@@ -26,6 +26,7 @@ namespace FAI
 {
 
 class Perception;
+class AdventureAI;
 
 class DLL_EXPORT FairAIGateway : public CAdventureAI
 {
@@ -68,10 +69,17 @@ public:
 	void battleEnd(const BattleID & battleID, const BattleResult * br, QueryID queryID) override;
 	void battleEnded() override;
 
+	// ---- used by the adventure module
+	/// Waits until no dialog, battle, visit or movement is pending (releases the gamestate lock meanwhile)
+	void waitTillFree();
+	/// Throws if the turn was interrupted (game over, shutdown)
+	void checkInterruption();
+
 private:
 	std::shared_ptr<CCallback> cb;
 	std::unique_ptr<AsyncRunner> asyncTasks;
 	std::unique_ptr<Perception> perception;
+	std::unique_ptr<AdventureAI> adventure; // after perception: destroyed first
 	Status status;
 
 	void makeTurn();

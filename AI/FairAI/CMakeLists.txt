@@ -4,6 +4,7 @@ set(fairAI_SRCS
 		Perception/Perception.cpp
 		Combat/CombatSim.cpp
 		Combat/FairBattleAI.cpp
+		Adventure/AdventureAI.cpp
 )
 
 # Components of VCMI's BattleAI reused by FairAI's combat module (hero spells, special units,
@@ -30,6 +31,8 @@ set(fairAI_HEADERS
 		Perception/Perception.h
 		Combat/CombatSim.h
 		Combat/FairBattleAI.h
+		Adventure/AdventureAI.h
+		Adventure/Params.h
 )
 
 if(NOT ENABLE_STATIC_LIBS)

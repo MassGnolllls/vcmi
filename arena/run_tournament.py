@@ -105,7 +105,11 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
         env["XDG_CONFIG_HOME"] = str(config_home)
         env["XDG_CACHE_HOME"] = str(config_home / "cache")
         (config_home / "vcmi").mkdir(parents=True, exist_ok=True)
-        (config_home / "vcmi" / "settings.json").write_text(json.dumps(ARENA_SETTINGS, indent=1))
+        settings = json.loads(json.dumps(ARENA_SETTINGS))
+        ai_log = os.environ.get("ARENA_AI_LOG")  # e.g. "debug": detailed AI decisions in the match log
+        if ai_log:
+            settings["logging"]["loggers"].append({"domain": "ai", "level": ai_log})
+        (config_home / "vcmi" / "settings.json").write_text(json.dumps(settings, indent=1))
         (config_home / "vcmi" / "modSettings.json").write_text(json.dumps(ARENA_MOD_SETTINGS, indent=1))
 
     port = args.base_port + match_id % 1000

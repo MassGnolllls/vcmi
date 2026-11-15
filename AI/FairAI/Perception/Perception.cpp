@@ -213,10 +213,22 @@ void Perception::refresh()
 	}
 
 	std::unique_lock lock(mx);
-	for(auto & entry : objects)
+	for(auto it = objects.begin(); it != objects.end();)
 	{
-		if(!seenNow.count(entry.first))
-			entry.second.visibleNow = false;
+		if(seenNow.count(it->first))
+		{
+			++it;
+			continue;
+		}
+		// We look at the tile and the object is gone: forget it. If the tile is hidden, keep the
+		// (possibly outdated) memory, exactly like a human player would.
+		if(cb->isVisible(it->second.visitablePos))
+		{
+			it = objects.erase(it);
+			continue;
+		}
+		it->second.visibleNow = false;
+		++it;
 	}
 	for(auto & observed : updates)
 		objects[observed.id] = std::move(observed);
@@ -243,8 +255,22 @@ void Perception::onTilesRevealed(const std::set<int3> & tiles)
 
 void Perception::onObjectRemoved(ObjectInstanceID id)
 {
+	// The client learns about every removal; we only "notice" it if we can see the tile.
 	std::unique_lock lock(mx);
-	objects.erase(id);
+	auto it = objects.find(id);
+	if(it != objects.end() && cb->isVisible(it->second.visitablePos))
+		objects.erase(it);
+}
+
+const CGObjectInstance * Perception::visibleObject(ObjectInstanceID id) const
+{
+	{
+		std::unique_lock lock(mx);
+		auto it = objects.find(id);
+		if(it == objects.end() || (!it->second.visibleNow && it->second.owner != me))
+			return nullptr;
+	}
+	return cb->getObj(id);
 }
 
 std::map<ObjectInstanceID, ObservedObject> Perception::knownObjects() const

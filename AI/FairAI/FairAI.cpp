@@ -11,8 +11,11 @@
 #include "FairAI.h"
 
 #include "Perception/Perception.h"
+#include "Adventure/AdventureAI.h"
 
 #include "../../lib/AsyncRunner.h"
+#include "../../lib/UnlockGuard.h"
+#include "../../lib/mapObjects/CGDwelling.h"
 #include "../../lib/CConfigHandler.h"
 #include "../../lib/json/JsonNode.h"
 #include "../../lib/CThreadHelper.h"
@@ -67,6 +70,7 @@ void FairAIGateway::initGameInterface(std::shared_ptr<Environment> ENV, std::sha
 	cb->waitTillRealize = true;
 
 	perception = std::make_unique<Perception>(cb, playerID);
+	adventure = std::make_unique<AdventureAI>(*this, cb, *perception, playerID);
 	logAi->info("FairAI initialised for player %s", playerID.toString());
 }
 
@@ -112,9 +116,20 @@ void FairAIGateway::makeTurn()
 	perception->refresh();
 	logAi->info("FairAI %s day %d: %s", playerID.toString(), day, perception->summary());
 
-	// Phase 0: no adventure-map decisions yet (Phase 2/3 plug in here).
+	adventure->playTurn();
 
 	endTurn();
+}
+
+void FairAIGateway::waitTillFree()
+{
+	auto unlock = vstd::makeUnlockSharedGuard(CGameState::mutex);
+	status.waitTillFree();
+}
+
+void FairAIGateway::checkInterruption()
+{
+	status.turnInterruption.interruptionPoint();
 }
 
 void FairAIGateway::endTurn()
@@ -135,7 +150,8 @@ void FairAIGateway::endTurn()
 void FairAIGateway::heroGotLevel(const CGHeroInstance * hero, PrimarySkill pskill, std::vector<SecondarySkill> & skills, QueryID queryID)
 {
 	status.addQuery(queryID, "HeroGotLevel");
-	executeActionAsync("heroGotLevel", [this, queryID]() { answerQuery(queryID, 0); });
+	int choice = adventure ? adventure->chooseSkill(hero, skills) : 0;
+	executeActionAsync("heroGotLevel", [this, queryID, choice]() { answerQuery(queryID, choice); });
 }
 
 void FairAIGateway::commanderGotLevel(const CCommanderInstance * commander, std::vector<ui32> skills, QueryID queryID)
@@ -152,7 +168,7 @@ void FairAIGateway::showBlockingDialog(const std::string & text, const std::vect
 	// Selections pick the last option (components are indexed 1..n).
 	int answer = 0;
 	if(selection)
-		answer = static_cast<int>(components.size());
+		answer = adventure ? adventure->chooseSelection(components) : static_cast<int>(components.size());
 	else if(cancel)
 		answer = 1;
 
@@ -204,13 +220,23 @@ void FairAIGateway::showUniversityWindow(const IMarket * market, const CGHeroIns
 void FairAIGateway::showRecruitmentDialog(const CGDwelling * dwelling, const CArmedInstance * dst, int level, QueryID queryID)
 {
 	status.addQuery(queryID, "RecruitmentDialog");
-	executeActionAsync("showRecruitmentDialog", [this, queryID]() { answerQuery(queryID, 0); });
+	executeActionAsync("showRecruitmentDialog", [this, queryID, dwelling, dst]()
+	{
+		if(adventure)
+			adventure->recruitAtDwelling(dwelling, dst);
+		answerQuery(queryID, 0);
+	});
 }
 
 void FairAIGateway::heroExchangeStarted(ObjectInstanceID hero1, ObjectInstanceID hero2, QueryID queryID)
 {
 	status.addQuery(queryID, "HeroExchange");
-	executeActionAsync("heroExchangeStarted", [this, queryID]() { answerQuery(queryID, 0); });
+	executeActionAsync("heroExchangeStarted", [this, queryID, hero1, hero2]()
+	{
+		if(adventure)
+			adventure->onHeroExchange(hero1, hero2);
+		answerQuery(queryID, 0);
+	});
 }
 
 void FairAIGateway::answerQuery(QueryID queryID, int selection)

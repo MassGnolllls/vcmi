@@ -97,6 +97,9 @@ public:
 	void onObjectRemoved(ObjectInstanceID id);
 
 	std::map<ObjectInstanceID, ObservedObject> knownObjects() const;
+	/// The live object if we can see it right now (or own it), else nullptr
+	const CGObjectInstance * visibleObject(ObjectInstanceID id) const;
+
 	/// Tiles that we saw once but are hidden from us now
 	std::set<int3> staleTiles() const;
 	bool isVisibleNow(const int3 & tile) const;
