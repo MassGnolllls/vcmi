@@ -52,6 +52,7 @@ option(ENABLE_GOLDMASTER "Build in public release mode in which some debug routi
 
 option(ENABLE_NULLKILLER_AI "Enable compilation of NullkillerAI library" ON)
 option(ENABLE_NULLKILLER2_AI "Enable compilation of Nullkiller2AI library" ON)
+option(ENABLE_FAIR_AI "Enable compilation of FairAI library (non-cheating adventure + combat AI)" ON)
 option(ENABLE_STUPID_AI "Enable compilation of StupidAI library" ON)
 option(ENABLE_BATTLE_AI "Enable compilation of BattleAI library" ON)
 option(ENABLE_MMAI "Enable compilation of MMAI AI library" ON)

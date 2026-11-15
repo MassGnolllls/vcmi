@@ -25,6 +25,7 @@
 #include "../client/render/Graphics.h"
 #include "../client/render/IRenderHandler.h"
 #include "../client/windows/CMessage.h"
+#include "../client/ArenaHarness.h"
 #include "../client/windows/InfoWindows.h"
 
 #include "../lib/AsyncRunner.h"
@@ -159,7 +160,21 @@ int main(int argc, char * argv[])
 		("nointro,i", "skips intro movies")
 		("donotstartserver,d","do not attempt to start server and just connect to it instead server")
 		("serverport", po::value<si64>(), "override port specified in config file")
-		("savefrequency", po::value<si64>(), "limit auto save creation to each N days");
+		("savefrequency", po::value<si64>(), "limit auto save creation to each N days")
+		// --- arena (headless AI-vs-AI evaluation), see client/ArenaHarness.h
+		("arena-result", po::value<std::string>(), "arena: write match result as JSON to this file and exit when the match is decided")
+		("arena-max-days", po::value<int>(), "arena: end the match as timeout after this many days")
+		("arena-seed", po::value<int>(), "arena: random seed for the match (or for --arena-genmap)")
+		("arena-difficulty", po::value<int>(), "arena: difficulty 0-4 (pawn..king)")
+		("arena-allow-cheats", "arena: allow cheat codes (default: forbidden)")
+		("arena-stall-seconds", po::value<int>(), "arena: end the match as 'stalled' if nothing happens for this long (default 120)")
+		("arena-genmap", po::value<std::string>(), "arena: generate a random map into this .vmap file and exit")
+		("arena-template", po::value<std::string>(), "arena: RMG template name for --arena-genmap (default 2SM4d)")
+		("arena-size", po::value<std::string>(), "arena: map size s/m/l/xl for --arena-genmap")
+		("arena-levels", po::value<int>(), "arena: 1 = surface only, 2 = with underground")
+		("arena-water", po::value<std::string>(), "arena: none/normal/islands/random")
+		("arena-monsters", po::value<std::string>(), "arena: weak/normal/strong/random")
+		("arena-players", po::value<int>(), "arena: number of players for --arena-genmap (default 2)");
 
 	if(argc > 1)
 	{
@@ -272,6 +287,9 @@ int main(int argc, char * argv[])
 	// Server settings
 	setSettingBool("session/donotstartserver", "donotstartserver");
 
+	// Arena (AI evaluation) settings
+	Arena::storeOptions(vm);
+
 	// Init special testing settings
 	setSettingInteger("session/serverport", "serverport", 0);
 	setSettingInteger("general/saveFrequency", "savefrequency", 1);
@@ -347,6 +365,13 @@ int main(int argc, char * argv[])
 		}
 
 		logGlobal->info("Initialization of VCMI (together): %d ms", total.getDiff());
+
+		if(vm.count("arena-genmap"))
+		{
+			int exitCode = Arena::generateMap(vm);
+			std::fflush(nullptr);
+			std::_Exit(exitCode);
+		}
 
 		session["autoSkip"].Bool()  = vm.count("autoSkip");
 		session["oneGoodAI"].Bool() = vm.count("oneGoodAI");

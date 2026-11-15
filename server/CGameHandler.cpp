@@ -586,6 +586,8 @@ void CGameHandler::init(StartInfo *si, Load::ProgressAccumulator & progressTrack
 	CMapService mapService;
 	gs = std::make_shared<CGameState>();
 	int requestedSeed = settings["server"]["seed"].Integer();
+	if(!settings["session"]["arena"]["seed"].isNull())
+		requestedSeed = settings["session"]["arena"]["seed"].Integer(); // arena: reproducible AI-vs-AI matches
 	randomizer = std::make_unique<GameRandomizer>(*gs);
 	if (requestedSeed != 0)
 		randomizer->setSeed(requestedSeed);

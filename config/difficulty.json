@@ -49,7 +49,7 @@
 		},
 		"rook":
 		{
-			"resources": { "wood" : 15, "mercury": 7, "ore": 15, "sulfur": 7, "crystal": 7, "gems": 7, "gold": 10000 },
+			"resources": { "wood" : 15, "mercury": 7, "ore": 15, "sulfur": 7, "crystal": 7, "gems": 7, "gold": 15000 },
 			"globalBonuses": [],
 			"battleBonuses": []
 		},

@@ -139,3 +139,6 @@ public:
 };
 
 extern std::unique_ptr<GameEngine> ENGINE; //global gui handler
+
+/// Interface mutex that also exists in headless mode (where ENGINE is not created)
+std::mutex & engineInterfaceMutex();

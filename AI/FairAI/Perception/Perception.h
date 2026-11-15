@@ -1,0 +1,119 @@
+/*
+ * Perception.h, part of VCMI engine - FairAI
+ *
+ * The fairness boundary of FairAI.
+ *
+ * Rule: FairAI may only know what a human player in the same seat could see in the UI.
+ *  - Own heroes, towns and armies: full information (the human sees them in their own windows).
+ *  - Everything else is handed out as an *observation*, never as a raw game object pointer:
+ *      * enemy heroes / towns: what the UI shows (cb->getHeroInfo / cb->getTownInfo),
+ *        i.e. exact numbers only where the game itself grants details (e.g. Thieves Guild)
+ *      * wandering monsters / garrisons: quantity categories ("Pack" = 10-19, ...)
+ *      * other guarded objects: unknown until the game reveals the guards
+ *  - Tiles: only revealed tiles. When tiles get hidden again (Cover of Darkness), the
+ *    memory keeps the last observation with its timestamp and flags the area as stale.
+ *
+ * All adventure-map and strategic code must read foreign state through this class.
+ * The arena's fairness check enforces that no FairAI code outside Perception/ touches
+ * the full game state (see arena/check_fairness.py).
+ *
+ * License: GNU General Public License v2.0 or later
+ * Full text of license available in license.txt file, in main folder
+ *
+ */
+#pragma once
+
+#include "../../../lib/int3.h"
+#include "../../../lib/constants/EntityIdentifiers.h"
+
+VCMI_LIB_NAMESPACE_BEGIN
+class CCallback;
+class CArmedInstance;
+class CGHeroInstance;
+class CGTownInstance;
+class CGObjectInstance;
+struct ArmyDescriptor;
+VCMI_LIB_NAMESPACE_END
+
+namespace FAI
+{
+
+/// One stack as a human would perceive it. For exact knowledge minCount == maxCount.
+struct ObservedStack
+{
+	CreatureID creature;
+	int minCount = 0;
+	int maxCount = 0;
+	bool exact = false;
+};
+
+/// Army as a human would perceive it.
+struct ObservedArmy
+{
+	std::vector<ObservedStack> units;
+	bool known = false; ///< false: the composition could not be observed at all
+
+	uint64_t minStrength() const;
+	uint64_t maxStrength() const;
+	uint64_t expectedStrength() const;
+
+	/// Build from what the game's info callbacks report (exact if detailed, quantity ranges otherwise)
+	static ObservedArmy fromDescriptor(const ArmyDescriptor & descriptor);
+	/// Exact copy - only legal for our own armies
+	static ObservedArmy exactOwn(const CArmedInstance * army);
+	/// Quantity category (1 = Few ... 9 = Legion) to count range, as shown by the game
+	static std::pair<int, int> quantityRange(int quantityId);
+};
+
+/// Last known state of a map object.
+struct ObservedObject
+{
+	ObjectInstanceID id;
+	MapObjectID type;
+	MapObjectSubID subtype;
+	PlayerColor owner;
+	int3 visitablePos;
+	int lastSeenDay = -1;
+	bool visibleNow = false;
+	std::optional<ObservedArmy> army;
+};
+
+class Perception
+{
+public:
+	Perception(std::shared_ptr<CCallback> cb, PlayerColor me);
+
+	/// ---- own side (full knowledge) ----
+	std::vector<const CGHeroInstance *> ownHeroes() const;
+	std::vector<const CGTownInstance *> ownTowns() const;
+	bool isOwn(const CGObjectInstance * obj) const;
+
+	/// ---- world memory (only what has been seen) ----
+	/// Rescan everything currently visible and update the memory. Call with the gamestate lock held.
+	void refresh();
+	/// Tiles that became hidden again, e.g. by a Cover of Darkness
+	void onTilesHidden(const std::set<int3> & tiles);
+	void onTilesRevealed(const std::set<int3> & tiles);
+	void onObjectRemoved(ObjectInstanceID id);
+
+	std::map<ObjectInstanceID, ObservedObject> knownObjects() const;
+	/// Tiles that we saw once but are hidden from us now
+	std::set<int3> staleTiles() const;
+	bool isVisibleNow(const int3 & tile) const;
+
+	/// Perceive an army the way the UI would show it to us
+	ObservedArmy observeArmy(const CArmedInstance * army) const;
+
+	/// Short status line for logs
+	std::string summary() const;
+
+private:
+	std::shared_ptr<CCallback> cb;
+	PlayerColor me;
+
+	mutable std::mutex mx;
+	std::map<ObjectInstanceID, ObservedObject> objects;
+	std::set<int3> hiddenAgain;
+};
+
+}

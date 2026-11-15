@@ -44,6 +44,12 @@
 
 std::unique_ptr<GameEngine> ENGINE;
 
+std::mutex & engineInterfaceMutex()
+{
+	static std::mutex headlessInterfaceMutex;
+	return ENGINE ? ENGINE->interfaceMutex : headlessInterfaceMutex;
+}
+
 static thread_local bool inGuiThread = false;
 
 ObjectConstruction::ObjectConstruction(CIntObject *obj)

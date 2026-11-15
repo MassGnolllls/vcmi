@@ -10,6 +10,7 @@
 #include "StdInc.h"
 #include "Global.h"
 #include "Client.h"
+#include "ArenaHarness.h"
 
 #include "CPlayerInterface.h"
 #include "PlayerLocalState.h"
@@ -208,11 +209,10 @@ void CClient::initMapHandler()
 	// TODO: CMapHandler initialization can probably go somewhere else
 	// It's can't be before initialization of interfaces
 	// During loading CPlayerInterface from serialized state it's depend on MH
-	if(!settings["session"]["headless"].Bool())
-	{
-		GAME->setMapInstance(std::make_unique<CMapHandler>(&gameState().getMap()));
-		logNetwork->trace("Creating mapHandler: %d ms", GAME->server().th->getDiff());
-	}
+	// Also created in headless mode: without observers it is a cheap no-op relay,
+	// and net pack handling relies on its presence
+	GAME->setMapInstance(std::make_unique<CMapHandler>(&gameState().getMap()));
+	logNetwork->trace("Creating mapHandler: %d ms", GAME->server().th->getDiff());
 }
 
 void CClient::initPlayerEnvironments()
@@ -268,6 +268,9 @@ void CClient::initPlayerInterfaces()
 						alliedToHuman = true;
 
 				auto AiToGive = aiNameForPlayer(playerInfo.second, false, alliedToHuman);
+				if(!Arena::aiForPlayer(color).empty())
+					AiToGive = Arena::aiForPlayer(color);
+				Arena::noteInstalledAI(color, AiToGive);
 				logNetwork->info("Player %s will be lead by %s", color.toString(), AiToGive);
 				installNewPlayerInterface(CDynLibHandler::getNewAI(AiToGive), color);
 			}
@@ -353,6 +356,7 @@ void CClient::handlePack(CPackForClient & pack)
 {
 	ApplyClientNetPackVisitor afterVisitor(*this, gameState());
 	ApplyFirstClientNetPackVisitor beforeVisitor(*this, gameState());
+	Arena::onPackApplied(*this);
 
 	pack.visit(beforeVisitor);
 	logNetwork->trace("\tMade first apply on cl: %s", typeid(pack).name());
@@ -498,7 +502,7 @@ void CClient::startPlayerBattleAction(const BattleID & battleID, PlayerColor col
 	if (!battleint->human)
 	{
 		// we want to avoid locking gamestate and causing UI to freeze while AI is making turn
-		auto unlockInterface = vstd::makeUnlockGuard(ENGINE->interfaceMutex);
+		auto unlockInterface = vstd::makeUnlockGuard(engineInterfaceMutex());
 		battleint->activeStack(battleID, gameState().getBattle(battleID)->battleGetStackByID(gameState().getBattle(battleID)->activeStack, false));
 	}
 	else
@@ -518,7 +522,8 @@ void CClient::reinitScripting()
 void CClient::removeGUI() const
 {
 	// CClient::endGame
-	ENGINE->windows().clear();
+	if(ENGINE)
+		ENGINE->windows().clear();
 	adventureInt.reset();
 	logGlobal->info("Removed GUI.");
 

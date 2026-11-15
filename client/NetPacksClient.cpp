@@ -28,6 +28,7 @@
 #include "GameChatHandler.h"
 #include "CServerHandler.h"
 #include "UIHelper.h"
+#include "ArenaHarness.h"
 
 #include "../lib/callback/CCallback.h"
 #include "../lib/filesystem/Filesystem.h"
@@ -186,6 +187,8 @@ void ApplyClientNetPackVisitor::visitSetMovePoints(SetMovePoints & pack)
 
 void ApplyClientNetPackVisitor::visitSetResearchedSpells(SetResearchedSpells & pack)
 {
+	if(!ENGINE)
+		return;
 	for(const auto & win : ENGINE->windows().findWindows<CMageGuildScreen>())
 		win->updateSpells(pack.tid);
 }
@@ -347,6 +350,7 @@ void ApplyClientNetPackVisitor::visitHeroVisit(HeroVisit & pack)
 
 void ApplyClientNetPackVisitor::visitNewTurn(NewTurn & pack)
 {
+	Arena::onNewTurn(cl);
 	callAllInterfaces(cl, &CGameInterface::invalidatePaths);
 
 	if(pack.newWeekNotification)
@@ -397,6 +401,7 @@ void ApplyClientNetPackVisitor::visitChangeObjPos(ChangeObjPos & pack)
 void ApplyClientNetPackVisitor::visitPlayerEndsGame(PlayerEndsGame & pack)
 {
 	callAllInterfaces(cl, &IGameEventsReceiver::gameOver, pack.player, pack.victoryLossCheckResult);
+	Arena::onPlayerEndsGame(cl, pack.player, pack.victoryLossCheckResult);
 
 	bool localHumanWinsGame = vstd::contains(cl.playerint, pack.player) && cl.gameInfo().getPlayerState(pack.player)->human && pack.victoryLossCheckResult.victory();
 	bool lastHumanEndsGame = GAME->server().howManyPlayerInterfaces() == 1 && vstd::contains(cl.playerint, pack.player) && cl.gameInfo().getPlayerState(pack.player)->human && !settings["session"]["spectate"].Bool();
@@ -924,6 +929,7 @@ void ApplyClientNetPackVisitor::visitPlayerBlocked(PlayerBlocked & pack)
 void ApplyClientNetPackVisitor::visitPlayerStartsTurn(PlayerStartsTurn & pack)
 {
 	logNetwork->debug("Server gives turn to %s", pack.player.toString());
+	Arena::onPlayerStartsTurn(cl, pack.player);
 
 	callAllInterfaces(cl, &IGameEventsReceiver::playerStartsTurn, pack.player);
 	callOnlyThatInterface(cl, pack.player, &CGameInterface::yourTurn, pack.queryID);

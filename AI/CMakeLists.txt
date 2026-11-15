@@ -58,3 +58,7 @@ endif()
 if(ENABLE_NULLKILLER2_AI)
 	add_subdirectory(Nullkiller2)
 endif()
+
+if(ENABLE_FAIR_AI)
+	add_subdirectory(FairAI)
+endif()

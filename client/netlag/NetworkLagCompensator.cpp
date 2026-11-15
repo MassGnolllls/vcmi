@@ -46,7 +46,7 @@ void NetworkLagCompensator::onDisconnected(const std::shared_ptr<INetworkConnect
 
 void NetworkLagCompensator::onPacketReceived(const std::shared_ptr<INetworkConnection> & connection, const std::vector<std::byte> & message)
 {
-	std::scoped_lock interfaceLock(ENGINE->interfaceMutex);
+	std::scoped_lock interfaceLock(engineInterfaceMutex());
 
 	auto basePack = antilagGameConnection->retrievePack(message);
 	auto * serverPack = dynamic_cast<CPackForServer *>(basePack.get());
