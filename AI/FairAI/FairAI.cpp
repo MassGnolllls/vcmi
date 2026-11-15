@@ -13,6 +13,8 @@
 #include "Perception/Perception.h"
 
 #include "../../lib/AsyncRunner.h"
+#include "../../lib/CConfigHandler.h"
+#include "../../lib/json/JsonNode.h"
 #include "../../lib/CThreadHelper.h"
 #include "../../lib/battle/BattleAction.h"
 #include "../../lib/battle/BattleStateInfoForRetreat.h"
@@ -42,6 +44,15 @@ FairAIGateway::~FairAIGateway()
 
 std::string FairAIGateway::getBattleAIName() const
 {
+	// Arena runs may assign a combat AI per player (harness configuration, not game information)
+	const JsonNode & list = settings["session"]["arena"]["battleAI"];
+	if(list.isVector() && playerID.isValidPlayer() && playerID.getNum() < static_cast<int>(list.Vector().size()))
+	{
+		const std::string & name = list.Vector()[playerID.getNum()].String();
+		if(!name.empty())
+			return name;
+	}
+
 	// Phase 0: VCMI's BattleAI fights for us. Phase 1 replaces this with FairAI's own combat module.
 	return "BattleAI";
 }

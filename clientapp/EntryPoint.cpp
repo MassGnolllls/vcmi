@@ -174,7 +174,11 @@ int main(int argc, char * argv[])
 		("arena-levels", po::value<int>(), "arena: 1 = surface only, 2 = with underground")
 		("arena-water", po::value<std::string>(), "arena: none/normal/islands/random")
 		("arena-monsters", po::value<std::string>(), "arena: weak/normal/strong/random")
-		("arena-players", po::value<int>(), "arena: number of players for --arena-genmap (default 2)");
+		("arena-players", po::value<int>(), "arena: number of players for --arena-genmap (default 2)")
+		("arena-genbattle", po::value<std::string>(), "arena: build a battle-only map from this scenario JSON and exit")
+		("arena-out", po::value<std::string>(), "arena: output file for --arena-genbattle")
+		("arena-dump-library", po::value<std::string>(), "arena: write creatures/heroes/spells/skills to this JSON file and exit")
+		("arena-battle-ai", po::value<std::vector<std::string>>(), "arena: combat AI per player (red, blue, ...), used by FairAI as adventure AI");
 
 	if(argc > 1)
 	{
@@ -366,9 +370,15 @@ int main(int argc, char * argv[])
 
 		logGlobal->info("Initialization of VCMI (together): %d ms", total.getDiff());
 
-		if(vm.count("arena-genmap"))
+		if(vm.count("arena-genmap") || vm.count("arena-genbattle") || vm.count("arena-dump-library"))
 		{
-			int exitCode = Arena::generateMap(vm);
+			int exitCode = 0;
+			if(vm.count("arena-genmap"))
+				exitCode = Arena::generateMap(vm);
+			else if(vm.count("arena-genbattle"))
+				exitCode = Arena::generateBattleMap(vm);
+			else
+				exitCode = Arena::dumpLibrary(vm);
 			std::fflush(nullptr);
 			std::_Exit(exitCode);
 		}

@@ -29,6 +29,24 @@
 #include "../lib/rmg/CMapGenerator.h"
 #include "../lib/rmg/CRmgTemplate.h"
 #include "../lib/rmg/CRmgTemplateStorage.h"
+#include "../lib/CCreatureHandler.h"
+#include "../lib/CRandomGenerator.h"
+#include "../lib/CSkillHandler.h"
+#include "../lib/battle/BattleInfo.h"
+#include "../lib/entities/artifact/CArtifact.h"
+#include "../lib/entities/hero/CHero.h"
+#include "../lib/entities/hero/CHeroClass.h"
+#include "../lib/entities/hero/CHeroHandler.h"
+#include "../lib/mapObjectConstructors/AObjectTypeHandler.h"
+#include "../lib/mapObjectConstructors/CObjectClassesHandler.h"
+#include "../lib/mapObjects/CGHeroInstance.h"
+#include "../lib/mapping/CMapEditManager.h"
+#include "../lib/modding/IdentifierStorage.h"
+#include "../lib/modding/ModScope.h"
+#include "../lib/networkPacks/PacksForClientBattle.h"
+#include "../lib/spells/CSpellHandler.h"
+#include "../lib/mapping/MapFormat.h"
+#include <vcmi/Faction.h>
 
 #include <boost/program_options.hpp>
 
@@ -88,11 +106,11 @@ JsonNode playerStats(const CGameState & gs, const PlayerState & ps)
 	return node;
 }
 
-[[noreturn]] void finishMatch(CClient & client, const std::string & outcome, const std::optional<PlayerColor> & winner)
+[[noreturn]] void finishMatch(CClient & client, const std::string & outcome, const std::optional<PlayerColor> & winner, const JsonNode & extra = JsonNode())
 {
 	const CGameState & gs = client.gameState();
 
-	JsonNode result;
+	JsonNode result = extra;
 	if(lastTurnPlayer.load() >= 0)
 	{
 		PlayerColor turnOf(lastTurnPlayer.load());
@@ -150,6 +168,14 @@ void storeOptions(const po::variables_map & vm)
 	if(vm.count("arena-stall-seconds"))
 		arena["stallSeconds"].Integer() = vm["arena-stall-seconds"].as<int>();
 	arena["cheatsAllowed"].Bool() = vm.count("arena-allow-cheats") > 0;
+
+	if(vm.count("arena-battle-ai"))
+	{
+		JsonNode list;
+		for(const auto & name : vm["arena-battle-ai"].as<std::vector<std::string>>())
+			list.Vector().emplace_back(name);
+		arena["battleAI"] = list;
+	}
 
 	if(vm.count("ai"))
 	{
@@ -355,6 +381,266 @@ int generateMap(const po::variables_map & vm)
 		std::cerr << "ARENA_MAP_FAILED " << e.what() << std::endl;
 		return 1;
 	}
+}
+
+
+namespace
+{
+std::optional<si32> resolveId(const std::string & type, const std::string & name)
+{
+	std::string scope = ModScope::scopeGame();
+	std::string id = name;
+	auto colon = name.find(':');
+	if(colon != std::string::npos)
+	{
+		scope = name.substr(0, colon);
+		id = name.substr(colon + 1);
+	}
+	return LIBRARY->identifiers()->getIdentifier(scope, type, id, true);
+}
+
+template<typename T>
+T requireId(const std::string & type, const std::string & name)
+{
+	auto id = resolveId(type, name);
+	if(!id)
+		throw std::runtime_error("unknown " + type + ": " + name);
+	return T(*id);
+}
+
+std::string sideName(BattleSide side)
+{
+	return side == BattleSide::ATTACKER ? "attacker" : (side == BattleSide::DEFENDER ? "defender" : "none");
+}
+}
+
+int dumpLibrary(const po::variables_map & vm)
+{
+	JsonNode out;
+
+	for(const auto & creature : LIBRARY->creh->objects)
+	{
+		if(!creature)
+			continue;
+		JsonNode c;
+		c["id"].String() = creature->getJsonKey();
+		c["name"].String() = creature->getNameSingularTranslated();
+		c["level"].Integer() = creature->getLevel();
+		c["faction"].String() = creature->getFactionID().hasValue() ? creature->getFactionID().toEntity(LIBRARY)->getJsonKey() : std::string();
+		c["aiValue"].Integer() = creature->getAIValue();
+		c["fightValue"].Integer() = creature->getFightValue();
+		c["hp"].Integer() = creature->getBaseHitPoints();
+		c["speed"].Integer() = creature->getBaseSpeed();
+		c["attack"].Integer() = creature->getBaseAttack();
+		c["defense"].Integer() = creature->getBaseDefense();
+		c["damageMin"].Integer() = creature->getBaseDamageMin();
+		c["damageMax"].Integer() = creature->getBaseDamageMax();
+		c["shots"].Integer() = creature->getBaseShots();
+		c["doubleWide"].Bool() = creature->isDoubleWide();
+		c["growth"].Integer() = creature->getGrowth();
+		c["gold"].Integer() = creature->getRecruitCost(EGameResID::GOLD);
+		c["hasUpgrades"].Bool() = creature->hasUpgrades();
+		c["special"].Bool() = creature->special;
+		out["creatures"].Vector().push_back(c);
+	}
+
+	for(const auto & hero : LIBRARY->heroh->objects)
+	{
+		if(!hero)
+			continue;
+		JsonNode h;
+		h["id"].String() = hero->getJsonKey();
+		h["name"].String() = hero->getNameTranslated();
+		h["class"].String() = hero->heroClass ? hero->heroClass->getJsonKey() : std::string();
+		h["faction"].String() = hero->heroClass ? hero->heroClass->faction.toEntity(LIBRARY)->getJsonKey() : std::string();
+		h["magicClass"].Bool() = hero->heroClass && hero->heroClass->affinity == CHeroClass::MAGIC;
+		h["special"].Bool() = hero->special;
+		out["heroes"].Vector().push_back(h);
+	}
+
+	for(const auto & spell : LIBRARY->spellh->objects)
+	{
+		if(!spell)
+			continue;
+		JsonNode sp;
+		sp["id"].String() = spell->getJsonKey();
+		sp["level"].Integer() = spell->getLevel();
+		sp["combat"].Bool() = spell->isCombat();
+		sp["adventure"].Bool() = spell->isAdventure();
+		sp["special"].Bool() = spell->isSpecial();
+		sp["creatureAbility"].Bool() = spell->isCreatureAbility();
+		out["spells"].Vector().push_back(sp);
+	}
+
+	for(const auto & skill : LIBRARY->skillh->objects)
+	{
+		if(skill)
+			out["skills"].Vector().emplace_back(skill->getJsonKey());
+	}
+
+	const std::string path = vm["arena-dump-library"].as<std::string>();
+	std::ofstream file(path, std::ios::trunc);
+	file << out.toString();
+	std::cout << "ARENA_LIBRARY " << path << std::endl;
+	return 0;
+}
+
+int generateBattleMap(const po::variables_map & vm)
+{
+	const std::string scenarioFile = vm["arena-genbattle"].as<std::string>();
+	const std::string outFile = vm.count("arena-out") ? vm["arena-out"].as<std::string>() : std::string("battle.vmap");
+
+	try
+	{
+		std::ifstream in(scenarioFile);
+		std::string text((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+		JsonNode scenario(reinterpret_cast<const std::byte *>(text.data()), text.size(), scenarioFile);
+
+		auto rng = &CRandomGenerator::getDefault();
+		auto map = std::make_unique<CMap>(nullptr);
+		map->version = EMapFormat::VCMI;
+		map->creationDateTime = std::time(nullptr);
+		map->width = 10;
+		map->height = 10;
+		map->mapLayers = {MapLayerId::SURFACE};
+		map->battleOnly = true;
+		map->name.appendRawString(scenario["name"].isNull() ? std::string("Arena battle") : scenario["name"].String());
+
+		EditorCallback callback(map.get());
+		map->cb = &callback;
+
+		map->initTerrain();
+		map->getEditManager()->clearTerrain(rng);
+		map->getEditManager()->getTerrainSelection().selectAll();
+		const std::string terrain = scenario["terrain"].isNull() ? std::string("dirt") : scenario["terrain"].String();
+		map->getEditManager()->drawTerrain(requireId<TerrainId>("terrain", terrain), 0, rng);
+
+		map->players[0].canComputerPlay = true;
+		map->players[0].canHumanPlay = true;
+		map->players[1] = map->players[0];
+
+		const auto & sides = scenario["sides"].Vector();
+		if(sides.size() != 2)
+			throw std::runtime_error("scenario needs exactly 2 sides");
+
+		for(int sel = 0; sel < 2; ++sel)
+		{
+			const JsonNode & side = sides[sel];
+			auto heroType = requireId<HeroTypeID>("hero", side["hero"].String());
+			auto factory = LIBRARY->objtypeh->getHandlerFor(Obj::HERO, heroType.toHeroType()->heroClass->getId());
+			auto templates = factory->getTemplates();
+			auto hero = std::dynamic_pointer_cast<CGHeroInstance>(factory->create(&callback, templates.front()));
+			hero->setHeroType(heroType);
+			hero->setOwner(PlayerColor(sel));
+			hero->pos = sel == 0 ? int3(5, 6, 0) : int3(5, 5, 0);
+
+			const auto & primary = side["primary"].Vector();
+			for(size_t i = 0; i < GameConstants::PRIMARY_SKILLS; i++)
+				hero->pushPrimSkill(PrimarySkill(i), i < primary.size() ? primary[i].Integer() : 0);
+
+			hero->clearSlots();
+			const auto & army = side["army"].Vector();
+			for(size_t slot = 0; slot < army.size() && slot < GameConstants::ARMY_SIZE; ++slot)
+			{
+				auto creature = requireId<CreatureID>("creature", army[slot].Vector().at(0).String());
+				int count = static_cast<int>(army[slot].Vector().at(1).Integer());
+				if(count > 0)
+					hero->setCreature(SlotID(slot), creature, count);
+			}
+
+			bool spellBook = side["spellBook"].isNull() ? !side["spells"].Vector().empty() : side["spellBook"].Bool();
+			if(!hero->getArt(ArtifactPosition::SPELLBOOK) && spellBook)
+				hero->putArtifact(ArtifactPosition::SPELLBOOK, map->createArtifact(ArtifactID::SPELLBOOK));
+			else if(hero->getArt(ArtifactPosition::SPELLBOOK) && !spellBook)
+				hero->removeArtifact(ArtifactPosition::SPELLBOOK);
+
+			if(side["warMachines"].Bool())
+			{
+				hero->putArtifact(ArtifactPosition::MACH1, map->createArtifact(ArtifactID::BALLISTA));
+				hero->putArtifact(ArtifactPosition::MACH2, map->createArtifact(ArtifactID::AMMO_CART));
+				hero->putArtifact(ArtifactPosition::MACH3, map->createArtifact(ArtifactID::FIRST_AID_TENT));
+			}
+
+			for(const auto & spell : side["spells"].Vector())
+				hero->addSpellToSpellbook(requireId<SpellID>("spell", spell.String()));
+
+			for(const auto & skill : LIBRARY->skillh->objects)
+				hero->setSecSkillLevel(SecondarySkill(skill->getId()), MasteryLevel::NONE, ChangeValueMode::ABSOLUTE);
+			static const std::map<std::string, MasteryLevel::Type> levels = {
+				{"basic", MasteryLevel::BASIC}, {"advanced", MasteryLevel::ADVANCED}, {"expert", MasteryLevel::EXPERT}
+			};
+			for(const auto & skill : side["secondary"].Vector())
+				hero->setSecSkillLevel(requireId<SecondarySkill>("skill", skill.Vector().at(0).String()), levels.at(skill.Vector().at(1).String()), ChangeValueMode::ABSOLUTE);
+
+			map->getEditManager()->insertObject(hero);
+		}
+
+		CMapService mapService;
+		mapService.saveMap(map, outFile);
+		std::cout << "ARENA_BATTLE_MAP " << outFile << std::endl;
+		return 0;
+	}
+	catch(const std::exception & e)
+	{
+		std::cerr << "ARENA_BATTLE_MAP_FAILED " << e.what() << std::endl;
+		return 1;
+	}
+}
+
+void onBattleResult(CClient & client, const BattleResult & result)
+{
+	if(!isActive())
+		return;
+
+	const CGameState & gs = client.gameState();
+	const auto * battle = gs.getBattle(result.battleID);
+	if(!battle)
+		return;
+
+	JsonNode info;
+	info["winnerSide"].String() = sideName(result.winner);
+	info["result"].String() = result.result == EBattleResult::NORMAL ? "normal" : (result.result == EBattleResult::ESCAPE ? "escape" : "surrender");
+
+	const JsonNode & battleAIs = arenaSettings()["battleAI"];
+	for(BattleSide side : {BattleSide::ATTACKER, BattleSide::DEFENDER})
+	{
+		JsonNode s;
+		PlayerColor player = battle->getSidePlayer(side);
+		s["player"].String() = player.isValidPlayer() ? player.toString() : std::string("neutral");
+		std::string battleAI = "?";
+		if(battleAIs.isVector() && player.isValidPlayer() && player.getNum() < static_cast<int>(battleAIs.Vector().size()))
+			battleAI = battleAIs.Vector()[player.getNum()].String();
+		s["battleAI"].String() = battleAI;
+
+		const CArmedInstance * army = battle->getSideArmy(side);
+		uint64_t initial = army ? army->getArmyStrength() : 0;
+		uint64_t lost = 0;
+		for(const auto & casualty : result.casualties[side])
+			lost += static_cast<uint64_t>(casualty.first.toCreature()->getAIValue()) * casualty.second;
+		s["initialStrength"].Integer() = initial;
+		s["lostStrength"].Integer() = lost;
+		s["remainingFraction"].Float() = initial ? std::max(0.0, 1.0 - static_cast<double>(lost) / initial) : 0.0;
+		info["sides"].Vector().push_back(s);
+	}
+
+	if(!gs.getMap().battleOnly)
+	{
+		logGlobal->info("ARENA_BATTLE %s", info.toCompactString());
+		return;
+	}
+
+	std::lock_guard lock(arenaMutex);
+	if(finished)
+		return;
+	finished = true;
+
+	std::optional<PlayerColor> winner;
+	if(result.winner == BattleSide::ATTACKER || result.winner == BattleSide::DEFENDER)
+		winner = battle->getSidePlayer(result.winner);
+
+	JsonNode extra;
+	extra["battle"] = info;
+	finishMatch(client, "battle", winner, extra);
 }
 
 }

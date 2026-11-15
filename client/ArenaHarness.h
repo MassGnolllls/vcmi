@@ -20,6 +20,7 @@ VCMI_LIB_NAMESPACE_BEGIN
 class PlayerColor;
 class EVictoryLossCheckResult;
 class StatisticDataSet;
+struct BattleResult;
 VCMI_LIB_NAMESPACE_END
 
 class CClient;
@@ -55,4 +56,13 @@ void onPlayerEndsGame(CClient & client, const PlayerColor & player, const EVicto
 
 /// --arena-genmap: generate a random map into a file and return the process exit code
 int generateMap(const boost::program_options::variables_map & vm);
+
+/// --arena-genbattle: build a battle-only map (two heroes, battle starts immediately) from a scenario JSON
+int generateBattleMap(const boost::program_options::variables_map & vm);
+
+/// --arena-dump-library: write creatures, heroes, spells and skills as JSON (input for scenario generators)
+int dumpLibrary(const boost::program_options::variables_map & vm);
+
+/// Battle result hook (called before the result is applied to the game state)
+void onBattleResult(CClient & client, const BattleResult & result);
 }

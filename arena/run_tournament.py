@@ -49,6 +49,12 @@ ARENA_SETTINGS = {
     "mods": {"validation": "off"},
 }
 
+# Mods active in arena runs: MMAI (machine-learning combat AI) needs its mod for the model files
+ARENA_MOD_SETTINGS = {
+    "activePreset": "default",
+    "presets": {"default": {"mods": ["vcmi", "core", "mmai"], "settings": {}}},
+}
+
 
 # ----------------------------------------------------------------------------- maps
 
@@ -85,7 +91,8 @@ def list_arena_maps(pattern: str):
 
 # ----------------------------------------------------------------------------- matches
 
-def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, seed: int, out_dir: Path) -> dict:
+def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, seed: int, out_dir: Path,
+               battle_mode: bool = False) -> dict:
     result_file = out_dir / f"match_{match_id:04d}.json"
     log_dir = out_dir / f"logs_{match_id:04d}"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -99,18 +106,23 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
         env["XDG_CACHE_HOME"] = str(config_home / "cache")
         (config_home / "vcmi").mkdir(parents=True, exist_ok=True)
         (config_home / "vcmi" / "settings.json").write_text(json.dumps(ARENA_SETTINGS, indent=1))
+        (config_home / "vcmi" / "modSettings.json").write_text(json.dumps(ARENA_MOD_SETTINGS, indent=1))
 
     port = args.base_port + match_id % 1000
-    cmd = [args.client, "--headless", "--testmap", map_name,
-           "--ai", ai_red, "--ai", ai_blue,
+    if battle_mode:
+        # FairAI drives the (trivial) adventure part and hands each side's battle to the requested combat AI
+        ai_args = ["--ai", "FairAI", "--ai", "FairAI", "--arena-battle-ai", ai_red, "--arena-battle-ai", ai_blue]
+    else:
+        ai_args = ["--ai", ai_red, "--ai", ai_blue]
+    cmd = [args.client, "--headless", "--testmap", map_name, *ai_args,
            "--arena-result", str(result_file),
-           "--arena-max-days", str(args.max_days),
+           "--arena-max-days", str(getattr(args, "max_days", 120)),
            "--arena-seed", str(seed),
-           "--arena-difficulty", str(args.difficulty),
+           "--arena-difficulty", str(getattr(args, "difficulty", 4)),
            "--arena-stall-seconds", str(args.stall_seconds),
            "--serverport", str(port),
            "--logLocation", str(log_dir)]
-    if args.allow_cheats:
+    if getattr(args, "allow_cheats", False):
         cmd.append("--arena-allow-cheats")
 
     started = time.time()
@@ -215,7 +227,7 @@ def cmd_play(args) -> int:
         print("no arena maps found - run 'genmaps' first", file=sys.stderr)
         return 1
 
-    out_dir = Path(args.out)
+    out_dir = Path(args.out).resolve()  # the client changes its working directory
     out_dir.mkdir(parents=True, exist_ok=True)
 
     jobs = []
@@ -243,6 +255,148 @@ def cmd_play(args) -> int:
                   f"[{rec['wallSec']}s]", flush=True)
 
     summary = summarize(sorted(records, key=lambda r: r["match"]), args.ai, args.opponent)
+    (out_dir / "summary.md").write_text(summary + "\n")
+    print()
+    print(summary)
+    return 0
+
+
+
+# ----------------------------------------------------------------------------- battles
+
+BATTLE_MAP_SUBDIR = "arenabattles"
+
+
+def cmd_genbattles(args) -> int:
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import battle_scenarios
+
+    library = Path(args.library).resolve()
+    if not library.exists():
+        subprocess.run([args.client, "--headless", "--arena-dump-library", str(library)], capture_output=True, timeout=300)
+    scenarios = battle_scenarios.generate(str(library), args.count, args.seed,
+                                          kinds=tuple(args.kinds.split(",")), stages=tuple(args.stages.split(",")),
+                                          magic_ratio=args.magic_ratio)
+    maps_dir = vcmi_data_dir() / "Maps" / BATTLE_MAP_SUBDIR
+    maps_dir.mkdir(parents=True, exist_ok=True)
+    scen_dir = Path(args.scenario_dir).resolve()
+    scen_dir.mkdir(parents=True, exist_ok=True)
+    ok = 0
+    for sc in scenarios:
+        name = f"{args.prefix}_{sc['name']}"
+        scen_file = scen_dir / f"{name}.json"
+        scen_file.write_text(json.dumps(sc, indent=1))
+        out = maps_dir / f"{name}.vmap"
+        res = subprocess.run([args.client, "--headless", "--arena-genbattle", str(scen_file), "--arena-out", str(out)],
+                             capture_output=True, text=True, timeout=300)
+        if res.returncode == 0 and out.exists():
+            ok += 1
+        else:
+            print(f"FAILED {name}: {res.stderr.strip()[-500:]}")
+    print(f"{ok}/{len(scenarios)} battle maps in {maps_dir} (scenarios in {scen_dir})")
+    return 0 if ok == len(scenarios) else 1
+
+
+def list_battle_maps(pattern: str):
+    maps_dir = vcmi_data_dir() / "Maps" / BATTLE_MAP_SUBDIR
+    maps = sorted(p for p in maps_dir.glob("*.vmap") if pattern in p.name)
+    return [f"MAPS/{BATTLE_MAP_SUBDIR.upper()}/{p.stem.upper()}" for p in maps]
+
+
+def battle_score(record: dict, ai: str):
+    """(won, score) from the perspective of `ai`; score = own remaining fraction - enemy remaining fraction."""
+    battle = record["result"]["battle"]
+    mine = [s for s in battle["sides"] if s["battleAI"] == ai]
+    theirs = [s for s in battle["sides"] if s["battleAI"] != ai]
+    if record["red"] == record["blue"]:
+        # same AI on both sides: report from red's point of view
+        mine = [s for s in battle["sides"] if s["player"] == "red"]
+        theirs = [s for s in battle["sides"] if s["player"] != "red"]
+    me, them = mine[0], theirs[0]
+    won = record["result"].get("winner") == me["player"]
+    return won, me["remainingFraction"] - them["remainingFraction"]
+
+
+def summarize_battles(records, ai: str, opponent: str) -> str:
+    groups = {}
+    errors = 0
+    wins = n = 0
+    scores = []
+    by_map = {}
+    for r in records:
+        if "error" in r or r.get("result", {}).get("outcome") != "battle":
+            errors += 1
+            continue
+        won, score = battle_score(r, ai)
+        n += 1
+        wins += won
+        scores.append(score)
+        by_map.setdefault(r["map"], []).append(score)
+        key = r["map"].split("_", 2)[-1].rsplit("_", 0)[0]
+        parts = r["map"].lower().split("_")
+        tag = "/".join(p for p in parts if p in ("mirror", "cross", "early", "mid", "late", "magic", "nomagic"))
+        g = groups.setdefault(tag, [0, 0, []])
+        g[0] += won
+        g[1] += 1
+        g[2].append(score)
+    lo, hi = wilson(wins, n)
+    mean = sum(scores) / len(scores) if scores else 0.0
+    sd = (sum((x - mean) ** 2 for x in scores) / max(1, len(scores) - 1)) ** 0.5 if scores else 0.0
+    se = sd / max(1, len(scores)) ** 0.5
+    # paired per scenario (both sides played): average of the two scores removes side advantage
+    paired = [sum(v) / len(v) for v in by_map.values() if len(v) == 2]
+    paired_better = sum(1 for v in paired if v > 0.02)
+    paired_worse = sum(1 for v in paired if v < -0.02)
+    lines = [
+        f"# Kampf-Arena: {ai} gegen {opponent}",
+        "",
+        f"- Kämpfe: {n} (Fehler: {errors})",
+        f"- Siege {ai}: {wins}/{n} = {wins / n:.0%} (95% CI {lo:.0%}-{hi:.0%})" if n else "- keine Kämpfe",
+        f"- mittlerer Score {ai}: {mean:+.3f} ± {1.96 * se:.3f} (Score = eigener Rest-Anteil - gegnerischer Rest-Anteil)",
+        f"- Szenarien mit beiden Seiten: {len(paired)}; {ai} besser in {paired_better}, schlechter in {paired_worse}",
+        "",
+        "| Gruppe | Kämpfe | Siege | mittlerer Score |",
+        "|---|---|---|---|",
+    ]
+    for tag in sorted(groups):
+        w, cnt, sc = groups[tag]
+        lines.append(f"| {tag} | {cnt} | {w / cnt:.0%} | {sum(sc) / len(sc):+.3f} |")
+    return "\n".join(lines)
+
+
+def cmd_battles(args) -> int:
+    maps = list_battle_maps(args.map_filter)
+    if args.max_maps:
+        maps = maps[: args.max_maps]
+    if not maps:
+        print("no battle maps found - run 'genbattles' first", file=sys.stderr)
+        return 1
+    out_dir = Path(args.out).resolve()  # the client changes its working directory
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rng = random.Random(args.seed)
+    jobs = []
+    match_id = 0
+    for map_name in maps:
+        seed = rng.randint(1, 2**31 - 1)
+        for swap in (False, True):
+            red, blue = (args.opponent, args.ai) if swap else (args.ai, args.opponent)
+            jobs.append((match_id, map_name, red, blue, seed))
+            match_id += 1
+    print(f"playing {len(jobs)} battles on {len(maps)} scenarios with {args.jobs} parallel job(s)")
+    records = []
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool, open(out_dir / "results.jsonl", "a") as sink:
+        futures = [pool.submit(play_match, args, *job, out_dir, True) for job in jobs]
+        for fut in as_completed(futures):
+            rec = fut.result()
+            records.append(rec)
+            sink.write(json.dumps(rec) + "\n")
+            sink.flush()
+            if args.verbose:
+                res = rec.get("result", {})
+                b = res.get("battle", {})
+                sides = " ".join(f"{s['battleAI']}:{s['remainingFraction']:.2f}" for s in b.get("sides", []))
+                print(f"battle {rec['match']:4d} {rec['map'].split('/')[-1]:<40} winner={res.get('winner', rec.get('error'))} {sides} [{rec['wallSec']}s]", flush=True)
+    summary = summarize_battles(sorted(records, key=lambda r: r["match"]), args.ai, args.opponent)
     (out_dir / "summary.md").write_text(summary + "\n")
     print()
     print(summary)
@@ -281,8 +435,35 @@ def main() -> int:
     p.add_argument("--keep-logs", action="store_true")
     p.add_argument("--out", required=True)
 
+    gb = sub.add_parser("genbattles", help="generate battle scenarios and battle-only maps")
+    gb.add_argument("--client", required=True)
+    gb.add_argument("--library", default="arena-library.json", help="library dump (created if missing)")
+    gb.add_argument("--count", type=int, default=24)
+    gb.add_argument("--seed", type=int, default=7)
+    gb.add_argument("--kinds", default="mirror,cross")
+    gb.add_argument("--stages", default="early,mid,late")
+    gb.add_argument("--magic-ratio", type=float, default=0.5)
+    gb.add_argument("--prefix", default="set1")
+    gb.add_argument("--scenario-dir", default="arena-scenarios")
+
+    b = sub.add_parser("battles", help="battle tournament between two combat AIs")
+    b.add_argument("--client", required=True)
+    b.add_argument("--ai", required=True, help="combat AI under test, e.g. FairAI")
+    b.add_argument("--opponent", required=True, help="reference combat AI, e.g. BattleAI or MMAI")
+    b.add_argument("--map-filter", default="")
+    b.add_argument("--max-maps", type=int, default=0)
+    b.add_argument("--jobs", type=int, default=2)
+    b.add_argument("--timeout", type=int, default=600)
+    b.add_argument("--stall-seconds", type=int, default=60)
+    b.add_argument("--base-port", type=int, default=3300)
+    b.add_argument("--seed", type=int, default=42)
+    b.add_argument("--keep-logs", action="store_true")
+    b.add_argument("--verbose", action="store_true")
+    b.add_argument("--out", required=True)
+
     args = ap.parse_args()
-    return cmd_genmaps(args) if args.cmd == "genmaps" else cmd_play(args)
+    commands = {"genmaps": cmd_genmaps, "play": cmd_play, "genbattles": cmd_genbattles, "battles": cmd_battles}
+    return commands[args.cmd](args)
 
 
 if __name__ == "__main__":
