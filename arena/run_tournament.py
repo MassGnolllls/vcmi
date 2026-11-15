@@ -113,7 +113,12 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
         # FairAI drives the (trivial) adventure part and hands each side's battle to the requested combat AI
         ai_args = ["--ai", "FairAI", "--ai", "FairAI", "--arena-battle-ai", ai_red, "--arena-battle-ai", ai_blue]
     else:
-        ai_args = ["--ai", ai_red, "--ai", ai_blue]
+        # "Adventure+Combat" labels, e.g. "Nullkiller2+FairAI", select both AIs of a seat
+        red_adv, _, red_combat = ai_red.partition("+")
+        blue_adv, _, blue_combat = ai_blue.partition("+")
+        ai_args = ["--ai", red_adv, "--ai", blue_adv]
+        if red_combat or blue_combat:
+            ai_args += ["--arena-battle-ai", red_combat or "BattleAI", "--arena-battle-ai", blue_combat or "BattleAI"]
     cmd = [args.client, "--headless", "--testmap", map_name, *ai_args,
            "--arena-result", str(result_file),
            "--arena-max-days", str(getattr(args, "max_days", 120)),
@@ -420,8 +425,8 @@ def main() -> int:
 
     p = sub.add_parser("play", help="play a tournament between two AIs")
     p.add_argument("--client", required=True)
-    p.add_argument("--ai", required=True, help="AI under test, e.g. FairAI")
-    p.add_argument("--opponent", required=True, help="reference AI, e.g. Nullkiller2")
+    p.add_argument("--ai", required=True, help="AI under test, e.g. FairAI or Nullkiller2+FairAI (adventure+combat)")
+    p.add_argument("--opponent", required=True, help="reference AI, e.g. Nullkiller2 or Nullkiller2+BattleAI")
     p.add_argument("--map-filter", default="", help="only maps whose file name contains this text")
     p.add_argument("--max-maps", type=int, default=0)
     p.add_argument("--max-days", type=int, default=120)

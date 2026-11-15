@@ -9,6 +9,8 @@ Werkzeuge, um VCMI-KIs objektiv gegeneinander zu messen. Grundlage für die Entw
 | Arena-Optionen im Client | `client/ArenaHarness.*`, `clientapp/EntryPoint.cpp` | KI pro Spieler, fester Seed, Tageslimit, Ergebnisdatei (JSON), Kartengenerator |
 | Turnier-Skript | `arena/run_tournament.py` | Karten erzeugen, Partien mit Seitenwechsel spielen, Auswertung |
 | Fairness-Prüfung | `arena/check_fairness.py` | Prüft den FairAI-Code auf verbotene Zugriffe (Cheats, voller Spielzustand) |
+| Kampf-Arena | `--arena-genbattle`, `arena/battle_scenarios.py`, `run_tournament.py battles` | Einzelne Kämpfe (VCMIs „Battle Only“-Modus) zwischen zwei Kampf-KIs |
+| Variantenvergleich | `arena/compare_runs.py` | Gepaarter Vergleich zweier Läufe auf denselben Szenarien |
 
 ## Neue Kommandozeilen-Optionen (vcmiclient)
 
@@ -37,6 +39,24 @@ python3 arena/run_tournament.py play --client build/bin/vcmiclient \
 # Fairness-Prüfung des Codes
 python3 arena/check_fairness.py
 ```
+
+## Kampf-Arena
+
+```bash
+# Spieldaten-Bibliothek exportieren und 200 Kampfszenarien erzeugen (Spiegel- und Kreuzkämpfe,
+# frühe/mittlere/späte Armeen, mit und ohne Zauber)
+python3 arena/run_tournament.py genbattles --client build/bin/vcmiclient --count 200 --prefix dev
+
+# Kampf-KI gegen Kampf-KI, jedes Szenario mit vertauschten Seiten
+python3 arena/run_tournament.py battles --client build/bin/vcmiclient --ai FairAI --opponent MMAI \
+    --map-filter dev_ --jobs 2 --out battle-results/fair-vs-mmai
+
+# zwei Varianten auf denselben Szenarien vergleichen (z. B. mit FAI_ROUNDS=1 gegen Standard)
+python3 arena/compare_runs.py battle-results/variante-a battle-results/variante-b
+```
+
+Score eines Kampfes = eigener verbleibender Armee-Anteil minus gegnerischer verbleibender Anteil (−1 … +1).
+MMAI braucht seine Mod im VCMI-Datenordner; für VCMI 1.7.x die Version aus dem offiziellen Mod-Repository (Modelle mit Endung `-stochastic.onnx`).
 
 Ergebnis: `results.jsonl` (eine Zeile pro Partie) und `summary.md` mit Siegquote und 95-%-Konfidenzintervall.
 

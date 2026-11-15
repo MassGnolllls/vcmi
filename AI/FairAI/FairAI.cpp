@@ -53,8 +53,8 @@ std::string FairAIGateway::getBattleAIName() const
 			return name;
 	}
 
-	// Phase 0: VCMI's BattleAI fights for us. Phase 1 replaces this with FairAI's own combat module.
-	return "BattleAI";
+	// FairAI's own combat module (same library)
+	return "FairAI";
 }
 
 void FairAIGateway::initGameInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CCallback> CB)

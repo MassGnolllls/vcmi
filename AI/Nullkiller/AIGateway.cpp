@@ -1666,6 +1666,12 @@ void AIGateway::requestSent(const CPackForServer * pack, int requestID)
 
 std::string AIGateway::getBattleAIName() const
 {
+	// arena runs may assign a combat AI per player (see client/ArenaHarness)
+	const JsonNode & arenaBattleAI = settings["session"]["arena"]["battleAI"];
+	if(arenaBattleAI.isVector() && playerID.isValidPlayer() && playerID.getNum() < static_cast<int>(arenaBattleAI.Vector().size())
+		&& !arenaBattleAI.Vector()[playerID.getNum()].String().empty())
+		return arenaBattleAI.Vector()[playerID.getNum()].String();
+
 	if(settings["ai"]["combatEnemyAI"].getType() == JsonNode::JsonType::DATA_STRING)
 		return settings["ai"]["combatEnemyAI"].String();
 	else

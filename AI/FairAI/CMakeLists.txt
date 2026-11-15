@@ -2,6 +2,24 @@ set(fairAI_SRCS
 		FairAI.cpp
 		Status.cpp
 		Perception/Perception.cpp
+		Combat/CombatSim.cpp
+		Combat/FairBattleAI.cpp
+)
+
+# Components of VCMI's BattleAI reused by FairAI's combat module (hero spells, special units,
+# engine-based enumeration of legal attacks). Compiled into FairAI so both libraries stay independent.
+set(battleAIDir ${CMAKE_CURRENT_SOURCE_DIR}/../BattleAI)
+list(APPEND fairAI_SRCS
+		${battleAIDir}/AttackPossibility.cpp
+		${battleAIDir}/BattleAI.cpp
+		${battleAIDir}/BattleEvaluator.cpp
+		${battleAIDir}/BattleExchangeVariant.cpp
+		${battleAIDir}/EnemyInfo.cpp
+		${battleAIDir}/PossibleSpellcast.cpp
+		${battleAIDir}/PotentialTargets.cpp
+		${battleAIDir}/SpellTargetsEvaluator.cpp
+		${battleAIDir}/StackWithBonuses.cpp
+		${battleAIDir}/ThreatMap.cpp
 )
 
 set(fairAI_HEADERS
@@ -10,6 +28,8 @@ set(fairAI_HEADERS
 		FairAI.h
 		Status.h
 		Perception/Perception.h
+		Combat/CombatSim.h
+		Combat/FairBattleAI.h
 )
 
 if(NOT ENABLE_STATIC_LIBS)

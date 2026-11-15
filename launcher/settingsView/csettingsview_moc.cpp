@@ -132,6 +132,10 @@ void CSettingsView::fillValidCombatAILibraries(QComboBox * comboBox, QString act
 	comboBox->addItem(tr("MMAI (experimental)"), "MMAI");
 #endif
 
+#ifdef ENABLE_FAIR_AI
+	comboBox->addItem(tr("FairAI (experimental, plays without cheats)"), "FairAI");
+#endif
+
 	fillValidAnyAILibraries(comboBox, activeAI);
 	comboBox->blockSignals(false);
 }

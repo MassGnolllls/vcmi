@@ -206,6 +206,10 @@ if(ANDROID)
 	list(APPEND launcher_RESOURCES "${CMAKE_CURRENT_BINARY_DIR}/Mods.qrc")
 endif()
 
+if(ENABLE_FAIR_AI)
+	target_compile_definitions(vcmilauncher PRIVATE ENABLE_FAIR_AI)
+endif()
+
 target_sources(vcmilauncher PRIVATE
 	${launcher_SRCS}
 	${launcher_HEADERS}

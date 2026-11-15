@@ -7,6 +7,7 @@
  */
 #include "StdInc.h"
 #include "FairAI.h"
+#include "Combat/FairBattleAI.h"
 
 #ifdef __GNUC__
 #define strcpy_s(a, b, c) strncpy(a, c, b)
@@ -24,10 +25,14 @@ extern "C" DLL_EXPORT void GetAiName(char * name)
 	strcpy_s(name, strlen(g_cszAiName) + 1, g_cszAiName);
 }
 
-// FairAI is one library for both roles: the adventure AI handles its own battles.
-// Phase 1 will additionally export GetNewBattleAI so FairAI's combat logic can also
-// be selected as a standalone combat AI (neutral battles, arena comparisons).
+// One library for both roles: adventure AI and combat AI. The combat AI can also be
+// selected on its own (e.g. as combat AI for other adventure AIs or in arena battles).
 extern "C" DLL_EXPORT void GetNewAI(std::shared_ptr<CGlobalAI> & out)
 {
 	out = std::make_shared<FAI::FairAIGateway>();
+}
+
+extern "C" DLL_EXPORT void GetNewBattleAI(std::shared_ptr<CBattleGameInterface> & out)
+{
+	out = std::make_shared<FAI::Combat::FairBattleAI>();
 }
