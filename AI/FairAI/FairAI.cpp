@@ -321,12 +321,45 @@ void FairAIGateway::gameOver(PlayerColor player, const EVictoryLossCheckResult &
 void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * army1, const CCreatureSet * army2, int3 tile, const CGHeroInstance * hero1, const CGHeroInstance * hero2, BattleSide side, bool replayAllowed)
 {
 	status.setBattle(BattleState::ONGOING_BATTLE);
+	// diagnostics: who fights whom, with which (own, exact) strength
+	{
+		auto describe = [](const CCreatureSet * army, const CGHeroInstance * hero)
+		{
+			std::string who = hero ? hero->getNameTranslated() : std::string("army");
+			return who + " (" + std::to_string(army ? army->getArmyStrength() : 0) + ")";
+		};
+		const bool weAttack = side == BattleSide::ATTACKER;
+		logAi->info("FairAI %s battle at %s: %s %s %s", playerID.toString(), tile.toString(),
+			describe(weAttack ? army1 : army2, weAttack ? hero1 : hero2), weAttack ? "attacks" : "is attacked by",
+			weAttack ? (hero2 ? hero2->getNameTranslated() : std::string("guards")) : (hero1 ? hero1->getNameTranslated() : std::string("monsters")));
+		battleSide = side;
+
+		// calibration (log only, never used for decisions): what the UI showed vs. the real enemy
+		const CCreatureSet * enemyArmy = weAttack ? army2 : army1;
+		const CGHeroInstance * enemyHero = weAttack ? hero2 : hero1;
+		const auto * enemyArmed = dynamic_cast<const CArmedInstance *>(enemyArmy);
+		if(enemyArmed && perception)
+		{
+			ObservedArmy seen = perception->observeArmy(enemyArmed);
+			logAi->info("FairAI %s calibration: enemy %s observed %llu..%llu (expected %llu), actual %llu, hero factor %.2f",
+				playerID.toString(), enemyHero ? "hero" : "army", (unsigned long long)seen.minStrength(), (unsigned long long)seen.maxStrength(),
+				(unsigned long long)seen.expectedStrength(), (unsigned long long)enemyArmy->getArmyStrength(), enemyHero ? enemyHero->getFightingStrength() : 1.0);
+		}
+	}
 	CAdventureAI::battleStart(battleID, army1, army2, tile, hero1, hero2, side, replayAllowed);
 }
 
 void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br, QueryID queryID)
 {
 	status.setBattle(BattleState::ENDING_BATTLE);
+	if(br)
+	{
+		int lost = 0;
+		for(const auto & entry : br->casualties[battleSide])
+			lost += entry.second;
+		logAi->info("FairAI %s battle result: %s, %d of our creatures died", playerID.toString(),
+			br->winner == battleSide ? "won" : "lost", lost);
+	}
 	CAdventureAI::battleEnd(battleID, br, queryID);
 
 	if(queryID != QueryID::NONE && cb->getPlayerState(playerID)->isHuman())

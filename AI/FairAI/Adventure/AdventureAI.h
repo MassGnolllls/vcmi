@@ -57,6 +57,7 @@ struct Threat
 	int3 pos;
 	double strength = 0;
 	double radius = 0;
+	int age = 0; ///< days since we saw it
 	ObjectInstanceID hero;
 };
 
@@ -130,7 +131,14 @@ private:
 	std::vector<Threat> threats;
 	void updateThreats();
 	/// Strongest enemy hero that might attack this tile before our next turn
-	double threatAt(const int3 & tile, ObjectInstanceID ignoreHero = ObjectInstanceID()) const;
+	/// Cautious: weak heroes also fear enemies seen up to three days ago, in a wider radius
+	double threatAt(const int3 & tile, ObjectInstanceID ignoreHero = ObjectInstanceID(), bool cautious = false) const;
+	/// Tiles a collector may work on: close to one of our towns
+	bool inTerritory(const int3 & tile) const;
+	int lastHeroLossDay = -100;
+	std::set<ObjectInstanceID> heroesLastTurn;
+	/// An enemy hero was seen within `radius` tiles of `tile` during the last `days` days
+	bool enemySeenNear(const int3 & tile, int days, double radius) const;
 	/// Strength the hero would defend with on this tile (own town: garrison and walls help)
 	double defenceAt(const CGHeroInstance * hero, const int3 & tile) const;
 
@@ -148,7 +156,7 @@ private:
 	double observedDanger(const ObservedObject & object) const;
 	double guardDanger(const int3 & tile) const;
 	/// Expected losses in gold equivalents, or a negative value if the fight is too risky
-	double expectedLoss(const CGHeroInstance * hero, double danger) const;
+	double expectedLoss(const CGHeroInstance * hero, double danger, bool desperate = false) const;
 
 	/// Moves the hero one step towards `tile`. Returns false if no step could be made.
 	bool stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths);
@@ -161,6 +169,8 @@ private:
 	void recruitInTown(const CGTownInstance * town, const CArmedInstance * destination, int64_t goldReserve);
 	int64_t recruitableValue(const CGTownInstance * town, int64_t gold) const;
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);
+	/// Upgrades the hero's creatures in the town it visits
+	void upgradeArmy(const CGHeroInstance * hero);
 	/// Moves the strongest stacks from `source` to `destination` (keeps one unit on a source hero)
 	void pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source);
 	double transferableValue(const CGHeroInstance * from) const;

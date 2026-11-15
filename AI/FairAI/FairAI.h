@@ -17,6 +17,7 @@
 
 #include "../../lib/callback/CAdventureAI.h"
 #include "Status.h"
+#include "../../lib/battle/BattleSide.h"
 
 VCMI_LIB_NAMESPACE_BEGIN
 class AsyncRunner;
@@ -81,6 +82,7 @@ private:
 	std::unique_ptr<Perception> perception;
 	std::unique_ptr<AdventureAI> adventure; // after perception: destroyed first
 	Status status;
+	BattleSide battleSide = BattleSide::NONE;
 
 	void makeTurn();
 	void endTurn();

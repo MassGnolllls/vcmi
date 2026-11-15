@@ -21,9 +21,9 @@ struct Params
 	double resourceValueFactor = 0.6;  ///< x the game's market price of a resource
 
 	// --- battles
-	double safetyRatio = 1.4;          ///< minimum own strength / enemy strength to start a fight (main hero)
+	double safetyRatio = 1.3;          ///< minimum own strength / enemy strength to start a fight (main hero)
 	double safetyRatioSecondary = 2.5; ///< same for scouts and collectors
-	double dangerUpperWeight = 0.4;    ///< observed quantity ranges: weight of the upper bound
+	double dangerUpperWeight = 0.15;   ///< observed quantity ranges: weight of the upper bound
 	double lossFactor = 0.7;           ///< scales the Lanchester estimate of own losses
 	double lossAversion = 1.0;         ///< weight of expected losses against gains
 	double expValueMain = 0.6;         ///< gold per experience point for the main hero
@@ -32,9 +32,10 @@ struct Params
 
 	// --- enemy heroes
 	double threatRadius = 16;          ///< tiles an enemy hero may cover until our next turn
-	double enemyHeroFactor = 1.25;     ///< assumed attack/defence bonus of an enemy hero
-	double threatTolerance = 0.8;      ///< avoid tiles where threat > tolerance x own strength
+	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
+	double threatTolerance = 0.9;      ///< avoid tiles where threat > tolerance x own strength
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
+	double wallsFactor = 1.5;          ///< sieges: defenders behind town walls count this much more
 
 	// --- movement and planning
 	double travelOffset = 0.15;        ///< days added to every travel time (visit overhead)
@@ -52,6 +53,8 @@ struct Params
 	double reinforceFactor = 0.8;      ///< value of picking up town troops (main hero)
 	int heroGoldReserve = 1000;        ///< gold kept after hiring a hero (except on the first days)
 	double retreatValue = 0.6;         ///< share of hero + army value saved by leaving a threatened tile
+	double collectorRadius = 12;       ///< collectors stay within this many tiles of an own town
+	int maxHeroes = 8;                 ///< never hire beyond this
 
 	/// Apply overrides from the arena settings for this player (no-op in normal games)
 	void loadOverrides(int playerIndex);
