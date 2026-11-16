@@ -1,5 +1,5 @@
 {
- "note": "long games on medium land maps (150 days, 24 paired games per config): further switches one by one - surr = surrender lost battles when gold is plentiful and hire veterans back, ff = fights against guards judged by simulated battle, sc2 = two scouts, know = secondary skills by role, artifact care, resource plan",
+ "note": "long games on medium land maps (150 days, 24 paired games per config): further switches one by one - surr = surrender lost battles when gold is plentiful and hire veterans back, ff = fights against guards judged by simulated battle, roam = more secondary heroes and all of them roam beyond the home territory (none sits in a garrison), know = secondary skills by role, artifact care, resource plan",
  "script": "matrix.py",
  "args": [
   "play",
@@ -16,7 +16,7 @@
   "--only",
   "m-land-2p",
   "--configs",
-  "{\"base\": {}, \"surr\": {\"surrender\": 1, \"veterans\": 1}, \"ff\": {\"fightForecast\": 1}, \"sc2\": {\"scouts\": 2}, \"know\": {\"skillChoice\": 1, \"artifactCare\": 1, \"resourcePlan\": 1}}"
+  "{\"base\": {}, \"surr\": {\"surrender\": 1, \"veterans\": 1}, \"ff\": {\"fightForecast\": 1}, \"roam\": {\"collectorsRoam\": 0, \"scouts\": 8, \"heroesWeek1\": 3, \"heroesWeek3\": 4, \"heroesLater\": 5}, \"know\": {\"skillChoice\": 1, \"artifactCare\": 1, \"resourcePlan\": 1}}"
  ],
  "jobs": 6
 }
