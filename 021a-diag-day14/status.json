@@ -1,0 +1,9 @@
+{
+ "job": "021a-diag-day14",
+ "state": "running",
+ "commit": "d5bf662d41bb1eb772aa35a1a7a1fbc84e439430",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T12:43:23",
+ "note": "diagnosis: where does FairAI fall behind? state of both sides at day 14 (72 games)"
+}
