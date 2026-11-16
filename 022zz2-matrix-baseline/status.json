@@ -1,9 +1,12 @@
 {
  "job": "022zz2-matrix-baseline",
- "state": "running",
+ "state": "done",
  "commit": "d5d444838865e8977d046f3791f033d85bd079f4",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T15:53:02",
- "note": "baseline over the map matrix: FairAI (boats, team mates, no ping-pong) vs Nullkiller2 in every category"
+ "note": "baseline over the map matrix: FairAI (boats, team mates, no ping-pong) vs Nullkiller2 in every category",
+ "returncode": 0,
+ "finished": "2026-11-16T17:43:07",
+ "minutes": 110.1
 }
