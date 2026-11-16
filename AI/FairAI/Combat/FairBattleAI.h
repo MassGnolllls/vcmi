@@ -20,6 +20,7 @@
 #include "../../../lib/callback/CBattleGameInterface.h"
 #include "../../../lib/battle/AutocombatPreferences.h"
 #include "../../../lib/battle/BattleSide.h"
+#include "../../../lib/battle/BattleAction.h"
 
 VCMI_LIB_NAMESPACE_BEGIN
 class CBattleCallback;
@@ -29,6 +30,7 @@ class Environment;
 VCMI_LIB_NAMESPACE_END
 
 class CBattleAI;
+class HypotheticBattle;
 
 namespace FAI::Combat
 {
@@ -53,6 +55,7 @@ private:
 	AutocombatPreferences preferences;
 	BattleSide side = BattleSide::NONE;
 	bool wasWaitingForRealize = false;
+	bool spellSearch = false; ///< from the player's FairAI parameters (or FAI_SPELL_SEARCH)
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);
@@ -62,6 +65,21 @@ private:
 	std::optional<BattleAction> siegeWalkerAction(const BattleID & battleID, const CStack * stack) const;
 	std::optional<BattleAction> considerRetreat(const BattleID & battleID);
 	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack);
+
+	struct UnitChoice
+	{
+		BattleAction action;
+		double score = 0;
+		std::string description;
+	};
+	/// Best action of `stack` in a (possibly hypothetical) battle state, with its look-ahead score
+	/// roundsAhead < 0: the search setting; spells look further ahead (their effect lasts for rounds)
+	UnitChoice bestUnitAction(const std::shared_ptr<HypotheticBattle> & state, const CStack * stack, int roundsAhead = -1);
+	/// Hero spells judged by the same look-ahead: every castable spell and target is applied to a
+	/// hypothetical copy of the battle (the game's own spell mechanics) and the active unit's best
+	/// continuation is compared with not casting; mana is priced by how scarce it is
+	bool trySpellSearch(const BattleID & battleID, const CStack * stack);
+	bool spellSearchEnabled() const;
 };
 
 }

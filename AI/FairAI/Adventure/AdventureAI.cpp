@@ -26,6 +26,8 @@
 #include "../../../lib/mapObjects/IMarket.h"
 #include "../../../lib/mapObjects/MiscObjects.h"
 #include "../../../lib/mapObjects/ObjectTemplate.h"
+#include "../../../lib/spells/CSpellHandler.h"
+#include "../../../lib/spells/ISpellMechanics.h"
 #include "../../../lib/ResourceSet.h"
 #include "../../../lib/gameState/UpgradeInfo.h"
 #include "../../../lib/mapObjects/army/CStackInstance.h"
@@ -195,6 +197,8 @@ void Params::loadOverrides(int playerIndex)
 	read("siegeCost", siegeCost);
 	read("baitStacks", baitStacks);
 	read("scouts", scouts);
+	read("moveSpells", moveSpells);
+	read("spellSearch", spellSearch);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -263,6 +267,7 @@ std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * her
 	config->options.useTeleportOneWay = true;
 	config->options.useTeleportOneWayRandom = false;
 	config->options.useTeleportWhirlpool = false;
+	config->options.canUseCast = params.moveSpells != 0;
 	config->options.turnLimit = static_cast<uint8_t>(std::clamp(params.maxTravelTurns + 1, 1, 250));
 	cb->calculatePaths(config);
 	return result;
@@ -577,6 +582,28 @@ bool AdventureAI::stepTowards(const CGHeroInstance * hero, const int3 & tile, co
 		cb->moveHero(hero, hero->pos, false);
 		return true;
 	}
+	// the path may rely on Fly or Water Walk the hero has not cast yet today
+	auto castMoveSpell = [&](BonusType needed)
+	{
+		if(hero->hasBonusOfType(needed))
+			return;
+		for(const auto & spell : LIBRARY->spellh->objects)
+		{
+			if(!spell || !spell->isAdventure() || !spell->getAdventureMechanics().givesBonus(hero, needed))
+				continue;
+			if(!hero->canCastThisSpell(spell.get()) || hero->mana < hero->getSpellCost(spell.get()))
+				continue;
+			logAi->info("FairAI %s: %s casts %s to go on", me.toString(), hero->getNameTranslated(), spell->getNameTranslated());
+			cb->castSpell(hero, spell->id);
+			gateway.waitTillFree();
+			return;
+		}
+	};
+	if(next.layer == EPathfindingLayer::AIR)
+		castMoveSpell(BonusType::FLYING_MOVEMENT);
+	else if(next.layer == EPathfindingLayer::WATER)
+		castMoveSpell(BonusType::WATER_WALKING);
+
 	const bool transit = next.layer == EPathfindingLayer::AIR;
 	cb->moveHero(hero, hero->convertFromVisitablePos(next.coord), transit);
 	return true;

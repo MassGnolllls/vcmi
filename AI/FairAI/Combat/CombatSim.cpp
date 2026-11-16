@@ -107,7 +107,8 @@ void SimState::init(const CBattleInfoCallback & cb, const std::vector<const batt
 		s.retaliationsPerRound = u->hasBonusOfType(BonusType::UNLIMITED_RETALIATIONS) ? 1000 : std::max(0, state->counterAttacks.total());
 		s.retaliationsLeft = u->ableToRetaliate() ? (u->hasBonusOfType(BonusType::UNLIMITED_RETALIATIONS) ? 1000 : state->counterAttacks.available()) : 0;
 		s.pos = u->getPosition();
-		s.acted = u->moved() || (!s.canMove && !s.shooter);
+		s.active = !u->hasBonusOfType(BonusType::NOT_ACTIVE);
+		s.acted = u->moved() || !s.active || (!s.canMove && !s.shooter);
 		s.waited = u->waited();
 		units.push_back(s);
 	}
@@ -244,7 +245,7 @@ int SimState::nextActiveUnit()
 		round++;
 		for(auto & u : units)
 		{
-			u.acted = !u.alive() || (!u.canMove && !u.shooter);
+			u.acted = !u.alive() || !u.active || (!u.canMove && !u.shooter);
 			u.waited = false;
 			u.retaliationsLeft = u.retaliationsPerRound;
 		}
@@ -390,6 +391,7 @@ void SimState::dealDamage(int target, double amount)
 void SimState::strike(int attacker, int target, bool ranged)
 {
 	const auto & a = units[attacker];
+	units[target].active = true; // blindness, paralysis and petrification end when the unit is attacked
 	if(ranged)
 	{
 		dealDamage(target, damage->ranged(attacker, target, shotIsFar(attacker, target)) * a.count);

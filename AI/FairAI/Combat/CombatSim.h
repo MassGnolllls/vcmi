@@ -60,6 +60,7 @@ struct SimUnit
 	bool flying = false;
 	bool doubleWide = false;
 	bool canMove = true;
+	bool active = true; ///< false while blinded, paralysed or petrified: skips its turns until attacked
 	bool noDistancePenalty = false;
 	bool blocksRetaliation = false; ///< enemies do not retaliate against this unit
 	bool attacksAllAdjacent = false;

@@ -9,12 +9,14 @@
 #include "FairBattleAI.h"
 #include "../../../lib/battle/BattleStateInfoForRetreat.h"
 #include "CombatSim.h"
+#include "../Adventure/Params.h"
 
 // components of VCMI's BattleAI (compiled into FairAI, see CMakeLists.txt)
 #include "../../BattleAI/BattleAI.h"
 #include "../../BattleAI/BattleEvaluator.h"
 #include "../../BattleAI/PotentialTargets.h"
 #include "../../BattleAI/StackWithBonuses.h"
+#include "../../BattleAI/SpellTargetsEvaluator.h"
 
 #include "../../../lib/CStack.h"
 #include "../../../lib/CCreatureHandler.h"
@@ -26,6 +28,10 @@
 #include "../../../lib/bonuses/BonusEnum.h"
 #include "../../../lib/callback/CBattleCallback.h"
 #include "../../../lib/callback/IGameInfoCallback.h"
+#include "../../../lib/GameLibrary.h"
+#include "../../../lib/mapObjects/CGHeroInstance.h"
+#include "../../../lib/spells/CSpellHandler.h"
+#include "../../../lib/spells/ISpellMechanics.h"
 
 #include <vcmi/Environment.h>
 
@@ -49,6 +55,8 @@ struct SearchSettings
 	bool robustStances = envInt("FAI_STANCES", 0) != 0;   ///< also play out against a waiting opponent
 	bool engineOutcome = envInt("FAI_OUTCOME", 1) != 0;   ///< use engine-evaluated results for attacks
 	double exposureWeight = envInt("FAI_EXPOSURE_PCT", 0) / 100.0; ///< weight of the next-round potential
+	int spellRounds = envInt("FAI_SPELL_ROUNDS", 2);        ///< spell search: rounds after the current one
+	int manaPricePermille = envInt("FAI_MANA_PRICE", 4);   ///< spell search: price of a scarce spell point, per mille of our army
 };
 
 const SearchSettings & searchSettings()
@@ -100,6 +108,10 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 
 	fallback = std::make_shared<CBattleAI>();
 	fallback->initBattleInterface(ENV, CB, preferences);
+
+	Params params;
+	params.loadOverrides(playerID.getNum());
+	spellSearch = params.spellSearch != 0;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -129,10 +141,98 @@ bool FairBattleAI::needsFallback(const CStack * stack) const
 		|| !stack->getPosition().isValid();
 }
 
+bool FairBattleAI::spellSearchEnabled() const
+{
+	if(const char * flag = std::getenv("FAI_SPELL_SEARCH"))
+		return std::string(flag) != "0";
+	return spellSearch;
+}
+
+bool FairBattleAI::trySpellSearch(const BattleID & battleID, const CStack * stack)
+{
+	auto battle = cb->getBattle(battleID);
+	const CGHeroInstance * hero = battle->battleGetMyHero();
+	if(!hero || battle->battleCanCastSpell(hero, spells::Mode::HERO) != ESpellCastProblem::OK)
+		return false;
+
+	struct Cast
+	{
+		const CSpell * spell;
+		spells::Target target;
+	};
+	std::vector<Cast> casts;
+	for(const auto & spell : LIBRARY->spellh->objects)
+	{
+		if(!spell->isCombat() || spell->isCreatureAbility() || !spell->canBeCast(battle.get(), spells::Mode::HERO, hero))
+			continue;
+		spells::BattleCast probe(battle.get(), hero, spells::Mode::HERO, spell.get());
+		for(const auto & target : SpellTargetEvaluator::getViableTargets(spell->battleMechanics(&probe).get()))
+			casts.push_back({spell.get(), target});
+	}
+	if(casts.empty())
+		return false;
+
+	const int rounds = searchSettings().spellRounds;
+	auto baseState = std::make_shared<HypotheticBattle>(env.get(), battle);
+	const double baseline = bestUnitAction(baseState, stack, rounds).score;
+
+	// what is at stake decides how much a spell must achieve; scarce mana is worth keeping
+	double ourValue = 0;
+	double enemyValue = 0;
+	for(const auto * unit : battle->battleGetAllStacks(false))
+	{
+		if(!unit->alive() || unit->isTurret())
+			continue;
+		const double value = static_cast<double>(unit->getCount()) * unit->creatureId().toCreature()->getAIValue();
+		(unit->unitSide() == side ? ourValue : enemyValue) += value;
+	}
+	const double mana = hero->mana;
+	const double scarcity = std::clamp(1.0 - mana / 60.0, 0.0, 1.0);
+	const double manaPrice = searchSettings().manaPricePermille / 1000.0 * ourValue * scarcity; // per spell point
+	const double threshold = 0.005 * (ourValue + enemyValue);
+
+	int best = -1;
+	double bestGain = threshold;
+	std::string bestWhat;
+	for(size_t i = 0; i < casts.size(); ++i)
+	{
+		const auto & cast = casts[i];
+		auto state = std::make_shared<HypotheticBattle>(env.get(), battle);
+		spells::BattleCast apply(state.get(), hero, spells::Mode::HERO, cast.spell);
+		apply.castEval(state->getServerCallback(), cast.target);
+		const double value = bestUnitAction(state, stack, rounds).score;
+		const double cost = battle->battleGetSpellCost(cast.spell, hero);
+		const double gain = value - baseline - manaPrice * cost;
+		if(gain > bestGain)
+		{
+			bestGain = gain;
+			best = static_cast<int>(i);
+			bestWhat = cast.spell->getNameTranslated();
+			if(!cast.target.empty() && cast.target.front().unitValue)
+				bestWhat += " on " + cast.target.front().unitValue->getDescription();
+		}
+	}
+	logAi->debug("FairBattleAI: spell search for %s: %d casts, best %s (gain %.0f, threshold %.0f, mana %.0f)", stack->getDescription(),
+		static_cast<int>(casts.size()), best >= 0 ? bestWhat : std::string("none"), best >= 0 ? bestGain : 0.0, threshold, mana);
+	if(best < 0)
+		return false;
+
+	BattleAction spellcast;
+	spellcast.actionType = EActionType::HERO_SPELL;
+	spellcast.spell = casts[best].spell->id;
+	spellcast.setTarget(casts[best].target);
+	spellcast.side = side;
+	spellcast.stackNumber = -1;
+	cb->battleMakeSpellAction(battleID, spellcast);
+	return true;
+}
+
 bool FairBattleAI::tryHeroSpell(const BattleID & battleID, const CStack * stack)
 {
 	if(!preferences.enableSpellsUsage)
 		return false;
+	if(spellSearchEnabled())
+		return trySpellSearch(battleID, stack);
 
 	auto battle = cb->getBattle(battleID);
 	const int simulationTurns = env->game()->getStartInfo()->difficulty < 4 ? 2 : 10;
@@ -253,7 +353,18 @@ std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battl
 
 BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack)
 {
-	auto battle = cb->getBattle(battleID);
+	auto state = std::make_shared<HypotheticBattle>(env.get(), cb->getBattle(battleID));
+	auto choice = bestUnitAction(state, stack);
+	logAi->debug("FairBattleAI: %s -> %s (score %.0f)", stack->getDescription(), choice.description, choice.score);
+	return choice.action;
+}
+
+FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<HypotheticBattle> & battle, const CStack * realStack, int roundsAhead)
+{
+	// the unit as it is in this (possibly hypothetical) state: spells change its speed and position
+	const battle::Unit * stack = battle->battleGetUnitByID(realStack->unitId());
+	if(!stack || !stack->alive())
+		return {BattleAction::makeDefend(realStack), -1e18, "gone"};
 
 	std::vector<const battle::Unit *> units;
 	for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
@@ -266,12 +377,12 @@ BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CSt
 
 	const int me = base.indexOf(stack->unitId());
 	if(me < 0)
-		return BattleAction::makeDefend(stack);
+		return {BattleAction::makeDefend(stack), base.evaluate(side), "defend"};
 
 	std::vector<Candidate> candidates;
 
 	// legal attacks and shots, as enumerated by the engine-based targeting code
-	auto hypothetic = std::make_shared<HypotheticBattle>(env.get(), battle);
+	auto hypothetic = battle;
 	DamageCache damageCache;
 	damageCache.buildDamageCache(hypothetic, side);
 	PotentialTargets targets(stack, damageCache, hypothetic);
@@ -352,7 +463,7 @@ BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CSt
 	// look ahead: every candidate is played out against an attacking and a waiting opponent,
 	// the worse of both counts (robust against opponents that do not walk into our traps)
 	const auto & config = searchSettings();
-	const int lastRound = base.round + config.roundsAhead;
+	const int lastRound = base.round + (roundsAhead >= 0 ? roundsAhead : config.roundsAhead);
 	const int enemySide = side == BattleSide::ATTACKER ? 1 : 0;
 	std::vector<Stance> enemyStances = {Stance::CHARGE};
 	if(config.robustStances)
@@ -385,8 +496,7 @@ BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CSt
 			best = &c;
 	}
 
-	logAi->debug("FairBattleAI: %s -> %s (score %.0f, %d candidates)", stack->getDescription(), best->description, best->score, candidates.size());
-	return best->real;
+	return {best->real, best->score, best->description};
 }
 
 }
