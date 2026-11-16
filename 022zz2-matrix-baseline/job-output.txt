@@ -327,3 +327,24 @@ match    1 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0
 match    5 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.27 [829.9s]
 match    3 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.21 [855.9s]
 match    0 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.32 [1025.4s]
+match    7 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.26 [804.9s]
+match    6 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.44 [873.7s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 8 (runner errors: 0)
+- decided: 0 -> FairAI won 0, lost 0
+- day limit reached: 8 (material lead for FairAI in 0)
+- stalled games (AI stopped responding), by AI on turn: none
+- no decided games
+- cheat flags raised: 0
+# A/B test (1 configs, seeds 42)
+
+Paired against `base`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| base | `{}` | 8 | 0 | 0 | 0.288 ± 0.088 | - | 8 |
+
+== xl-islands-8p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/d5d4448388/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2-matrix-baseline/xl-islands-8p/base-s42 --pool mix1-xl-islands-8p --max-days 90 --timeout 3600 --stall-seconds 180 --base-port 8100
