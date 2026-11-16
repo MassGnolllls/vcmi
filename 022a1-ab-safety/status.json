@@ -1,0 +1,9 @@
+{
+ "job": "022a1-ab-safety",
+ "state": "running",
+ "commit": "11b743704ed400bae196eac9905b6f7bdda03690",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T13:35:40",
+ "note": "hero safety: lower threat tolerance (1.0 instead of 1.4) and weaker walls in our own defence estimate (most main-hero deaths happen in towns we thought safe); 2x72 paired games, day 45"
+}
