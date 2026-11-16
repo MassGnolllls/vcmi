@@ -1,0 +1,50 @@
+{
+	"cheatsAllowed" : false,
+	"day" : 46,
+	"difficulty" : "king",
+	"lastTurnOf" : "blue",
+	"lastTurnOfAI" : "FairAI",
+	"map" : "MAPS/ARENA/2SM4D_S_L1_NONE_2004",
+	"outcome" : "timeout",
+	"players" : {
+		"blue" : {
+			"ai" : "FairAI",
+			"armyStrength" : 32016,
+			"cheated" : false,
+			"gold" : 7700,
+			"heroes" : 1,
+			"income" : 500,
+			"mapExploredRatio" : 0.512941,
+			"maxHeroLevel" : 5,
+			"mines" : 0,
+			"numberArtifacts" : 2,
+			"numberDwellings" : 0,
+			"score" : 378,
+			"status" : "ingame",
+			"totalExperience" : 5736,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		},
+		"red" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 81437,
+			"cheated" : false,
+			"gold" : 72812,
+			"heroes" : 8,
+			"income" : 13750,
+			"mapExploredRatio" : 1,
+			"maxHeroLevel" : 6,
+			"mines" : 7,
+			"numberArtifacts" : 15,
+			"numberDwellings" : 0,
+			"score" : 390,
+			"status" : "ingame",
+			"totalExperience" : 20833,
+			"townBuiltRatio" : 0.369099,
+			"towns" : 6
+		}
+	},
+	"seed" : 1702849896,
+	"wallTimeSec" : 22.1028,
+	"winner" : ""
+}
