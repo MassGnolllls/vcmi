@@ -1,5 +1,5 @@
 {
- "note": "long games on medium land maps (150 days, 2x12 games per config), code of 21:10 (idle heroes leave passes and go home, gate with two heroes, unexplored land around a guard seen from afar counts as a region): the campaign brought the first wins but also more defeats - what makes it safer? all = campaign + everything of the last job; allg = + secondary heroes leave garrison troops in the towns (no more 150k armies roaming with level-1 heroes); allv = + surrender a lost battle when gold is plentiful, hire veterans back; allr = + the campaign is interrupted to fetch troops once 40 % of the army waits at home",
+ "note": "long games on medium land maps (150 days, 24 games per config), code of 21:35 with the hand-over fix: the campaign brought the first wins but also more defeats - what makes it safer? h = hero against hero in one measure alone; all = campaign + expansion; allg = + secondary heroes leave garrison troops in the towns; alls = + supply runs; allv = + surrender a lost battle when gold is plentiful, hire veterans back; allr = + the campaign is interrupted to fetch troops once 40 % of the army waits at home",
  "script": "matrix.py",
  "args": [
   "play",
@@ -12,11 +12,11 @@
   "--jobs",
   "{jobs}",
   "--seeds",
-  "42,43",
+  "42",
   "--only",
   "m-land-2p",
   "--configs",
-  "{\"all\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1}, \"allg\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"collectorsTakeGarrison\": 0}, \"allv\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"surrender\": 1, \"veterans\": 1}, \"allr\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"refillShare\": 0.4}}"
+  "{\"h\": {\"heroModel\": 1}, \"all\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1}, \"allg\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"collectorsTakeGarrison\": 0}, \"alls\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"supplyRuns\": 1}, \"allv\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"surrender\": 1, \"veterans\": 1}, \"allr\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"refillShare\": 0.4}}"
  ],
  "jobs": 6
 }

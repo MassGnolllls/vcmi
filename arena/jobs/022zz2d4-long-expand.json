@@ -1,5 +1,5 @@
 {
- "note": "long games on medium land maps (150 days, 2x12 games per config), code of 21:15. Nullkiller2 ends with five of seven towns in nearly every game: what makes FairAI expand? g = secondary heroes leave garrison troops in the towns (one army instead of four heroes with 20k each); se = troops fetched by share + main hero looks 12 days ahead + guards at region borders count; seg = se + g; segx = seg + a whole unexplored region counts when exploring + the way home for troops counts twice; segt = segx + towns worth 60k/80k instead of 12k/20k",
+ "note": "long games on medium land maps (150 days, 24 games per config), code of 21:35 with the hand-over fix (heroes that walk up to each other really meet; before, troops reached the main hero only by chance and the army stayed split). Nullkiller2 ends with five of seven towns in nearly every game: what makes FairAI expand? g = secondary heroes leave garrison troops in the towns; s = supply runs (a hero standing in a town brings what has grown there to the main hero; implies g); se = troops fetched by share + main hero looks 12 days ahead + guards at region borders count; ses = se + s; sesx = ses + a whole unexplored region counts when exploring",
  "script": "matrix.py",
  "args": [
   "play",
@@ -12,11 +12,11 @@
   "--jobs",
   "{jobs}",
   "--seeds",
-  "42,43",
+  "42",
   "--only",
   "m-land-2p",
   "--configs",
-  "{\"base\": {}, \"g\": {\"collectorsTakeGarrison\": 0}, \"se\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12}, \"seg\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"collectorsTakeGarrison\": 0}, \"segx\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"collectorsTakeGarrison\": 0, \"exploreRegion\": 1, \"fetchRoundTrip\": 1}, \"segt\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"collectorsTakeGarrison\": 0, \"exploreRegion\": 1, \"fetchRoundTrip\": 1, \"neutralTownValue\": 60000, \"enemyTownValue\": 80000}}"
+  "{\"base\": {}, \"g\": {\"collectorsTakeGarrison\": 0}, \"s\": {\"supplyRuns\": 1}, \"se\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12}, \"ses\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"supplyRuns\": 1}, \"sesx\": {\"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"supplyRuns\": 1, \"exploreRegion\": 1}}"
  ],
  "jobs": 6
 }
