@@ -4,7 +4,7 @@ Paired against `base`: mean score difference over the games both played (95% CI)
 
 | config | params | games | won | lost | score | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|
-| base | `{}` | 288 | 58 | 76 | 0.511 ± 0.045 | - | 288 |
-| osc0 | `{"antiOscillation": 0}` | 287 | 35 | 90 | 0.438 ± 0.042 | -0.073 ± 0.045 | 287 |
-| conc1 | `{"concentrate": 1}` | 288 | 58 | 75 | 0.520 ± 0.045 | +0.008 ± 0.037 | 288 |
-| siege1 | `{"siegeCost": 1}` | 288 | 56 | 76 | 0.512 ± 0.044 | +0.001 ± 0.038 | 288 |
+| base | `{}` | 360 | 72 | 93 | 0.513 ± 0.040 | - | 360 |
+| osc0 | `{"antiOscillation": 0}` | 359 | 43 | 115 | 0.435 ± 0.038 | -0.077 ± 0.042 | 359 |
+| conc1 | `{"concentrate": 1}` | 360 | 67 | 95 | 0.510 ± 0.040 | -0.003 ± 0.033 | 360 |
+| siege1 | `{"siegeCost": 1}` | 360 | 68 | 97 | 0.503 ± 0.039 | -0.009 ± 0.035 | 360 |
