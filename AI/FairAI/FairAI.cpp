@@ -9,6 +9,7 @@
  */
 #include "StdInc.h"
 #include "FairAI.h"
+#include "../../lib/gameState/InfoAboutArmy.h"
 #include "../../lib/mapObjects/CGTownInstance.h"
 
 #include "Perception/Perception.h"
@@ -204,6 +205,21 @@ std::optional<BattleAction> FairAIGateway::makeSurrenderRetreatDecision(const Ba
 	// who can be hired again. Without a town there is nothing to flee to.
 	if(!battleState.canFlee || !battleState.ourHero || cb->getTownsInfo().empty())
 		return std::nullopt;
+	// A battle our simulator sees as lost: buying the army free keeps all of it - if we have the gold
+	// and the army is worth more to us than that gold (and than what it would still kill).
+	const BattleVerdict verdict = battleVerdict(playerID);
+	if(verdict.lost && battleState.canSurrender && adventure)
+	{
+		auto battle = cb->getBattle(battleID);
+		const int cost = battle ? battle->battleGetSurrenderCost() : -1;
+		if(cost >= 0 && adventure->surrenderWorth(cost, verdict.ownValue, verdict.enemyLoss))
+		{
+			logAi->info("FairAI %s: %s surrenders a lost battle for %d gold (army value %.0f, would still kill %.0f)", playerID.toString(),
+				battleState.ourHero->getNameTranslated(), cost, verdict.ownValue, verdict.enemyLoss);
+			adventure->noteSurrender(battleState.ourHero->getHeroTypeID());
+			return BattleAction::makeSurrender(battleState.ourSide);
+		}
+	}
 	const double ours = static_cast<double>(battleState.getOurStrength());
 	const double theirs = std::max<double>(1.0, static_cast<double>(battleState.getEnemyStrength()));
 	if(ours / theirs < 0.25 && battleState.ourHero->level >= 4)
@@ -366,6 +382,15 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 	CAdventureAI::battleStart(battleID, army1, army2, tile, hero1, hero2, side, replayAllowed);
 	if(auto battle = cb->getBattle(battleID))
 	{
+		// In battle the game shows the enemy hero's primary skills (its window on the battlefield):
+		// remembered for the next time we judge a fight against that hero.
+		const CGHeroInstance * enemyHero = side == BattleSide::ATTACKER ? hero2 : hero1;
+		if(enemyHero && adventure)
+		{
+			const InfoAboutHero shown = battle->battleGetHeroInfo(side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER);
+			if(shown.details && shown.details->primskills.size() >= 4)
+				adventure->noteHeroSkills(enemyHero->getHeroTypeID(), {shown.details->primskills[0], shown.details->primskills[1], shown.details->primskills[2], shown.details->primskills[3]});
+		}
 		if(const auto * town = battle->battleGetDefendedTown(); town && town->fortLevel() > CGTownInstance::NONE)
 			logAi->info("FairAI %s battle is a siege of %s (fort level %d)", playerID.toString(), town->getNameTranslated(), static_cast<int>(town->fortLevel()));
 	}

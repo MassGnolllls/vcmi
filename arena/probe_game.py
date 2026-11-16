@@ -39,7 +39,7 @@ def main() -> int:
     p.add_argument("--mods", default="", help="extra mods to enable, comma-separated")
     args = p.parse_args()
 
-    out = Path(args.out)
+    out = Path(args.out).resolve()  # the client changes its working directory: relative paths would go astray
     out.mkdir(parents=True, exist_ok=True)
     result_file = out / "result.json"
     config_home = Path(tempfile.mkdtemp(prefix="vcmi-probe-cfg-"))

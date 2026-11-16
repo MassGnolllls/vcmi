@@ -13,6 +13,26 @@
 namespace FAI
 {
 
+namespace
+{
+std::mutex verdictMutex;
+std::map<PlayerColor, BattleVerdict> verdicts;
+}
+
+void setBattleVerdict(PlayerColor player, const BattleVerdict & verdict)
+{
+	std::unique_lock lock(verdictMutex);
+	verdicts[player] = verdict;
+}
+
+BattleVerdict battleVerdict(PlayerColor player)
+{
+	std::unique_lock lock(verdictMutex);
+	auto it = verdicts.find(player);
+	return it == verdicts.end() ? BattleVerdict() : it->second;
+}
+
+
 void Status::setBattle(BattleState state)
 {
 	std::unique_lock lock(mx);

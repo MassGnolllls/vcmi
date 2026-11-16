@@ -1,0 +1,12 @@
+{
+ "note": "maps for long games (pool long1): 12 small and 12 medium land maps for two players, 6 each of medium islands, free-for-all, teams and large land",
+ "script": "matrix.py",
+ "args": [
+  "gen",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json"
+ ],
+ "jobs": 1
+}

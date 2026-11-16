@@ -1,0 +1,22 @@
+{
+ "note": "long games on medium land maps (150 days, 2x24 paired games per config): which of today's three ideas win games? share = troops waiting at home count by what they add to the main hero's army (no more circling the town for a trickle); camp = campaign mode (a clearly superior main hero marches on the enemy's towns, no errands, no chasing heroes); expand = what a guard blocks counts from the guard's place, unexplored land behind a guard counts as a new region; all = the three together",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "42,43",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"base\": {}, \"share\": {\"fetchByShare\": 1}, \"camp\": {\"leaderFocus\": 1, \"noChase\": 1}, \"expand\": {\"unlockDirect\": 1, \"regionValue\": 8000}, \"all\": {\"fetchByShare\": 1, \"leaderFocus\": 1, \"noChase\": 1, \"unlockDirect\": 1, \"regionValue\": 8000}}"
+ ],
+ "jobs": 6
+}

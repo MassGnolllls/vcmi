@@ -76,6 +76,24 @@ struct ObservedObject
 	int lastSeenDay = -1;
 	bool visibleNow = false;
 	std::optional<ObservedArmy> army;
+	/// heroes: attack, defence, spell power, knowledge - only if the game shows them to us in the
+	/// hero's info window (it does not for an ordinary enemy hero)
+	std::optional<std::array<int, 4>> heroSkills;
+};
+
+/// The best hero of another player as our thieves' guild shows it (tavern window)
+struct GuildHero
+{
+	HeroTypeID hero;                            ///< whose portrait is shown
+	std::optional<std::array<int, 4>> skills;   ///< shown from two taverns on
+};
+
+/// What the thieves' guild window shows (as far as FairAI uses it)
+struct GuildInfo
+{
+	bool available = false;                     ///< we own a tavern
+	std::map<PlayerColor, GuildHero> bestHero;
+	std::map<PlayerColor, int> townPlace;       ///< place in the ranking by number of towns (0 = most; ties share a place)
 };
 
 class Perception
@@ -106,6 +124,10 @@ public:
 
 	/// Perceive an army the way the UI would show it to us
 	ObservedArmy observeArmy(const CArmedInstance * army) const;
+
+	/// What the thieves' guild in one of our taverns tells about the other players' best heroes.
+	/// Only what the window shows: the portrait and, with enough taverns, the primary skills.
+	GuildInfo thievesGuild() const;
 
 	/// Short status line for logs
 	std::string summary() const;

@@ -1,0 +1,13 @@
+{
+ "pool": "long1",
+ "mods": "",
+ "note": "long games: the day limits let most games come to a decision (wins and losses instead of army shares)",
+ "categories": [
+  {"name": "s-land-2p", "template": "2SM4d", "size": "s", "levels": 1, "water": "none", "players": 2, "count": 12, "seed": 41000, "days": 90, "timeout": 1800},
+  {"name": "m-land-2p", "template": "Skirmish M", "size": "m", "levels": 1, "water": "none", "players": 2, "count": 12, "seed": 41200, "days": 150, "timeout": 3600, "stall": 300},
+  {"name": "m-islands-2p", "template": "2SM4d", "size": "m", "levels": 1, "water": "islands", "players": 2, "count": 6, "seed": 41400, "days": 150, "timeout": 3600, "stall": 300},
+  {"name": "m-ffa-4p", "template": "2SM4d(2)", "size": "m", "levels": 1, "water": "none", "players": 4, "count": 6, "seed": 41500, "days": 150, "timeout": 5400, "stall": 300},
+  {"name": "m-teams-4p", "template": "2SM4d(2)", "size": "m", "levels": 1, "water": "none", "players": 4, "teams": "0,1,0,1", "count": 6, "seed": 41600, "days": 150, "timeout": 5400, "stall": 300},
+  {"name": "l-land-2p", "template": "Jebus Cross", "size": "l", "levels": 1, "water": "none", "players": 2, "count": 6, "seed": 41700, "days": 200, "timeout": 7200, "stall": 300}
+ ]
+}

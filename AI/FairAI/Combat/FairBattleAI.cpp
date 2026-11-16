@@ -10,6 +10,7 @@
 #include "../../../lib/battle/BattleStateInfoForRetreat.h"
 #include "CombatSim.h"
 #include "../Adventure/Params.h"
+#include "../Status.h"
 
 // components of VCMI's BattleAI (compiled into FairAI, see CMakeLists.txt)
 #include "../../BattleAI/BattleAI.h"
@@ -349,6 +350,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	params.loadOverrides(playerID.getNum());
 	spellSearch = params.spellSearch != 0;
 	simAbilities = params.simAbilities != 0;
+	setMultiHex(params.simMultiHex != 0);
 	battlePlan = params.battlePlan != 0;
 }
 
@@ -603,7 +605,45 @@ std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battl
 		}
 	}
 	bs.turnsSkippedByDefense = 0;
-	// the adventure AI decides: it knows what the hero is worth
+	// Is the battle lost? Both sides played on by the simulator, our side once holding and once
+	// advancing. Lost means: we end with nothing either way and the enemy keeps a good part.
+	BattleVerdict verdict;
+	try
+	{
+		if(!battle->battleGetDefendedTown())
+		{
+			std::vector<const battle::Unit *> units;
+			for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
+				units.push_back(u);
+			DamageTable table;
+			table.build(*battle, units, simAbilities);
+			SimState base;
+			base.init(*battle, units, table, simAbilities);
+			const BattleSide other = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
+			const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
+			const double enemyNow = base.sideValue(other);
+			verdict.ownValue = base.sideValue(side);
+			verdict.lost = true;
+			double enemyLeft = enemyNow;
+			for(Stance stance : {Stance::HOLD, Stance::CHARGE})
+			{
+				SimState sim = base;
+				sim.stance[ownSide] = stance;
+				sim.playout(base.round + 30);
+				if(sim.sideValue(side) > 0 || sim.sideValue(other) < 0.3 * enemyNow)
+					verdict.lost = false;
+				enemyLeft = std::min(enemyLeft, sim.sideValue(other));
+			}
+			verdict.enemyLoss = enemyNow - enemyLeft;
+		}
+	}
+	catch(const std::exception & e)
+	{
+		logAi->debug("FairBattleAI: no verdict on the battle (%s)", e.what());
+		verdict = BattleVerdict();
+	}
+	setBattleVerdict(playerID, verdict);
+	// the adventure AI decides: it knows what the hero, the army and our gold are worth
 	return cb->makeSurrenderRetreatDecision(battleID, bs);
 }
 

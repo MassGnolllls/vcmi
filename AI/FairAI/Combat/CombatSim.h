@@ -79,6 +79,17 @@ struct SimUnit
 	double fireShield = 0;           ///< share of melee damage received that burns the attacker (efreet sultans)
 	bool fireImmune = false;
 	bool returnsAfterStrike = false; ///< flies back to where it started after a melee attack (harpies)
+	// A melee attack that reaches further hexes: breath goes on behind the target (dragons, phoenix),
+	// several heads bite sideways (cerberus). Each path is noted the way the game notes it: steps from
+	// the attacking hex, one digit per step, 1 = straight on towards the target, 2 and 6 = one turn to
+	// either side.
+	uint8_t extraCount = 0;
+	std::array<int16_t, 6> extraPath{};
+	uint8_t extraFriendly = 0;       ///< bit i: path i burns our own units too (breath)
+	bool areaShot = false;           ///< its shot bursts on every hex around the target, friend and foe (lich, magog)
+	bool areaLivingOnly = false;     ///< ... and harms only the living (death cloud)
+	bool areaFire = false;           ///< ... and is fire (fireball): the fire-immune stay unharmed
+	bool magicImmune = false;        ///< immune to all spells: spell-like shots do nothing to it
 	double meleeFactor = 1.0;        ///< expected multiplier of melee damage dealt: luck, death blow
 	double rangedFactor = 1.0;       ///< expected multiplier of ranged damage dealt: luck
 	double turnFactor = 1.0;         ///< expected number of own actions per turn: good morale > 1, bad morale < 1
@@ -101,6 +112,8 @@ struct StackSpec
 	const CCreature * type = nullptr;
 	int count = 0;
 	BattleSide side = BattleSide::NONE;
+	int attackBonus = 0;  ///< added to the bearer's attack: an enemy hero's skill as we estimate it
+	int defenceBonus = 0; ///< same for defence
 };
 
 /// Expected damage per attacking creature, per unit pair
@@ -110,10 +123,11 @@ public:
 	/// Without a battle (forecasts on the adventure map): FairAI's own copy of the game's damage formula
 	void build(const std::vector<StackSpec> & stacks);
 	/// Expected damage of one attacking creature, without luck and other dice
-	static double formula(const ACreature & attacker, const CCreature * attackerType, const ACreature & defender, const CCreature * defenderType, bool shooting, int chargeDistance = 0);
+	static double formula(const ACreature & attacker, const CCreature * attackerType, const ACreature & defender, const CCreature * defenderType, bool shooting, int chargeDistance = 0, int attackBonus = 0, int defenceBonus = 0);
 	/// abilities = false: plain damage only (to measure what the knowledge of special abilities is worth)
 	void build(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & units, bool abilities = true);
 
+	/// also filled for units of the same side where the attacker can hit its own (breath, bursting shots)
 	double melee(size_t attacker, size_t defender) const { return meleeDmg[attacker * n + defender]; }
 	/// extra melee damage per creature for every hex walked before the attack (jousting; 0 for everybody else)
 	double chargeStep(size_t attacker, size_t defender) const { return chargeDmg.empty() ? 0.0 : chargeDmg[attacker * n + defender]; }
@@ -223,6 +237,10 @@ private:
 	void heal(int unit, double amount);
 	/// chargeHexes: hexes walked before a melee attack; ownTurn: the unit's own action (not a retaliation)
 	void strike(int attacker, int target, bool ranged, int chargeHexes = 0, bool ownTurn = false);
+	/// units on the further hexes a melee attack of `attacker` on `target` reaches (not the target itself)
+	void extraVictims(int attacker, int target, std::array<int, 8> & out, int & count) const;
+	/// units next to the target that a bursting shot of `attacker` also hits
+	void burstVictims(int attacker, int target, std::array<int, 8> & out, int & count) const;
 	void finishTurn(int unit, bool waited);
 	bool shotIsFar(int attacker, int target) const;
 };
@@ -245,5 +263,10 @@ struct Forecast
 };
 
 Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30, Stance enemyStance = Stance::CHARGE);
+
+/// Attacks that reach several hexes (breath, further heads, bursting shots) in the simulator: on or off.
+/// One switch for the whole process (parameter simMultiHex; off until the unit lab and a benchmark confirm it).
+void setMultiHex(bool enabled);
+bool multiHex();
 
 }

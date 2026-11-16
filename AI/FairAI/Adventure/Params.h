@@ -34,11 +34,21 @@ struct Params
 	double expValueOther = 0.15;
 	double unlockFactor = 0.7;         ///< share of the value behind a guard credited to beating it
 	double guardFogFactor = 0.0;       ///< share of the unexplored land around a guard credited to beating it
+	int unlockDirect = 0;              ///< what a guard blocks counts from the guard's place (where the hero stands after the fight), not from where the hero is now. Off until a test shows a gain
+	double regionValue = 0;            ///< main hero: unexplored land behind a guard is a new region (mines, treasures, perhaps a town): worth this much early on, fading like exploration. 0: only the strip the first step reveals counts
 
 	// --- enemy heroes
 	double threatRadius = 16;          ///< tiles an enemy hero may cover until our next turn
 	int pathThreats = 1;               ///< threat zones follow the walkable land we know (0: straight-line radius)
 	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
+	int heroModel = 0;                 ///< 1: an enemy hero's army counts by what the hero adds - skills the game showed us (battles, thieves' guild) or what its class and the day suggest - instead of the flat enemyHeroFactor. Off until a test shows a gain
+	int surrender = 0;                 ///< 1: in a battle our simulator sees as lost the hero buys its army free (surrender) when we have the gold and the army is worth more to us than the gold; hired back from the tavern at once. Off until a test shows a gain
+	int heroForecast = 0;              ///< 1: attacking an enemy hero in the open field is judged by simulating the battle with the hero's estimated attack and defence (as for guards), not by army values alone. Off until a test shows a gain
+	int leaderFocus = 0;               ///< 1: campaign mode - once the main hero is campaignEdge times as strong as any enemy hero seen in three weeks it plans up to 30 days ahead, looks for the enemy's towns and takes them, and leaves the growth at home as garrison. Off until a test shows a gain
+	double campaignEdge = 2.0;         ///< see leaderFocus
+	int fetchByShare = 0;              ///< 1: troops waiting for the main hero (in towns, with our other heroes) count by how much they would add to its army - full value from fetchShare of the army on, a tenth for a trickle. Off until a test shows a gain
+	double fetchShare = 0.5;           ///< see fetchByShare
+	int noChase = 0;                   ///< 1: enemy heroes are targets only when they can be reached today (or stand in a town): no running after heroes that move on. Off until a test shows a gain
 	double threatGrowth = 0.15;        ///< an enemy hero we have not seen for a day has probably picked up this much more army (per day)
 	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength (main hero)
 	double threatToleranceSecondary = 1.4; ///< same for the other heroes
@@ -85,6 +95,7 @@ struct Params
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
 	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero; a big reinforcement counts more than its size (it makes fights possible). Off until a test shows a gain
 	double earlyGoldDays = 21;         ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full, fading out over the two weeks after. 0: off. On by default: +0.05 and +0.12 score in two tests on medium maps (town hall and city hall in week one)
+	int earlyGoldContact = 0;          ///< 1: "gold first" ends when the first enemy hero or town comes into view (then troops count, fading within a week) - on small maps that is early, on large ones late. Off until a test shows a gain
 	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)
 	int heroesWeek3 = 3;               ///< ... until day 21
 	int heroesLater = 4;               ///< ... afterwards
@@ -96,6 +107,7 @@ struct Params
 	// --- combat (read by the battle AI of the same player)
 	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)
 	int simAbilities = 1;              ///< battle look-ahead knows special abilities: life drain, regeneration, fire shield, charge bonus, strike and return, luck, morale (0: plain damage only)
+	int simMultiHex = 0;               ///< battle look-ahead knows attacks that reach several hexes: breath behind the target (dragons, phoenix), further heads (cerberus), bursting shots (lich, magog) - our own troops in the way included. Off until the unit lab and the guard benchmark confirm it
 	int battlePlan = 0;                ///< battle AI judges every action by playing several rounds ahead with two plans for our side, hold or advance (0: rest of the current round only). Off until a test shows a gain
 	int fightForecast = 0;             ///< fights against map guards are judged by simulating the battle (unit against unit, FairAI's battle simulator) instead of comparing army values. Off until a test shows a gain
 	double maxLossShare = 0.35;        ///< with fightForecast: the main hero does not start a fight that is forecast to cost more than this share of its army ...

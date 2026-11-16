@@ -126,6 +126,15 @@ public:
 
 	const Params & parameters() const { return params; }
 
+	/// The game showed us a hero's primary skills (attack, defence, spell power, knowledge): in a
+	/// battle against it or in our thieves' guild. Remembered with the day.
+	void noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills);
+	/// A battle is lost: is buying our army free for `cost` gold the better end? ownValue: AI value we
+	/// still have on the field, enemyLoss: what it would still kill (parameter surrender)
+	bool surrenderWorth(int cost, double ownValue, double enemyLoss) const;
+	/// Our hero surrendered and waits in the tavern with its army: hire it back before the week ends
+	void noteSurrender(HeroTypeID hero);
+
 private:
 	FairAIGateway & gateway;
 	std::shared_ptr<CCallback> cb;
@@ -138,6 +147,8 @@ private:
 	std::map<ObjectInstanceID, ObjectInstanceID> reservedBy; ///< target object -> hero (this turn)
 	std::map<ObjectInstanceID, int3> currentGoal;            ///< hero -> tile (stickiness)
 	std::set<std::pair<int, int3>> failedToday;              ///< hero, tile
+	std::map<std::pair<int, ObjectInstanceID>, int> fruitless; ///< hero, object -> day of a visit that changed nothing (not again this week)
+	std::map<std::pair<int, int>, std::pair<uint64_t, uint64_t>> fruitlessMeetings; ///< two of our heroes met and nothing changed hands: their army values then
 	std::map<ObjectInstanceID, std::set<int3>> trail;        ///< tiles each hero stood on today
 	std::map<ObjectInstanceID, std::set<int3>> abandonedToday; ///< goals a hero gave up unreached today (no A-B-A oscillation)
 	struct RoundTrip
@@ -231,6 +242,46 @@ private:
 	double siegeOverhead(const CGHeroInstance * hero, int fortLevel) const;
 	void rememberStaticObjects();
 
+	// ---- what we know about enemy heroes (fair: battles we fought, the thieves' guild, their class)
+	struct HeroIntel
+	{
+		int day = -1;
+		std::array<double, 4> skills{}; ///< attack, defence, spell power, knowledge
+	};
+	std::map<int, HeroIntel> heroIntel; ///< hero type -> primary skills the game showed us, and when
+	mutable std::mutex intelMutex;
+	struct Sighting
+	{
+		int day = -1;
+		double strength = 0; ///< army as shown, times the hero factor
+	};
+	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
+	double oppositionHeroes = 0; ///< strongest enemy hero seen in the last three weeks (0: none)
+	double oppositionGuards = 0; ///< strongest guard we know of on the map
+	int guildDay = -1;           ///< day we last looked into the thieves' guild
+	int contactDay = -1;         ///< day we first saw an enemy hero or town (-1: not yet)
+	std::atomic<int> rehireHero{-1}; ///< hero type that surrendered and waits in our tavern with its army
+	std::atomic<int> rehireDay{-100};
+	std::map<PlayerColor, int> guildTownPlace; ///< thieves' guild: place of each player by number of towns (0 = most)
+	bool huntWanted = false;     ///< some enemy still has towns we have not found (updateThreats)
+	bool campaignMode = false;   ///< the main hero is clearly the strongest force we know of (updateThreats; parameter leaderFocus)
+	/// this hero is the main hero on campaign: long marches, the enemy's towns first, no errands
+	bool campaign(const CGHeroInstance * hero) const;
+	/// attack, defence, spell power and knowledge of an enemy hero: as shown to us, else as its class and the day suggest
+	std::array<double, 4> heroSkillsEstimate(const ObservedObject & hero) const;
+	/// expected loss (gold) of attacking an enemy hero in the open field, by simulating the battle with
+	/// the hero's estimated attack and defence on its troops; -1: leave it alone (parameter heroForecast)
+	double heroFightLoss(const CGHeroInstance * hero, const ObservedObject & enemy) const;
+	/// What an enemy hero adds to its army (multiplier): attack and defence, spell power and knowledge,
+	/// as shown to us or as its class and the day suggest (parameter heroModel; else a flat factor)
+	double heroFactor(const ObservedObject & hero) const;
+	/// what walking back for troops is worth to the main hero, as a share of the troops' value (parameter leaderFocus)
+	double fetchFactor(const CGHeroInstance * hero) const;
+	/// the hero's strength over the strongest enemy hero seen lately; 0 if we have seen none
+	double superiority(const CGHeroInstance * hero) const;
+	/// planning horizon in days: the main hero may march on a far town (parameter leaderFocus)
+	int travelHorizon(const CGHeroInstance * hero) const;
+
 	// ---- helpers
 	const CGHeroInstance * ownHero(ObjectInstanceID id) const;
 	void chooseMainHero();
@@ -260,6 +311,7 @@ private:
 	double guardLoss(const CGHeroInstance * hero, const int3 & tile) const;
 	mutable std::map<std::tuple<int, uint64_t, int, int>, FightForecast> forecastCache;
 	int forecastLogDay = -1; ///< diagnostics: the forecasts of the main hero are logged once a day
+	int guardLogDay = -1;    ///< diagnostics: the main hero's judgement of the guards in reach, once a day
 
 	/// Moves the hero one step towards `tile`. Returns false if no step could be made.
 	bool stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths);

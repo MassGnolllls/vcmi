@@ -29,6 +29,8 @@
 #include "../../../lib/entities/artifact/ArtifactUtils.h"
 #include "../../../lib/entities/building/CBuilding.h"
 #include "../../../lib/entities/faction/CTown.h"
+#include "../../../lib/entities/hero/CHero.h"
+#include "../../../lib/entities/hero/CHeroClass.h"
 #include "../../../lib/json/JsonNode.h"
 #include "../../../lib/mapObjects/CGDwelling.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
@@ -221,6 +223,7 @@ void Params::loadOverrides(int playerIndex)
 	read("enemyTownValue", enemyTownValue);
 	read("spellSearch", spellSearch);
 	read("simAbilities", simAbilities);
+	read("simMultiHex", simMultiHex);
 	read("battlePlan", battlePlan);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
@@ -239,6 +242,17 @@ void Params::loadOverrides(int playerIndex)
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
+	read("unlockDirect", unlockDirect);
+	read("heroModel", heroModel);
+	read("leaderFocus", leaderFocus);
+	read("campaignEdge", campaignEdge);
+	read("noChase", noChase);
+	read("fetchByShare", fetchByShare);
+	read("fetchShare", fetchShare);
+	read("heroForecast", heroForecast);
+	read("surrender", surrender);
+	read("earlyGoldContact", earlyGoldContact);
+	read("regionValue", regionValue);
 	read("minSafetyRatio", minSafetyRatio);
 	read("exploreMaxTurns", exploreMaxTurns);
 	read("huntFactor", huntFactor);
@@ -254,6 +268,7 @@ AdventureAI::AdventureAI(FairAIGateway & gateway, std::shared_ptr<CCallback> cb,
 	, me(me)
 {
 	params.loadOverrides(me.getNum());
+	Combat::setMultiHex(params.simMultiHex != 0); // the forecasts of the adventure AI use the same simulator
 }
 
 AdventureAI::~AdventureAI() = default;
@@ -304,7 +319,10 @@ void AdventureAI::chooseMainHero()
 		mainHero = ObjectInstanceID();
 		return;
 	}
-	if(!current || strongest->getTotalStrength() > 1.5 * current->getTotalStrength())
+	// The army leader keeps its role (and its experience): couriers bring it the troops. Only an army
+	// far bigger than what is left of the leader's takes over (leaderFocus; else at 1.5 times).
+	const double takeover = params.leaderFocus && params.couriers ? 3.0 : 1.5;
+	if(!current || strongest->getTotalStrength() > takeover * current->getTotalStrength())
 		mainHero = strongest->id;
 }
 
@@ -325,9 +343,22 @@ std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * her
 	config->options.useTeleportOneWayRandom = false;
 	config->options.useTeleportWhirlpool = false;
 	config->options.canUseCast = params.moveSpells != 0;
-	config->options.turnLimit = static_cast<uint8_t>(std::clamp(params.maxTravelTurns + 1, 1, 250));
+	config->options.turnLimit = static_cast<uint8_t>(std::clamp(travelHorizon(hero) + 1, 1, 250));
 	cb->calculatePaths(config);
 	return result;
+}
+
+int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
+{
+	// on campaign the main hero may march on a far town; couriers may follow it for a week to hand over troops
+	if(campaign(hero))
+		return std::max(params.maxTravelTurns, 30);
+	return params.leaderFocus && params.couriers && !isMain(hero) ? std::max(params.maxTravelTurns, 8) : params.maxTravelTurns;
+}
+
+bool AdventureAI::campaign(const CGHeroInstance * hero) const
+{
+	return campaignMode && hero && isMain(hero);
 }
 
 // ======================================================================= turn
@@ -432,7 +463,7 @@ void AdventureAI::playTurn()
 			const auto * leader = ownHero(mainHero);
 			const bool courier = params.couriers && hero && leader
 				&& transferGain(leader, hero) >= std::max(800.0, 0.1 * static_cast<double>(leader->getArmyStrength()));
-			if(town && !courier && !hero->isGarrisoned() && !town->getGarrisonHero())
+			if(town && !courier && !hero->isGarrisoned() && !town->getGarrisonHero() && hero->canBeMergedWith(*town))
 			{
 				cb->swapGarrisonHero(town);
 				gateway.waitTillFree();
@@ -459,6 +490,20 @@ void AdventureAI::playTurn()
 	int mines = 0;
 	for(const auto * object : cb->getMyObjects())
 		mines += object->ID == Obj::MINE ? 1 : 0;
+	if(logAi->isDebugEnabled())
+	{
+		// what we know of the map's towns, and how we stand against the opposition we have seen
+		std::string towns;
+		for(const auto & [id, object] : perception.knownObjects())
+		{
+			if(object.type == Obj::TOWN && object.owner != me)
+				towns += boost::str(boost::format(" %s%s%s") % (object.owner.isValidPlayer() ? object.owner.toString() : std::string("neutral"))
+					% object.visitablePos.toString() % (object.visibleNow ? "" : boost::str(boost::format("(seen day %d)") % object.lastSeenDay)));
+		}
+		logAi->debug("FairAI %s day %d: foreign towns known:%s; towns unfound %s; opposition heroes %.0f, guards %.0f; main hero strength %.0f, campaign %s",
+			me.toString(), today, towns.empty() ? " none" : towns, huntWanted ? "yes" : "no", oppositionHeroes, oppositionGuards,
+			main ? static_cast<double>(main->getTotalStrength()) : 0.0, campaignMode ? "on" : "off");
+	}
 	logAi->info("FairAI %s day %d end: gold %d, heroes %d, towns %d, main hero %s army %d, mines %d, wood %d, ore %d", me.toString(), today,
 		cb->getResourceAmount(GameResID::GOLD), static_cast<int>(perception.ownHeroes().size()), static_cast<int>(perception.ownTowns().size()),
 		main ? main->getNameTranslated() : "-", main ? static_cast<int>(main->getArmyStrength()) : 0, mines,
@@ -634,7 +679,12 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			return;
 		}
 
-		bool progress = sent && (hero->visitablePos() != posBefore || hero->movementPointsRemaining() != mpBefore);
+		// Progress: the hero moved, or (below) the target changed, or troops changed hands. Movement
+		// points spent without any of these are no progress: a hero outside a gate that our other hero
+		// blocks would otherwise "meet" that hero again and again until the day is over.
+		bool progress = sent && (hero->visitablePos() != posBefore || hero->getArmyStrength() != ownArmyBefore);
+		if(sent && !progress && hero->movementPointsRemaining() != mpBefore && !best.object.hasValue())
+			progress = true; // no object to check: trust the movement
 		if(sent && hero->visitablePos().dist2d(posBefore) > 2.5)
 		{
 			// teleported: both ends of the channel are explored now
@@ -665,10 +715,30 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		}
 		if(meetingOwnHero && hero->visitablePos().dist2d(best.tile) < 1.5 && hero->getArmyStrength() == ownArmyBefore)
 		{
-			// met our other hero and nothing changed hands: once is enough for today
+			// met our other hero and nothing changed hands: once is enough for today - and for as
+			// long as neither army changes
 			failedToday.insert({heroId.getNum(), best.tile});
+			if(const auto * other = ownHero(best.object))
+				fruitlessMeetings[{std::min(heroId.getNum(), best.object.getNum()), std::max(heroId.getNum(), best.object.getNum())}]
+					= {hero->getArmyStrength(), other->getArmyStrength()};
 		}
 		failures = 0;
+		if(best.object.hasValue() && !meetingOwnHero && hero->visitablePos() == best.tile)
+		{
+			// Visited, and the object offers the same as before (an emptied lean-to, a hut that teaches
+			// what the hero cannot learn, a school we cannot pay): nothing to come back for this week.
+			auto now = perception.knownObjects();
+			auto after = now.find(best.object);
+			auto before = objectBefore.find(best.object);
+			if(after != now.end() && before != objectBefore.end() && after->second.owner == before->second.owner
+				&& after->second.type != Obj::TOWN && after->second.type != Obj::HERO
+				&& objectValue(hero, after->second, perception.visibleObject(best.object)) > 0)
+			{
+				fruitless[{heroId.getNum(), best.object}] = today;
+				logAi->debug("FairAI %s: %s gained nothing at object %d %s", me.toString(), hero->getNameTranslated(),
+					after->second.type.getNum(), best.tile.toString());
+			}
+		}
 		if(isMain(hero) && (best.object.hasValue() || best.description == "explore") && best.description != "home")
 			mainProductive = true;
 		if(auto trip = roundTrip.find(heroId); trip != roundTrip.end())
@@ -1009,7 +1079,20 @@ void AdventureAI::updateThreats()
 {
 	rememberStaticObjects();
 	threats.clear();
-	for(const auto & [id, object] : perception.knownObjects())
+	const auto known = perception.knownObjects();
+	if((params.heroModel || params.leaderFocus) && guildDay != today)
+	{
+		// the thieves' guild in our tavern: the other players' best heroes, with their skills from two taverns on
+		guildDay = today;
+		const GuildInfo guild = perception.thievesGuild();
+		for(const auto & [color, shown] : guild.bestHero)
+		{
+			if(shown.skills && isEnemy(color))
+				noteHeroSkills(shown.hero, *shown.skills);
+		}
+		guildTownPlace = guild.townPlace;
+	}
+	for(const auto & [id, object] : known)
 	{
 		if(object.type != Obj::HERO || !isEnemy(object.owner) || !object.army)
 			continue;
@@ -1018,12 +1101,245 @@ void AdventureAI::updateThreats()
 			continue;
 		Threat t;
 		t.pos = object.visitablePos;
-		t.strength = observedDanger(object) * params.enemyHeroFactor * (1.0 + params.threatGrowth * age);
+		const double factor = heroFactor(object);
+		t.strength = observedDanger(object) * factor * (1.0 + params.threatGrowth * age);
+		if(age == 0)
+			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor};
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
 		threats.push_back(t);
 	}
+	// the opposition we know of: enemy heroes seen in the last three weeks (they grow meanwhile), guards on the map
+	oppositionHeroes = 0;
+	for(const auto & [type, seen] : enemySightings)
+	{
+		if(today - seen.day <= 21)
+			oppositionHeroes = std::max(oppositionHeroes, seen.strength * (1.0 + 0.03 * (today - seen.day)));
+	}
+	oppositionGuards = 0;
+	std::map<PlayerColor, int> townsKnown;
+	for(const auto & [id, object] : known)
+	{
+		if(object.type == Obj::MONSTER && object.army)
+			oppositionGuards = std::max(oppositionGuards, observedDanger(object));
+		if(object.type == Obj::TOWN && object.owner.isValidPlayer())
+			++townsKnown[object.owner];
+		if(contactDay < 0 && (object.type == Obj::TOWN || object.type == Obj::HERO) && isEnemy(object.owner))
+			contactDay = today; // the first enemy hero or town we get to see
+	}
+	// Campaign: our main hero is clearly the strongest force we know of - time to end the game. On at
+	// campaignEdge times the strongest enemy hero seen in the last three weeks, off again well below
+	// that; with no enemy hero in sight for three weeks after day 42 they are not coming, so we go.
+	{
+		const CGHeroInstance * leader = ownHero(mainHero);
+		const bool before = campaignMode;
+		if(!params.leaderFocus || !leader || today < 21)
+			campaignMode = false;
+		else if(oppositionHeroes > 0)
+		{
+			const double edge = static_cast<double>(leader->getTotalStrength()) / oppositionHeroes;
+			if(edge >= params.campaignEdge)
+				campaignMode = true;
+			else if(edge < 0.65 * params.campaignEdge)
+				campaignMode = false;
+		}
+		else
+			campaignMode = today > 42;
+		if(before != campaignMode)
+			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f)", me.toString(), today,
+				campaignMode ? "on" : "off", leader ? static_cast<double>(leader->getTotalStrength()) : 0.0, oppositionHeroes);
+	}
+	// Does an enemy still have towns we have not found? Every enemy in the game has at least one
+	// (or is about to drop out); the thieves' guild ranks the players by their number of towns.
+	huntWanted = false;
+	const int myTowns = static_cast<int>(perception.ownTowns().size());
+	auto myPlace = guildTownPlace.find(me);
+	for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
+	{
+		const PlayerColor color(c);
+		if(color == me || cb->getPlayerStatus(color, false) != EPlayerStatus::INGAME || !isEnemy(color))
+			continue;
+		int expected = 1;
+		auto place = guildTownPlace.find(color);
+		if(place != guildTownPlace.end() && myPlace != guildTownPlace.end())
+		{
+			if(place->second < myPlace->second)
+				expected = myTowns + 1;
+			else if(place->second == myPlace->second)
+				expected = std::max(1, myTowns);
+		}
+		if(townsKnown[color] < expected)
+			huntWanted = true;
+	}
+}
+
+void AdventureAI::noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills)
+{
+	if(!hero.hasValue())
+		return;
+	std::unique_lock lock(intelMutex);
+	HeroIntel & intel = heroIntel[hero.getNum()];
+	intel.day = cb->getDate(Date::DAY);
+	for(size_t i = 0; i < 4; ++i)
+		intel.skills[i] = skills[i];
+}
+
+std::array<double, 4> AdventureAI::heroSkillsEstimate(const ObservedObject & hero) const
+{
+	const HeroTypeID type(hero.subtype.getNum());
+	const CHero * heroType = type.hasValue() ? type.toHeroType() : nullptr;
+	const CHeroClass * heroClass = heroType ? heroType->heroClass : nullptr;
+
+	// How much of a main hero is it? Judged by the army it leads against our biggest.
+	double ownBest = 1;
+	for(const auto * own : perception.ownHeroes())
+		ownBest = std::max(ownBest, static_cast<double>(own->getArmyStrength()));
+	const double army = hero.army ? static_cast<double>(hero.army->expectedStrength()) : 0.0;
+	const double weight = std::clamp(army / (0.5 * ownBest), 0.25, 1.0);
+
+	// What `levels` level-ups add: the class decides where the points go; a hero that fights its way
+	// across the map also collects skill points at map objects and wears artifacts.
+	auto grow = [&](std::array<double, 4> & skills, double fromLevel, double levels)
+	{
+		for(size_t i = 0; i < 4; ++i)
+		{
+			double perLevel = 0.25;
+			if(heroClass && heroClass->primarySkillLowLevel.size() >= 4 && heroClass->primarySkillHighLevel.size() >= 4)
+			{
+				const double low = std::clamp(10.0 - fromLevel, 0.0, levels); // levels gained below level 10
+				perLevel = levels > 0 ? (low * heroClass->primarySkillLowLevel[i] + (levels - low) * heroClass->primarySkillHighLevel[i]) / (100.0 * levels) : 0.0;
+			}
+			skills[i] += levels * (perLevel + 0.35 * weight);
+		}
+	};
+
+	std::array<double, 4> skills{};
+	if(hero.heroSkills)
+	{
+		for(size_t i = 0; i < 4; ++i)
+			skills[i] = (*hero.heroSkills)[i];
+		return skills;
+	}
+	{
+		std::unique_lock lock(intelMutex);
+		auto intel = heroIntel.find(hero.subtype.getNum());
+		if(intel != heroIntel.end() && intel->second.day >= 0)
+		{
+			// shown to us before: it has grown since (main heroes gain a level every four to five days)
+			skills = intel->second.skills;
+			const double level = 1.0 + weight * intel->second.day / 4.5;
+			grow(skills, level, weight * std::max(0, today - intel->second.day) / 4.5);
+			return skills;
+		}
+	}
+	if(heroClass && heroClass->primarySkillInitial.size() >= 4)
+		for(size_t i = 0; i < 4; ++i)
+			skills[i] = heroClass->primarySkillInitial[i];
+	grow(skills, 1.0, std::min(25.0, weight * today / 4.5));
+	return skills;
+}
+
+double AdventureAI::heroFactor(const ObservedObject & hero) const
+{
+	if(!params.heroModel)
+		return params.enemyHeroFactor;
+	const auto skills = heroSkillsEstimate(hero);
+	const double fight = std::sqrt((1.0 + 0.05 * skills[0]) * (1.0 + 0.05 * skills[1]));
+	const double magic = std::sqrt((1.0 + 0.05 * skills[2]) * (1.0 + 0.05 * skills[3]));
+	return fight * magic;
+}
+
+double AdventureAI::heroFightLoss(const CGHeroInstance * hero, const ObservedObject & enemy) const
+{
+	if(!hero || !enemy.army || enemy.army->units.empty() || hero->stacksCount() == 0)
+		return -1;
+	const auto skills = heroSkillsEstimate(enemy);
+	const int attack = static_cast<int>(std::lround(skills[0]));
+	const int defence = static_cast<int>(std::lround(skills[1]));
+	// the enemy casts every round and ours does too: what counts is who is the better mage
+	const double magic = std::clamp(std::sqrt((1.0 + 0.05 * skills[2]) * (1.0 + 0.05 * skills[3])) / std::max(1.0, hero->getMagicStrength()), 0.8, 1.6);
+
+	auto simulate = [&](bool upper) -> FightForecast
+	{
+		FightForecast result;
+		std::vector<Combat::StackSpec> stacks;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(stack && stack->getCreature() && stack->getCount() > 0)
+				stacks.push_back({stack.get(), stack->getCreature(), stack->getCount(), BattleSide::ATTACKER});
+		}
+		for(const auto & unit : enemy.army->units)
+		{
+			if(!unit.creature.hasValue())
+				continue;
+			const CCreature * type = unit.creature.toCreature();
+			const int count = upper ? unit.maxCount : std::max(1, (unit.minCount + unit.maxCount + 1) / 2);
+			if(type && count > 0)
+				stacks.push_back({type, type, count, BattleSide::DEFENDER, attack, defence});
+		}
+		try
+		{
+			const JsonNode & layout = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
+			const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout);
+			const int plan = forecast.bestPlan();
+			result.win = forecast.win(plan);
+			result.lossShare = forecast.lossShare(plan);
+		}
+		catch(const std::exception & e)
+		{
+			logAi->warn("FairAI %s: battle forecast failed (%s)", me.toString(), e.what());
+		}
+		return result;
+	};
+	const FightForecast likely = simulate(false);
+	const FightForecast worst = simulate(true);
+	if(!likely.win || !worst.win)
+		return -1;
+	const double share = std::min(1.0, (0.7 * likely.lossShare + 0.3 * worst.lossShare) * magic);
+	logAi->debug("FairAI %s: %s against hero %d: forecast loss %.2f (at most %.2f), enemy attack %d defence %d, magic x%.2f", me.toString(),
+		hero->getNameTranslated(), enemy.subtype.getNum(), likely.lossShare, worst.lossShare, attack, defence, magic);
+	if(share > (isMain(hero) ? 0.6 : 0.3))
+		return -1;
+	return share * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+}
+
+bool AdventureAI::surrenderWorth(int cost, double ownValue, double enemyLoss) const
+{
+	if(!params.surrender)
+		return false;
+	// the hero must be hired back from the tavern this week
+	bool tavern = false;
+	for(const auto * town : perception.ownTowns())
+		tavern = tavern || town->hasBuilt(BuildingID::TAVERN);
+	const double gold = cb->getResourceAmount(GameResID::GOLD);
+	if(!tavern || cost + GameConstants::HERO_GOLD_COST > gold || static_cast<int>(perception.ownHeroes().size()) > params.maxHeroes)
+		return false;
+	// Fighting on costs the army but hurts the enemy; surrendering costs gold. Army counts for more
+	// and gold for less when gold piles up (creatures, not gold, are what we lack then).
+	const double fightOn = (ownValue - enemyLoss) * params.goldPerArmyValue * economy.armyPremium;
+	const double price = (cost + GameConstants::HERO_GOLD_COST) * economy.goldWeight;
+	return fightOn > price;
+}
+
+void AdventureAI::noteSurrender(HeroTypeID hero)
+{
+	rehireHero = hero.getNum();
+	rehireDay = cb->getDate(Date::DAY);
+}
+
+double AdventureAI::fetchFactor(const CGHeroInstance * hero) const
+{
+	// On campaign the main hero is strong enough: what grows at home stays there and holds the towns;
+	// walking back for it pays only when nothing else is left to do (any positive value wins then).
+	return campaign(hero) ? 0.2 : 1.0;
+}
+
+double AdventureAI::superiority(const CGHeroInstance * hero) const
+{
+	if(!hero || oppositionHeroes <= 0)
+		return 0;
+	return static_cast<double>(hero->getTotalStrength()) / oppositionHeroes;
 }
 
 double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, bool cautious) const
@@ -1280,7 +1596,7 @@ bool AdventureAI::enemySeenNear(const int3 & tile, int days, double radius) cons
 		if(today - object.lastSeenDay > days)
 			continue;
 		if(cb->getPlayerRelations(me, object.owner) == PlayerRelations::ENEMIES
-			&& enemyDistance(id, object.visitablePos, observedDanger(object) * params.enemyHeroFactor, tile, radius) <= radius)
+			&& enemyDistance(id, object.visitablePos, observedDanger(object) * heroFactor(object), tile, radius) <= radius)
 			return true;
 	}
 	return false;
@@ -1405,11 +1721,42 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 	const CGHeroInstance * visitor = town->getVisitingHero();
 	if(!visitor || visitor == mainHero || visitor->tempOwner != me || town->getGarrisonHero())
 		return;
-	if(!visitor->canBeMergedWith(*town))
+	if(visitor->canBeMergedWith(*town))
+	{
+		logAi->debug("FairAI %s: %s steps into the garrison of %s to let %s in", me.toString(), visitor->getNameTranslated(),
+			town->getNameTranslated(), mainHero->getNameTranslated());
+		cb->swapGarrisonHero(town);
+		gateway.waitTillFree();
 		return;
-	logAi->debug("FairAI %s: %s steps into the garrison of %s to let %s in", me.toString(), visitor->getNameTranslated(),
+	}
+	// The garrison's troops and the visitor's do not fit into one army: the visitor leaves the gate
+	// by the nearest free tile instead - once the main hero is about to arrive.
+	const int3 gate = town->visitablePos();
+	if(mainHero->visitablePos().z != gate.z || mainHero->visitablePos().dist2d(gate) > 10)
+		return;
+	auto paths = computePaths(visitor, false);
+	int3 best(-1);
+	float bestCost = std::numeric_limits<float>::max();
+	for(int dx = -1; dx <= 1; ++dx)
+	{
+		for(int dy = -1; dy <= 1; ++dy)
+		{
+			const int3 tile(gate.x + dx, gate.y + dy, gate.z);
+			if(tile == gate || tile == mainHero->visitablePos() || !cb->isInTheMap(tile))
+				continue;
+			const CGPathNode * node = paths->getPathInfo(tile);
+			if(node && node->reachable() && node->turns == 0 && node->action == EPathNodeAction::NORMAL && node->cost < bestCost)
+			{
+				best = tile;
+				bestCost = node->cost;
+			}
+		}
+	}
+	if(!best.isValid())
+		return;
+	logAi->debug("FairAI %s: %s leaves the gate of %s to let %s in", me.toString(), visitor->getNameTranslated(),
 		town->getNameTranslated(), mainHero->getNameTranslated());
-	cb->swapGarrisonHero(town);
+	cb->moveHero(visitor, visitor->convertFromVisitablePos(best), false);
 	gateway.waitTillFree();
 }
 
@@ -1532,9 +1879,18 @@ double AdventureAI::reinforcementBoost(double troops) const
 	// Troops in a garrison win nothing. For the main hero a reinforcement that is big compared with
 	// its army is worth more than its size: guards it had to leave alone come into reach.
 	const CGHeroInstance * leader = ownHero(mainHero);
-	if(!params.couriers || !leader)
+	if(!leader)
 		return 1.0;
 	const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+	if(params.fetchByShare)
+	{
+		// Troops waiting in a town do not run away: fetching them only brings their use forward. A
+		// trickle (a few per cent of the army) is not worth a trip - it would keep the hero circling
+		// its town; a week's growth that makes the army half as big again is.
+		return std::clamp(troops / (params.fetchShare * army), 0.1, 1.5);
+	}
+	if(!params.couriers)
+		return 1.0;
 	return 1.0 + std::min(2.0, troops / army);
 }
 
@@ -1586,7 +1942,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		return 2500;
 	case Obj::LEAN_TO:
 	case Obj::WAGON:
-		return 600;
+		return visitedByUs() ? 0 : 600; // they stay on the map when emptied
 	case Obj::CORPSE:
 		return visitedByUs() ? 0 : 400;
 	case Obj::WARRIORS_TOMB:
@@ -1738,7 +2094,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			// what the hero left behind on its last visit (no free slot, garrison share) is no reason to return
 			if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
 				troops = std::max(0.0, troops - left->second);
-			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor * reinforcementBoost(troops);
+			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor * reinforcementBoost(troops) * fetchFactor(hero);
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
 				value += 300;
 			auto trip = roundTrip.find(hero->id);
@@ -1755,7 +2111,10 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		// without a town the game is lost after seven days: any town is worth everything
 		if(perception.ownTowns().empty())
 			return 100000;
-		return enemy ? params.enemyTownValue : params.neutralTownValue;
+		if(!campaign(hero))
+			return enemy ? params.enemyTownValue : params.neutralTownValue;
+		// On campaign: the enemy's towns are how the game is won, and a town taken late is a built-up one
+		return (enemy ? 2.0 * params.enemyTownValue : params.neutralTownValue) * (1.0 + today / 28.0);
 	}
 	case Obj::HERO:
 	{
@@ -1764,11 +2123,21 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			const CGHeroInstance * other = ownHero(object.id);
 			if(!other || other == hero)
 				return 0;
+			// the two met already and had nothing for each other; nothing has changed since
+			if(auto met = fruitlessMeetings.find({std::min(hero->id.getNum(), other->id.getNum()), std::max(hero->id.getNum(), other->id.getNum())});
+				met != fruitlessMeetings.end())
+			{
+				const uint64_t mine = hero->getArmyStrength();
+				const uint64_t theirs = other->getArmyStrength();
+				if((met->second.first == mine && met->second.second == theirs) || (met->second.first == theirs && met->second.second == mine))
+					return 0;
+			}
 			// meeting the main hero hands over troops - as far as its army can take them
 			const double gain = main ? transferGain(hero, other) : (other->id == mainHero ? transferGain(other, hero) : 0.0);
 			if(gain < 1)
 				return 0;
-			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain);
+			// the main hero walks back for troops only as far as it needs them; the others bring them anyway
+			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain) * (main ? fetchFactor(hero) : 1.0);
 		}
 		if(!enemy || !object.visibleNow || !object.army)
 			return 0;
@@ -1785,33 +2154,60 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	const auto known = perception.knownObjects();
 	const int3 heroPos = hero->visitablePos();
 	const int heroNum = hero->id.getNum();
+	const int horizon = travelHorizon(hero);
+	const int exploreHorizon = campaign(hero) ? horizon : params.exploreMaxTurns;
 
 	auto reachable = [&](const CPathsInfo & p, const int3 & tile) -> const CGPathNode *
 	{
 		const CGPathNode * node = p.getPathInfo(tile);
-		if(!node || !node->reachable() || node->turns > params.maxTravelTurns)
+		if(!node || !node->reachable() || node->turns > horizon)
 			return nullptr;
 		return node;
 	};
 
-	// first guard (closest to the hero) on the guard-free path to a tile
-	std::map<const CGPathNode *, ObjectInstanceID> guardMemo;
-	std::function<ObjectInstanceID(const CGPathNode *)> firstGuard = [&](const CGPathNode * node) -> ObjectInstanceID
+	// guards on the guard-free path to a tile: the first one (closest to the hero), where the path
+	// meets it (days) and how many different guards the path crosses in all
+	struct GuardOnPath
+	{
+		ObjectInstanceID guard;
+		ObjectInstanceID last;
+		double cost = 0;
+		int count = 0;
+	};
+	std::map<const CGPathNode *, GuardOnPath> guardMemo;
+	std::function<GuardOnPath(const CGPathNode *)> firstGuard = [&](const CGPathNode * node) -> GuardOnPath
 	{
 		if(!node)
-			return ObjectInstanceID();
+			return GuardOnPath();
 		auto memo = guardMemo.find(node);
 		if(memo != guardMemo.end())
 			return memo->second;
-		ObjectInstanceID result = node->theNodeBefore ? firstGuard(node->theNodeBefore) : ObjectInstanceID();
-		if(!result.hasValue() && node->coord != heroPos && cb->isVisible(node->coord))
+		GuardOnPath result = node->theNodeBefore ? firstGuard(node->theNodeBefore) : GuardOnPath();
+		if(node->coord != heroPos && cb->isVisible(node->coord))
 		{
 			auto guards = cb->getGuardingCreatures(node->coord);
-			if(!guards.empty())
-				result = guards.front()->id;
+			if(!guards.empty() && guards.front()->id != result.last)
+			{
+				if(!result.guard.hasValue())
+				{
+					result.guard = guards.front()->id;
+					result.cost = node->cost;
+				}
+				result.last = guards.front()->id;
+				++result.count;
+			}
 		}
 		guardMemo[node] = result;
 		return result;
+	};
+	// what lies behind a guard, credited to beating it. unlockDirect: counted from the guard (the
+	// hero stands there after the fight), further guards on the way halve it each; old rule: counted
+	// from where the hero stands now
+	auto unlockShare = [&](const GuardOnPath & g, const CGPathNode * free) -> double
+	{
+		if(!params.unlockDirect)
+			return 1.0 / (1.0 + free->cost);
+		return std::pow(0.5, std::max(0, g.count - 1)) / (1.0 + std::max(0.0, static_cast<double>(free->cost) - g.cost));
 	};
 
 	auto reservedByOther = [&](ObjectInstanceID object)
@@ -1848,7 +2244,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		const CGHeroInstance * partner = ownHeroAt(object);
 		// collectors are weak: they work close to home (scouts roam, but still avoid known enemies);
 		// bringing troops to the main hero is worth the trip
-		const bool toMain = partner && partner->id == mainHero;
+		const bool toMain = (partner && partner->id == mainHero)
+			|| (params.leaderFocus && params.couriers && object.hasValue() && object == mainHero);
 		if(cautious && !scout && !toMain && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
 			return true;
 		if(threats.empty())
@@ -1900,6 +2297,15 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 	// value hidden behind guards, credited to the guard that blocks it
 	std::map<ObjectInstanceID, double> unlockValue;
+	struct Approach
+	{
+		int3 town;
+		double value = 0;
+		int3 tile{-1, -1, -1};
+		double cost = 0;
+		double left = 1e9; ///< tiles from `tile` to the town
+	};
+	std::vector<Approach> approach;
 	std::map<std::string, int> rejected; // diagnostics
 
 	// ---- objects other than monsters
@@ -1909,6 +2315,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			continue;
 		if(failedToday.count({heroNum, object.visitablePos}))
 			continue;
+		if(auto f = fruitless.find({heroNum, id}); f != fruitless.end() && today < f->second + 7)
+			continue;
 		const CGObjectInstance * instance = perception.visibleObject(id);
 		double value = objectValue(hero, object, instance);
 		if(value <= 0 || reservedByOther(id))
@@ -1916,6 +2324,37 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 		if(const CGPathNode * node = reachable(paths, object.visitablePos))
 		{
+			const bool foreignHero = object.type == Obj::HERO && object.owner != me;
+			const bool foreignTown = object.type == Obj::TOWN && object.owner != me;
+			// An enemy hero further off than today's march will not be there when we arrive: no chase
+			// (one standing in a town is that town's defender - the town is the target)
+			if(params.noChase && foreignHero && node->turns > 0)
+			{
+				bool inTown = false;
+				for(const auto & [otherId, other] : known)
+					inTown = inTown || (other.type == Obj::TOWN && other.visitablePos == object.visitablePos);
+				if(!inTown)
+				{
+					++rejected["no chase"];
+					continue;
+				}
+			}
+			// On campaign the main hero has one job - the enemy's towns. Errands are done only on the
+			// way; our own towns call it back only when they cannot hold.
+			if(campaign(hero) && !foreignTown && !foreignHero)
+			{
+				bool needed = false;
+				if(object.type == Obj::TOWN)
+				{
+					const auto * town = dynamic_cast<const CGTownInstance *>(instance);
+					needed = town && townNeed(town, hero) > 0.2;
+				}
+				if(!needed && node->cost > (object.type == Obj::TOWN || object.type == Obj::HERO ? 0.3 : 0.5))
+				{
+					++rejected["errand"];
+					continue;
+				}
+			}
 			double danger = guardDanger(object.visitablePos);
 			ObjectInstanceID siegedTown; // attacking this tile means a siege (a hero in a town gate, too)
 			double defenders = 0; // nobody at home: the town is simply taken, no battle
@@ -1928,7 +2367,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					if(other.visitablePos != object.visitablePos || other.owner == me)
 						continue;
 					if(other.type == Obj::HERO)
-						defenders += observedDanger(other) * params.enemyHeroFactor;
+						defenders += observedDanger(other) * heroFactor(other);
 					else if(other.type == Obj::TOWN)
 					{
 						defenders += observedDanger(other);
@@ -1944,6 +2383,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			double loss = params.fightForecast && !versusHero && defenders <= 0 && !desperate
 				? guardLoss(hero, object.visitablePos)
 				: expectedLoss(hero, danger, desperate, versusHero);
+			// an enemy hero in the open: the simulated battle, with what we assume about the hero, has the last word
+			if(params.heroForecast && loss >= 0 && object.type == Obj::HERO && versusHero && !siegedTown.hasValue() && !desperate
+				&& guardDanger(object.visitablePos) <= 0)
+			{
+				const double simulated = heroFightLoss(hero, object);
+				loss = simulated < 0 ? -1 : std::max(loss, simulated);
+			}
 			if(loss < 0)
 			{
 				++rejected["too strong"];
@@ -1986,14 +2432,21 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		else if(const CGPathNode * free = reachable(freePaths, object.visitablePos))
 		{
 			++rejected["behind guard"];
-			ObjectInstanceID guard = firstGuard(free);
-			if(guard.hasValue())
-				unlockValue[guard] += value / (1.0 + free->cost);
+			const GuardOnPath g = firstGuard(free);
+			if(g.guard.hasValue())
+				unlockValue[g.guard] += value * unlockShare(g, free);
+		}
+		else if(campaign(hero) && object.type == Obj::TOWN && isEnemy(object.owner) && object.visitablePos.z == heroPos.z)
+		{
+			// an enemy town we know of but cannot find a way to (the land around it is hidden again):
+			// march to the nearest place we can reach, the way shows itself from there
+			approach.push_back({object.visitablePos, value});
 		}
 	}
 
 	// ---- exploration
-	RevealGrid revealGrid(*cb, perception.staleTiles(), params.staleTileWeight);
+	// on campaign land that was hidden again counts like land never seen: that is where a town with a Cover of Darkness lies
+	RevealGrid revealGrid(*cb, perception.staleTiles(), campaign(hero) ? 1.0 : params.staleTileWeight);
 	double tileValue = params.explorationTileValue;
 	{
 		RevealGrid & grid = revealGrid;
@@ -2010,13 +2463,16 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(auto it = abandonedToday.find(hero->id); it != abandonedToday.end() && params.antiOscillation)
 			gaveUp = &it->second;
 		double decay = enemyTownKnown ? std::max(0.25, 1.0 - today / 56.0) : std::max(0.6, 1.0 - today / 56.0);
-		if(!enemyTownKnown && isMain(hero) && today > 14)
+		if(campaign(hero))
+			decay = std::max(0.6, 1.0 - today / 56.0) * params.huntFactor * (huntWanted ? 3.0 : 1.5); // looking for the enemy's towns
+		else if(!enemyTownKnown && isMain(hero) && today > 14)
 			decay *= params.huntFactor;
 		tileValue = params.explorationTileValue * decay;
 		const int3 size = cb->getMapSize();
 		Target bestExplore;
 		bestExplore.score = 0;
 		std::map<ObjectInstanceID, double> behindGuard;
+		std::map<ObjectInstanceID, double> fogBehind; // most tiles one step behind the guard would reveal
 		for(int z = 0; z < size.z; ++z)
 		{
 			for(int x = 0; x < size.x; ++x)
@@ -2029,10 +2485,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					if(gaveUp && gaveUp->count(tile))
 						continue;
 					const CGPathNode * node = reachable(paths, tile);
-					const bool normal = node && node->turns <= params.exploreMaxTurns && node->action == EPathNodeAction::NORMAL;
+					const bool normal = node && node->turns <= exploreHorizon && node->action == EPathNodeAction::NORMAL;
 					const CGPathNode * free = normal ? nullptr : reachable(freePaths, tile);
-					if(!normal && !(free && free->turns <= params.exploreMaxTurns && free->action == EPathNodeAction::NORMAL))
+					if(!normal && !(free && free->turns <= exploreHorizon && free->action == EPathNodeAction::NORMAL))
 						continue;
+					if(normal && !approach.empty())
+					{
+						for(auto & a : approach)
+						{
+							const double left = tile.z == a.town.z ? tile.dist2d(a.town) : 1e9;
+							if(left < a.left && !unsafe(node, ObjectInstanceID()))
+							{
+								a.left = left;
+								a.tile = tile;
+								a.cost = node->cost;
+							}
+						}
+					}
 					double reveal = grid.count(tile, radius);
 					if(reveal < 4)
 						continue;
@@ -2052,22 +2521,44 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					}
 					else
 					{
-						ObjectInstanceID guard = firstGuard(free);
-						if(guard.hasValue())
-							behindGuard[guard] = std::max(behindGuard[guard], value / (1.0 + free->cost));
+						const GuardOnPath g = firstGuard(free);
+						if(g.guard.hasValue())
+						{
+							behindGuard[g.guard] = std::max(behindGuard[g.guard], value * unlockShare(g, free));
+							if(g.count == 1)
+								fogBehind[g.guard] = std::max(fogBehind[g.guard], reveal);
+						}
 					}
 				}
 			}
 		}
 		if(bestExplore.score > 0)
 			addTarget(bestExplore.tile, ObjectInstanceID(), bestExplore.value, 0, bestExplore.travel, "explore");
+		for(const auto & a : approach)
+		{
+			// half the town's value: what stands in the way from there on is unknown; the rest of the way at about 15 tiles a day
+			if(a.tile.isValid() && a.left < heroPos.dist2d(a.town) - 1.0)
+				addTarget(a.tile, ObjectInstanceID(), 0.5 * a.value, 0, a.cost + a.left / 15.0, "approach");
+		}
 		for(const auto & [guard, value] : behindGuard)
 			unlockValue[guard] += value;
+		// Land we have not seen behind a guard is more than the strip the first step reveals: on a
+		// map of zones it is a new region with its mines, treasures and perhaps a town.
+		if(params.regionValue > 0 && isMain(hero))
+		{
+			for(const auto & [guard, tiles] : fogBehind)
+			{
+				if(tiles >= 30)
+					unlockValue[guard] += params.regionValue * decay * std::min(1.0, tiles / 60.0);
+			}
+		}
 	}
 
 	// ---- monsters: experience plus whatever they block
 	double weakestRejected = 0;
 	std::string forecastLines;
+	std::string guardLines;
+	const bool guardLog = isMain(hero) && logAi->isDebugEnabled() && guardLogDay != today;
 	for(const auto & [id, object] : known)
 	{
 		if(object.type != Obj::MONSTER || !object.army || failedToday.count({heroNum, object.visitablePos}))
@@ -2095,6 +2586,12 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(loss < 0)
 		{
 			++rejected["monster too strong"];
+			if(guardLog && object.army->units.size() == 1 && object.army->units.front().creature.hasValue())
+			{
+				const ObservedStack & seen = object.army->units.front();
+				guardLines += boost::str(boost::format(" [%s %d-%d at %s: danger %.0f -> too strong]")
+					% seen.creature.toCreature()->getJsonKey() % seen.minCount % seen.maxCount % object.visitablePos.toString() % danger);
+			}
 			continue;
 		}
 		if(unsafe(node, ObjectInstanceID()))
@@ -2116,11 +2613,26 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		auto unlock = unlockValue.find(id);
 		if(unlock != unlockValue.end())
 			value += params.unlockFactor * unlock->second;
+		if(guardLog && object.army->units.size() == 1 && object.army->units.front().creature.hasValue())
+		{
+			// once a day: how the main hero judges every guard in reach (diagnostics)
+			const ObservedStack & seen = object.army->units.front();
+			guardLines += boost::str(boost::format(" [%s %d-%d at %s, %.1f days: danger %.0f, loss %.0f, experience %.0f, opens %.0f -> %s]")
+				% seen.creature.toCreature()->getJsonKey() % seen.minCount % seen.maxCount % object.visitablePos.toString() % node->cost
+				% danger % loss % (hp * expValue(hero)) % (unlock != unlockValue.end() ? params.unlockFactor * unlock->second : 0.0)
+				% (value <= loss ? "not worth it" : "target"));
+		}
 		if(value <= loss)
 			continue;
 		addTarget(object.visitablePos, id, value, loss, node->cost, "monster");
 	}
 
+	if(guardLog)
+	{
+		logAi->debug("FairAI %s day %d: %s (strength %.0f) guards in reach:%s", me.toString(), today, hero->getNameTranslated(), ownStrength,
+			guardLines.empty() ? " none" : guardLines);
+		guardLogDay = today;
+	}
 	if(!forecastLines.empty())
 	{
 		logAi->debug("FairAI %s day %d: %s (army %d) forecasts:%s", me.toString(), today, hero->getNameTranslated(), static_cast<int>(hero->getArmyStrength()), forecastLines);
@@ -2872,7 +3384,24 @@ void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second
 		std::swap(a, b);
 	const ObjectInstanceID receiver = a->id;
 	const ObjectInstanceID giver = b->id;
+	const double expected = transferGain(a, b);
+	const uint64_t before = a->getArmyStrength();
+	auto describe = [](const CGHeroInstance * hero)
+	{
+		std::string text = hero->getNameTranslated() + ":";
+		for(const auto & [slot, stack] : hero->Slots())
+			if(stack && stack->getCreature())
+				text += boost::str(boost::format(" %d %s") % stack->getCount() % stack->getCreature()->getJsonKey());
+		return text;
+	};
+	const std::string armies = logAi->isDebugEnabled() ? describe(a) + " | " + describe(b) : std::string();
 	pickBestCreatures(a, b);
+	if(const auto * now = ownHero(receiver); now && logAi->isDebugEnabled())
+	{
+		logAi->debug("FairAI %s: hero meeting, expected gain %.0f, army value %llu -> %llu%s", me.toString(), expected,
+			static_cast<unsigned long long>(before), static_cast<unsigned long long>(now->getArmyStrength()),
+			expected > 0 && now->getArmyStrength() == before ? " NOTHING MOVED [" + armies + "]" : "");
+	}
 	// the hero that got the troops leads: it gets the artifacts that make an army fight better, too
 	exchangeArtifacts(ownHero(receiver), ownHero(giver));
 }
@@ -3386,7 +3915,17 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 		// while buildings are waiting gold is scarce whatever today's stock says
 		double incomeWeight = goldWeight;
 		if(params.earlyGoldDays > 0)
-			incomeWeight = std::max(goldWeight, std::clamp(1.0 - (today - params.earlyGoldDays) / 14.0, 0.0, 1.0));
+		{
+			// economy first lasts until the enemy is found (earlyGoldContact): from then on troops count
+			double until = params.earlyGoldDays;
+			double fade = 14.0;
+			if(params.earlyGoldContact && contactDay >= 0 && contactDay < until)
+			{
+				until = contactDay;
+				fade = 7.0;
+			}
+			incomeWeight = std::max(goldWeight, std::clamp(1.0 - (today - until) / fade, 0.0, 1.0));
+		}
 		value += std::max(0.0, worth(produce)) * params.incomeHorizonDays * incomeWeight;
 	}
 
@@ -3729,12 +4268,17 @@ void AdventureAI::hireHeroes()
 		wanted = std::min(wanted, 2);
 	wanted = std::min(wanted, params.maxHeroes);
 	const int64_t reserve = today <= 2 ? 0 : params.heroGoldReserve;
+	// a hero of ours that surrendered waits in the tavern with its whole army - until the week ends
+	const int waiting = rehireHero.load();
+	const bool rehire = waiting >= 0 && today - rehireDay.load() < 7 && (today - 1) / 7 == (rehireDay.load() - 1) / 7;
+	if(waiting >= 0 && !rehire)
+		rehireHero = -1;
 
 	for(const auto * town : perception.ownTowns())
 	{
-		if(static_cast<int>(perception.ownHeroes().size()) >= wanted)
+		if(!rehire && static_cast<int>(perception.ownHeroes().size()) >= wanted)
 			return;
-		if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + reserve)
+		if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + (rehire ? 0 : reserve))
 			return;
 		if(!town->hasBuilt(BuildingID::TAVERN))
 			continue;
@@ -3742,18 +4286,28 @@ void AdventureAI::hireHeroes()
 		const CGHeroInstance * best = nullptr;
 		for(const auto * candidate : cb->getAvailableHeroes(town))
 		{
+			if(rehire && candidate->getHeroTypeID().getNum() == waiting)
+			{
+				best = candidate;
+				break;
+			}
 			if(!best || candidate->getTotalStrength() > best->getTotalStrength())
 				best = candidate;
 		}
 		if(!best)
 			continue;
+		if(rehire && best->getHeroTypeID().getNum() != waiting)
+		{
+			if(static_cast<int>(perception.ownHeroes().size()) >= wanted)
+				continue; // not in this tavern's offer (it should be): no other hero instead
+		}
 
 		// our hero stands in the gate: park him in the garrison while hiring, then swap back
 		const CGHeroInstance * visitor = town->getVisitingHero();
 		bool parked = false;
 		if(visitor)
 		{
-			if(visitor->tempOwner != me || town->getGarrisonHero() || today > 3)
+			if(visitor->tempOwner != me || town->getGarrisonHero() || (today > 3 && !rehire) || !visitor->canBeMergedWith(*town))
 				continue;
 			cb->swapGarrisonHero(town);
 			gateway.waitTillFree();
@@ -3762,7 +4316,10 @@ void AdventureAI::hireHeroes()
 			parked = true;
 		}
 
-		logAi->info("FairAI %s day %d: hiring %s in %s", me.toString(), today, best->getNameTranslated(), town->getNameTranslated());
+		logAi->info("FairAI %s day %d: hiring %s in %s%s", me.toString(), today, best->getNameTranslated(), town->getNameTranslated(),
+			rehire && best->getHeroTypeID().getNum() == waiting ? " (back from its surrender, with its army)" : "");
+		if(rehire && best->getHeroTypeID().getNum() == waiting)
+			rehireHero = -1;
 		cb->recruitHero(town, best);
 		gateway.waitTillFree();
 
@@ -3824,7 +4381,7 @@ void AdventureAI::defendTowns()
 		for(const auto & [id, object] : known)
 		{
 			if(object.type == Obj::HERO && object.visibleNow && isEnemy(object.owner)
-				&& enemyDistance(id, object.visitablePos, observedDanger(object) * params.enemyHeroFactor, town->visitablePos(), 14) < 14)
+				&& enemyDistance(id, object.visitablePos, observedDanger(object) * heroFactor(object), town->visitablePos(), 14) < 14)
 			{
 				threatened = true;
 				break;

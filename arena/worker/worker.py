@@ -20,6 +20,7 @@ import datetime
 import json
 import os
 import shutil
+import signal
 import socket
 import subprocess
 import sys
@@ -212,6 +213,18 @@ def ensure_mods(names) -> None:
         log(f"mod {name} installed in {target}")
 
 
+def job_withdrawn(job_id: str) -> bool:
+    """A running job is stopped when its file disappears from the branch (checked at every sync).
+    Only a clear answer counts: network trouble never cancels a job."""
+    if git(["fetch", "--depth", "50", "origin", BRANCH], SRC, check=False).returncode != 0:
+        return False
+    res = git(["cat-file", "-e", f"FETCH_HEAD:arena/jobs/{job_id}.json"], SRC, check=False)
+    if res.returncode == 0:
+        return False
+    # the branch itself must be readable, else the missing file means nothing
+    return git(["cat-file", "-e", "FETCH_HEAD:arena/worker/worker.py"], SRC, check=False).returncode == 0
+
+
 def run_job(path: Path, commit: str) -> None:
     job_id = path.stem
     job = json.loads(path.read_text())
@@ -235,15 +248,30 @@ def run_job(path: Path, commit: str) -> None:
     log(f"job {job_id}: {script.name} {' '.join(args)}")
     started = time.time()
     last_sync = started
+    cancelled = False
     with open(out / "job-output.txt", "w") as output:
-        proc = subprocess.Popen([sys.executable, str(script), *args], cwd=out, stdout=output, stderr=subprocess.STDOUT)
+        # own process group: a cancelled job takes its games down with it
+        proc = subprocess.Popen([sys.executable, str(script), *args], cwd=out, stdout=output, stderr=subprocess.STDOUT,
+                                start_new_session=True)
         while proc.poll() is None:
             time.sleep(30)
             if time.time() - last_sync > SYNC_SECONDS:
                 copy_small_files(out, result_dir)
                 publish(f"{job_id}: progress")
                 last_sync = time.time()
-    status["state"] = "done" if proc.returncode == 0 else "failed"
+                if job_withdrawn(job_id):
+                    log(f"job {job_id}: its file was removed from the branch - stopping it")
+                    cancelled = True
+                    try:
+                        os.killpg(proc.pid, signal.SIGTERM)
+                        proc.wait(timeout=60)
+                    except (OSError, subprocess.TimeoutExpired):
+                        try:
+                            os.killpg(proc.pid, signal.SIGKILL)
+                        except OSError:
+                            pass
+                        proc.wait()
+    status["state"] = "cancelled" if cancelled else ("done" if proc.returncode == 0 else "failed")
     status["returncode"] = proc.returncode
     status["finished"] = datetime.datetime.now().isoformat(timespec="seconds")
     status["minutes"] = round((time.time() - started) / 60, 1)

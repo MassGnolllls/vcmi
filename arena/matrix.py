@@ -77,8 +77,9 @@ def summarise(out: Path, spec, configs: dict, seeds: list, only: str) -> str:
     names = list(configs)
     base = names[0]
     lines = [f"# Matrix test: {len(spec['categories'])} map categories, configs {', '.join(names)}, seeds {', '.join(map(str, seeds))}", "",
-             "Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval.", "",
-             "| category | " + " | ".join(f"{n} (games, score)" for n in names) + " | " +
+             "Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. "
+             "Won and lost count the games decided before the day limit.", "",
+             "| category | " + " | ".join(f"{n} (games, score, decided)" for n in names) + " | " +
              " | ".join(f"{n} − {base}" for n in names[1:]) + (" |" if len(names) > 1 else "")]
     lines.append("|---|" + "---|" * (len(names) + max(0, len(names) - 1)))
     per_cat_means = {n: [] for n in names}
@@ -97,7 +98,9 @@ def summarise(out: Path, spec, configs: dict, seeds: list, only: str) -> str:
         for name in names:
             scores = list(games[name].values())
             m, ci = mean_ci(scores)
-            cells.append(f"{len(scores)}, {m:.3f} ± {ci:.3f}" if scores else "-")
+            wins = sum(1 for x in scores if x >= 0.999)
+            losses = sum(1 for x in scores if x <= 0.001)
+            cells.append(f"{len(scores)}, {m:.3f} ± {ci:.3f}, {wins} won {losses} lost" if scores else "-")
             if scores:
                 per_cat_means[name].append(m)
         diffs = []

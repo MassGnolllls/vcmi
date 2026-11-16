@@ -29,6 +29,17 @@ enum class BattleState
 	ENDING_BATTLE
 };
 
+/// What our battle AI's simulator says about the battle in progress (for the retreat/surrender decision)
+struct BattleVerdict
+{
+	bool lost = false;      ///< played on by the simulator - holding or advancing - we lose all, the enemy keeps a good part
+	double ownValue = 0;    ///< AI value of what we still have on the field
+	double enemyLoss = 0;   ///< AI value the enemy is expected to lose if we fight on
+};
+/// Battle AI and gateway of one player are separate objects created by the engine: they meet here
+void setBattleVerdict(PlayerColor player, const BattleVerdict & verdict);
+BattleVerdict battleVerdict(PlayerColor player);
+
 class Status
 {
 	mutable std::mutex mx;

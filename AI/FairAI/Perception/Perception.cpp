@@ -11,6 +11,7 @@
 #include "../../../lib/callback/CCallback.h"
 #include "../../../lib/CCreatureHandler.h"
 #include "../../../lib/gameState/InfoAboutArmy.h"
+#include "../../../lib/gameState/SThievesGuildInfo.h"
 #include "../../../lib/mapObjects/CGCreature.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
@@ -210,6 +211,13 @@ void Perception::refresh()
 			if(army.known)
 				observed.army = army;
 		}
+		if(obj->ID == Obj::HERO && !isOwn(obj) && cb->isVisible(obj->visitablePos()))
+		{
+			// primary skills: only where the hero's info window shows them
+			InfoAboutHero info;
+			if(cb->getHeroInfo(obj, info) && info.details && info.details->primskills.size() >= 4)
+				observed.heroSkills = std::array<int, 4>{info.details->primskills[0], info.details->primskills[1], info.details->primskills[2], info.details->primskills[3]};
+		}
 
 		seenNow.insert(obj->id);
 		updates.push_back(std::move(observed));
@@ -235,6 +243,35 @@ void Perception::refresh()
 	}
 	for(auto & observed : updates)
 		objects[observed.id] = std::move(observed);
+}
+
+GuildInfo Perception::thievesGuild() const
+{
+	GuildInfo result;
+	for(const auto * town : cb->getTownsInfo(true))
+	{
+		if(!town->hasBuilt(BuildingID::TAVERN))
+			continue;
+		SThievesGuildInfo info;
+		cb->getThievesGuildInfo(info, town);
+		result.available = true;
+		for(const auto & [color, hero] : info.colorToBestHero)
+		{
+			if(color == me || !hero.portraitSource.hasValue())
+				continue;
+			GuildHero shown;
+			shown.hero = hero.portraitSource;
+			// the window shows the four primary skills (never the army: we do not read it)
+			if(hero.details && hero.details->primskills.size() >= 4)
+				shown.skills = std::array<int, 4>{hero.details->primskills[0], hero.details->primskills[1], hero.details->primskills[2], hero.details->primskills[3]};
+			result.bestHero[color] = shown;
+		}
+		for(size_t place = 0; place < info.numOfTowns.size(); ++place)
+			for(const auto & color : info.numOfTowns[place])
+				result.townPlace[color] = static_cast<int>(place);
+		break; // every tavern of ours shows the same
+	}
+	return result;
 }
 
 void Perception::onTilesHidden(const std::set<int3> & tiles)
@@ -271,6 +308,9 @@ const CGObjectInstance * Perception::visibleObject(ObjectInstanceID id) const
 		std::unique_lock lock(mx);
 		auto it = objects.find(id);
 		if(it == objects.end() || (!it->second.visibleNow && it->second.owner != me))
+			return nullptr;
+		// our own mine or dwelling in land that is hidden again (Cover of Darkness): we do not see it either
+		if(!it->second.visibleNow && !cb->isVisible(it->second.visitablePos))
 			return nullptr;
 	}
 	return cb->getObj(id);

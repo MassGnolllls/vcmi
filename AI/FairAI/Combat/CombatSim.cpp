@@ -17,10 +17,12 @@
 #include "../../../lib/bonuses/BonusEnum.h"
 #include "../../../lib/bonuses/Bonus.h"
 #include "../../../lib/bonuses/BonusList.h"
+#include "../../../lib/bonuses/BonusParameters.h"
 #include "../../../lib/bonuses/BonusSelector.h"
 #include "../../../lib/bonuses/BonusCustomTypes.h"
 #include "../../../lib/bonuses/IBonusBearer.h"
 #include "../../../lib/json/JsonNode.h"
+#include "../../../lib/spells/CSpellHandler.h"
 #include "../../../lib/IGameSettings.h"
 #include "../../../lib/GameLibrary.h"
 #include "../../../lib/constants/EntityIdentifiers.h"
@@ -40,6 +42,21 @@ constexpr int MAX_SIM_STEPS = 600;
 
 // ------------------------------------------------------------------ DamageTable
 
+namespace
+{
+std::atomic<bool> multiHexEnabled{false};
+
+/// attacks that reach beyond the target do not spare the attacker's own side
+bool canHitOwn(const IBonusBearer & unit)
+{
+	if(!multiHexEnabled)
+		return false;
+	return unit.hasBonusOfType(BonusType::TWO_HEX_ATTACK_BREATH) || unit.hasBonusOfType(BonusType::WIDE_BREATH)
+		|| unit.hasBonusOfType(BonusType::PRISM_HEX_ATTACK_BREATH) || unit.hasBonusOfType(BonusType::MULTIHEX_UNIT_ATTACK)
+		|| unit.hasBonusOfType(BonusType::SPELL_LIKE_ATTACK);
+}
+}
+
 void DamageTable::build(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & units, bool abilities)
 {
 	n = units.size();
@@ -52,12 +69,26 @@ void DamageTable::build(const CBattleInfoCallback & cb, const std::vector<const 
 	{
 		const battle::Unit * attacker = units[a];
 		const double count = std::max(1, attacker->getCount());
+		const bool hitsOwn = canHitOwn(*attacker);
 
 		for(size_t d = 0; d < n; ++d)
 		{
 			const battle::Unit * defender = units[d];
-			if(a == d || attacker->unitSide() == defender->unitSide())
+			if(a == d)
 				continue;
+			if(attacker->unitSide() == defender->unitSide())
+			{
+				// breath and bursting shots do not tell friend from foe
+				if(hitsOwn)
+				{
+					const CCreature * attackerType = attacker->creatureId().toCreature();
+					const CCreature * defenderType = defender->creatureId().toCreature();
+					meleeDmg[a * n + d] = formula(*attacker, attackerType, *defender, defenderType, false);
+					if(attacker->isShooter())
+						rangedNear[a * n + d] = rangedFar[a * n + d] = formula(*attacker, attackerType, *defender, defenderType, true);
+				}
+				continue;
+			}
 
 			BattleAttackInfo meleeInfo(attacker, defender, 0, false);
 			meleeDmg[a * n + d] = average(cb.battleEstimateDamage(meleeInfo).damage) / count;
@@ -82,7 +113,7 @@ void DamageTable::build(const CBattleInfoCallback & cb, const std::vector<const 
 	}
 }
 
-double DamageTable::formula(const ACreature & attacker, const CCreature * attackerType, const ACreature & defender, const CCreature * defenderType, bool shooting, int chargeDistance)
+double DamageTable::formula(const ACreature & attacker, const CCreature * attackerType, const ACreature & defender, const CCreature * defenderType, bool shooting, int chargeDistance, int attackBonus, int defenceBonus)
 {
 	// Mirrors lib/battle/DamageCalculator.cpp for everything that does not depend on dice, positions
 	// or spells in effect. unit_lab.py checks it against the game for every pair it sees in a battle.
@@ -99,8 +130,8 @@ double DamageTable::formula(const ACreature & attacker, const CCreature * attack
 
 	int attack = a.getBonuses(Selector::typeSubtype(BonusType::PRIMARY_SKILL, BonusSubtypeID(PrimarySkill::ATTACK)))->valOfBonuses(inRange);
 	int defence = d.getBonuses(Selector::typeSubtype(BonusType::PRIMARY_SKILL, BonusSubtypeID(PrimarySkill::DEFENSE)))->valOfBonuses(inRange);
-	attack = std::max(0, attack);
-	defence = std::max(0, defence);
+	attack = std::max(0, attack + attackBonus);
+	defence = std::max(0, defence + defenceBonus);
 	if(const int percent = ranged(d, BonusType::ENEMY_ATTACK_REDUCTION); percent > 0)
 		attack -= std::min(attack, static_cast<int>(std::lround(attack * percent / 100.0)));
 	if(const double share = ranged(a, BonusType::ENEMY_DEFENCE_REDUCTION) / 100.0; share > 0)
@@ -164,21 +195,22 @@ void DamageTable::build(const std::vector<StackSpec> & stacks)
 		const StackSpec & attacker = stacks[a];
 		const IBonusBearer & bearer = *attacker.bearer->getBonusBearer();
 		const bool shooter = bearer.valOfBonuses(BonusType::SHOTS) > 0;
+		const bool hitsOwn = canHitOwn(bearer);
 		for(size_t d = 0; d < n; ++d)
 		{
 			const StackSpec & defender = stacks[d];
-			if(a == d || attacker.side == defender.side)
+			if(a == d || (attacker.side == defender.side && !hitsOwn))
 				continue;
-			meleeDmg[a * n + d] = formula(*attacker.bearer, attacker.type, *defender.bearer, defender.type, false);
+			meleeDmg[a * n + d] = formula(*attacker.bearer, attacker.type, *defender.bearer, defender.type, false, 0, attacker.attackBonus, defender.defenceBonus);
 			if(bearer.hasBonusOfType(BonusType::JOUSTING))
 			{
 				if(chargeDmg.empty())
 					chargeDmg.assign(n * n, 0.0);
-				chargeDmg[a * n + d] = std::max(0.0, formula(*attacker.bearer, attacker.type, *defender.bearer, defender.type, false, 1) - meleeDmg[a * n + d]);
+				chargeDmg[a * n + d] = std::max(0.0, formula(*attacker.bearer, attacker.type, *defender.bearer, defender.type, false, 1, attacker.attackBonus, defender.defenceBonus) - meleeDmg[a * n + d]);
 			}
 			if(shooter)
 			{
-				const double nearValue = formula(*attacker.bearer, attacker.type, *defender.bearer, defender.type, true);
+				const double nearValue = formula(*attacker.bearer, attacker.type, *defender.bearer, defender.type, true, 0, attacker.attackBonus, defender.defenceBonus);
 				rangedNear[a * n + d] = nearValue;
 				rangedFar[a * n + d] = bearer.hasBonusOfType(BonusType::NO_DISTANCE_PENALTY) ? nearValue : nearValue / 2;
 			}
@@ -285,6 +317,63 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	s.fireShield = u.valOfBonuses(BonusType::FIRE_SHIELD) / 100.0;
 	s.fireImmune = u.hasBonusOfType(BonusType::SPELL_SCHOOL_IMMUNITY, BonusSubtypeID(SpellSchool::FIRE));
 	s.returnsAfterStrike = u.hasBonusOfType(BonusType::RETURN_AFTER_STRIKE);
+
+	// attacks that reach further hexes (the game's own notation of the paths, see CBattleInfoCallback)
+	s.extraCount = 0;
+	s.extraFriendly = 0;
+	auto addPath = [&s](int path, bool friendly)
+	{
+		if(path <= 0 || path > 30000 || s.extraCount >= s.extraPath.size())
+			return;
+		for(int i = 0; i < s.extraCount; ++i)
+		{
+			if(s.extraPath[i] == path)
+			{
+				if(friendly)
+					s.extraFriendly |= static_cast<uint8_t>(1u << i);
+				return;
+			}
+		}
+		if(friendly)
+			s.extraFriendly |= static_cast<uint8_t>(1u << s.extraCount);
+		s.extraPath[s.extraCount++] = static_cast<int16_t>(path);
+	};
+	if(multiHexEnabled)
+	{
+	for(const auto & bonus : *u.getBonusesOfType(BonusType::MULTIHEX_UNIT_ATTACK))
+		if(bonus->parameters)
+			for(int path : bonus->parameters->toVector())
+				addPath(path, true);
+	for(const auto & bonus : *u.getBonusesOfType(BonusType::MULTIHEX_ENEMY_ATTACK))
+		if(bonus->parameters)
+			for(int path : bonus->parameters->toVector())
+				addPath(path, false);
+	if(u.hasBonusOfType(BonusType::THREE_HEADED_ATTACK))
+		for(int path : {2, 6})
+			addPath(path, false);
+	if(u.hasBonusOfType(BonusType::WIDE_BREATH))
+		for(int path : {11, 111, 2, 12, 6, 16})
+			addPath(path, true);
+	if(u.hasBonusOfType(BonusType::TWO_HEX_ATTACK_BREATH))
+		addPath(11, true);
+	if(u.hasBonusOfType(BonusType::PRISM_HEX_ATTACK_BREATH))
+		for(int path : {11, 12, 16})
+			addPath(path, true);
+
+	// shots that burst like a spell (the lich's death cloud, the magog's fireball)
+	s.areaShot = false;
+	s.areaLivingOnly = false;
+	s.areaFire = false;
+	if(const auto burst = u.getBonus(Selector::type()(BonusType::SPELL_LIKE_ATTACK)))
+	{
+		s.areaShot = true;
+		const SpellID spell = burst->subtype.as<SpellID>();
+		s.areaLivingOnly = spell == SpellID::DEATH_CLOUD;
+		if(const auto * info = spell.hasValue() ? spell.toSpell() : nullptr)
+			s.areaFire = info->hasSchool(SpellSchool::FIRE);
+	}
+	}
+	s.magicImmune = u.valOfBonuses(BonusType::LEVEL_SPELL_IMMUNITY) >= 5;
 
 	// expected values instead of dice: luck doubles a hit, a death blow too; morale gives or takes turns
 	const auto & settings = *LIBRARY->engineSettings();
@@ -646,7 +735,20 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 	const double turns = ownTurn ? a.turnFactor : 1.0;
 	if(ranged)
 	{
-		dealDamage(target, damage->ranged(attacker, target, shotIsFar(attacker, target)) * a.count * a.rangedFactor * turns);
+		const bool far = shotIsFar(attacker, target);
+		if(a.areaShot)
+		{
+			// the burst hits everything around the target as well - our own troops included
+			std::array<int, 8> around{};
+			int aroundCount = 0;
+			burstVictims(attacker, target, around, aroundCount);
+			for(int i = 0; i < aroundCount; ++i)
+			{
+				units[around[i]].active = true;
+				dealDamage(around[i], damage->ranged(attacker, around[i], far) * a.count * a.rangedFactor * turns);
+			}
+		}
+		dealDamage(target, damage->ranged(attacker, target, far) * a.count * a.rangedFactor * turns);
 		return;
 	}
 
@@ -670,12 +772,111 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 				hit(i, damage->melee(attacker, i) * a.count * factor);
 		}
 	}
+	if(a.extraCount > 0)
+	{
+		// breath and further heads: whoever stands on the hexes they reach
+		std::array<int, 8> further{};
+		int furtherCount = 0;
+		extraVictims(attacker, target, further, furtherCount);
+		for(int i = 0; i < furtherCount; ++i)
+		{
+			units[further[i]].active = true;
+			hit(further[i], damage->melee(attacker, further[i]) * a.count * factor);
+		}
+	}
 	hit(target, (damage->melee(attacker, target) + damage->chargeStep(attacker, target) * chargeHexes) * a.count * factor);
 
 	if(a.lifeDrain > 0 && dealtToLiving > 0)
 		heal(attacker, a.lifeDrain * dealtToLiving);
 	if(burn > 0 && !a.fireImmune && units[attacker].alive())
 		dealDamage(attacker, burn);
+}
+
+void SimState::extraVictims(int attacker, int target, std::array<int, 8> & out, int & count) const
+{
+	// The same geometry as the game's (CBattleInfoCallback::getPotentiallyAttackableHexes).
+	count = 0;
+	const SimUnit & a = units[attacker];
+	const SimUnit & d = units[target];
+	if(a.extraCount == 0 || !a.pos.isValid() || !d.pos.isValid())
+		return;
+	BattleHex origin = a.pos;
+	// a wide attacker whose head does not touch the enemy strikes from its other hex
+	if(a.doubleWide && !battle::Unit::getSurroundingHexes(d.pos, d.doubleWide, d.side).contains(origin))
+		origin = battle::Unit::occupiedHex(a.pos, true, a.side);
+	if(!origin.isValid())
+		return;
+	auto direction = BattleHex::mutualPosition(origin, d.pos);
+	if(d.doubleWide)
+	{
+		// a wide defender is hit on its far hex whenever that one is in reach
+		const BattleHex tail = battle::Unit::occupiedHex(d.pos, true, d.side);
+		if(tail.isValid() && BattleHex::mutualPosition(origin, tail) != BattleHex::NONE)
+			direction = BattleHex::mutualPosition(origin, tail);
+	}
+	if(direction == BattleHex::NONE)
+		return;
+	const auto & own = battle::Unit::getHexes(a.pos, a.doubleWide, a.side);
+	for(int i = 0; i < a.extraCount; ++i)
+	{
+		std::array<BattleHex::EDir, 5> path{};
+		int steps = 0;
+		for(int left = a.extraPath[i]; left != 0 && steps < 5; left /= 10)
+			path[steps++] = static_cast<BattleHex::EDir>((direction + left % 10 - 1) % 6);
+		if(steps == 0)
+			continue;
+		BattleHex hex = origin;
+		try
+		{
+			if(a.doubleWide && own.contains(hex.cloneInDirection(path[0])))
+				hex.moveInDirection(direction);
+			for(int k = 0; k < steps; ++k)
+				hex.moveInDirection(path[k]);
+		}
+		catch(const std::out_of_range &)
+		{
+			continue; // off the field
+		}
+		if(!hex.isValid() || own.contains(hex))
+			continue;
+		const int victim = occupant[hex.toInt()];
+		if(victim < 0 || victim == target || victim == attacker || !units[victim].alive())
+			continue;
+		const bool friendly = (a.extraFriendly >> i) & 1u;
+		if(!friendly && units[victim].side == a.side)
+			continue;
+		bool known = false;
+		for(int k = 0; k < count; ++k)
+			known = known || out[k] == victim;
+		if(!known && count < static_cast<int>(out.size()))
+			out[count++] = victim;
+	}
+}
+
+void SimState::burstVictims(int attacker, int target, std::array<int, 8> & out, int & count) const
+{
+	count = 0;
+	const SimUnit & a = units[attacker];
+	const SimUnit & d = units[target];
+	if(!a.areaShot || !d.pos.isValid())
+		return;
+	// the burst is centred on the hex of the target the shooter aims at: its position
+	for(const auto & hex : d.pos.getNeighbouringTiles())
+	{
+		if(!hex.isValid())
+			continue;
+		const int victim = occupant[hex.toInt()];
+		if(victim < 0 || victim == target || victim == attacker || !units[victim].alive())
+			continue;
+		const SimUnit & v = units[victim];
+		if(v.magicImmune || (a.areaLivingOnly && !v.living) || (a.areaFire && v.fireImmune))
+			continue;
+		bool known = false;
+		for(int k = 0; k < count; ++k)
+			known = known || out[k] == victim;
+		if(!known && count < static_cast<int>(out.size()))
+			out[count++] = victim;
+	}
 }
 
 void SimState::finishTurn(int unit, bool waited)
@@ -838,8 +1039,23 @@ double SimState::shotValue(int attacker, int target) const
 {
 	const auto & a = units[attacker];
 	const auto & t = units[target];
-	double dealt = std::min<double>(t.totalHP(), damage->ranged(attacker, target, shotIsFar(attacker, target)) * a.count * a.rangedAttacks);
-	return dealt / t.maxHP * t.value;
+	const bool far = shotIsFar(attacker, target);
+	double dealt = std::min<double>(t.totalHP(), damage->ranged(attacker, target, far) * a.count * a.rangedAttacks);
+	double value = dealt / t.maxHP * t.value;
+	if(a.areaShot)
+	{
+		// a bursting shot: what else it hits counts too - for us when it is theirs, against us when it is ours
+		std::array<int, 8> around{};
+		int aroundCount = 0;
+		burstVictims(attacker, target, around, aroundCount);
+		for(int i = 0; i < aroundCount; ++i)
+		{
+			const auto & v = units[around[i]];
+			const double burst = std::min<double>(v.totalHP(), damage->ranged(attacker, around[i], far) * a.count * a.rangedAttacks) / v.maxHP * v.value;
+			value += v.side == a.side ? -burst : burst;
+		}
+	}
+	return value;
 }
 
 void SimState::playDefault(int unit)
@@ -1045,6 +1261,16 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 		++plan;
 	}
 	return result;
+}
+
+void setMultiHex(bool enabled)
+{
+	multiHexEnabled = enabled;
+}
+
+bool multiHex()
+{
+	return multiHexEnabled;
 }
 
 }

@@ -1,0 +1,27 @@
+{
+ "note": "small maps, 90 days, 2x72 paired games each: is 'gold first' (default since 16.11.) right on small maps too? old = without it, contact = gold first only until the first enemy hero or town is seen; all = today's three ideas (share, camp, expand) on small maps",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"old\": {\"incomeHorizonDays\": 14, \"earlyGoldDays\": 0}, \"contact\": {\"earlyGoldContact\": 1}, \"all\": {\"fetchByShare\": 1, \"leaderFocus\": 1, \"noChase\": 1, \"unlockDirect\": 1, \"regionValue\": 8000}}",
+  "--seeds",
+  "42,43",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "90",
+  "--timeout",
+  "1200",
+  "--stall-seconds",
+  "120"
+ ],
+ "jobs": 6
+}
