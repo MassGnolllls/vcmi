@@ -296,3 +296,7 @@ match    2 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.00 [626
 match    1 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.14 [643.1s]
 match    0 FairAI as red,tan,orange of 6: victory winner=blue day=72 score=0.00 [786.6s]
 match    8 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.27 [295.7s]
+match    6 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.27 [488.4s]
+match    9 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.02 [506.9s]
+match    7 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.02 [840.4s]
+match   10 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.19 [802.4s]
