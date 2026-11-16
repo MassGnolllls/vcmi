@@ -1,0 +1,30 @@
+{
+ "note": "sensitivity at day 45, 72 games: {\"collectorsRoam\": 0}",
+ "script": "run_tournament.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--ai",
+  "FairAI",
+  "--opponent",
+  "Nullkiller2",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--jobs",
+  "{jobs}",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60",
+  "--ai-params",
+  "{\"collectorsRoam\": 0}",
+  "--out",
+  "{out}"
+ ],
+ "jobs": 6
+}
