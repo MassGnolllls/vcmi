@@ -11,7 +11,8 @@ import json
 import sys
 from pathlib import Path
 
-COLUMNS = ["army", "towns", "heroes", "income", "mines", "explored%", "level", "gold", "dwellings", "guardFights", "guardLosses"]
+# mainArmy = army of the strongest hero, garrisons = army in towns without a hero (clients built after 16.11.2026 23:35)
+COLUMNS = ["army", "towns", "heroes", "income", "mines", "explored%", "level", "gold", "dwellings", "guardFights", "guardLosses", "mainArmy", "garrisons"]
 
 
 def load(path: Path):

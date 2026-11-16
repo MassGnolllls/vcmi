@@ -39,6 +39,7 @@
 #include "../lib/entities/hero/CHeroHandler.h"
 #include "../lib/mapObjectConstructors/AObjectTypeHandler.h"
 #include "../lib/mapObjectConstructors/CObjectClassesHandler.h"
+#include "../lib/mapObjects/CGTownInstance.h"
 #include "../lib/mapObjects/CGHeroInstance.h"
 #include "../lib/mapObjects/CGCreature.h"
 #include "../lib/mapObjects/army/CStackInstance.h"
@@ -336,7 +337,8 @@ void onNewTurn(CClient & client)
 	const CGameState & gs = client.gameState();
 	if(!gs.getMap().battleOnly)
 	{
-		// key figures per day, compact: [army, towns, heroes, income, mines, explored %, best hero level, gold, dwellings, guard fights, guard losses]
+		// key figures per day, compact: [army, towns, heroes, income, mines, explored %, best hero level, gold, dwellings, guard fights, guard losses,
+		// army of the strongest hero, army standing in town garrisons (without a hero)]
 		JsonNode day;
 		day["day"].Integer() = gs.getDate(Date::DAY);
 		for(const auto & player : gs.players)
@@ -348,11 +350,19 @@ void onNewTurn(CClient & client)
 			for(const auto & m : e.numMines)
 				mines += m.second;
 			const BattleTally & tally = battleTally[player.first];
+			// how the army is spread: the strongest single hero, and what stands in towns without a hero
+			int64_t mainArmy = 0;
+			int64_t garrisons = 0;
+			for(const auto * hero : player.second.getHeroes())
+				mainArmy = std::max<int64_t>(mainArmy, static_cast<int64_t>(hero->getArmyStrength()));
+			for(const auto * town : player.second.getTowns())
+				if(!town->getGarrisonHero())
+					garrisons += static_cast<int64_t>(town->getArmyStrength());
 			JsonNode & row = day["players"][player.first.toString()];
 			for(int64_t value : {static_cast<int64_t>(e.armyStrength), static_cast<int64_t>(e.numberTowns), static_cast<int64_t>(e.numberHeroes), static_cast<int64_t>(e.income),
 				static_cast<int64_t>(mines), static_cast<int64_t>(std::lround(e.mapExploredRatio * 100)), static_cast<int64_t>(e.maxHeroLevel),
 				static_cast<int64_t>(player.second.resources[EGameResID::GOLD]), static_cast<int64_t>(e.numberDwellings),
-				static_cast<int64_t>(tally.guardFights), tally.guardLosses})
+				static_cast<int64_t>(tally.guardFights), tally.guardLosses, mainArmy, garrisons})
 			{
 				row.Vector().emplace_back(value);
 			}
