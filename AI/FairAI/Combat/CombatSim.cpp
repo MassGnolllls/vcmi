@@ -927,17 +927,43 @@ void SimState::playDefault(int unit)
 		}
 	}
 
-	if(bestTarget >= 0 && (stance[static_cast<int>(u.side)] == Stance::CHARGE || bestValue > 0))
+	const Stance own = stance[static_cast<int>(u.side)];
+	if(bestTarget >= 0 && (own != Stance::HOLD || bestValue > 0))
 	{
 		apply(unit, {SimActionType::ATTACK, bestTarget, bestHex});
 		return;
 	}
 
 	// nothing in reach: advance towards the closest enemy - unless this side holds its ground
-	if(stance[static_cast<int>(u.side)] == Stance::HOLD)
+	if(own == Stance::HOLD)
 	{
 		apply(unit, {SimActionType::DEFEND, -1, BattleHex()});
 		return;
+	}
+	if(own == Stance::STALK && !u.waited)
+	{
+		apply(unit, {SimActionType::WAIT, -1, BattleHex()});
+		return;
+	}
+
+	// which enemy to walk towards: the closest, or (stalking) the one that promises the best trade soon
+	int prey = -1;
+	if(own == Stance::STALK)
+	{
+		double bestPrey = -1e18;
+		for(int i = 0; i < static_cast<int>(units.size()); ++i)
+		{
+			const auto & e = units[i];
+			if(!e.alive() || e.side == u.side)
+				continue;
+			const int turns = (BattleHex::getDistance(u.pos, e.pos) - 1) / std::max(1, u.speed) + 1;
+			const double v = meleeTradeValue(unit, i) / turns;
+			if(v > bestPrey)
+			{
+				bestPrey = v;
+				prey = i;
+			}
+		}
 	}
 
 	BattleHex bestMove = u.pos;
@@ -947,9 +973,14 @@ void SimState::playDefault(int unit)
 		if(dist[h] < 0)
 			continue;
 		int closest = 1000;
-		for(const auto & e : units)
-			if(e.alive() && e.side != u.side)
-				closest = std::min<int>(closest, BattleHex::getDistance(BattleHex(h), e.pos));
+		if(prey >= 0)
+			closest = BattleHex::getDistance(BattleHex(h), units[prey].pos);
+		else
+		{
+			for(const auto & e : units)
+				if(e.alive() && e.side != u.side)
+					closest = std::min<int>(closest, BattleHex::getDistance(BattleHex(h), e.pos));
+		}
 		if(closest < bestRemaining)
 		{
 			bestRemaining = closest;
@@ -989,7 +1020,7 @@ double Forecast::lossShare(int plan) const
 	return std::clamp(1.0 - ownAfter[plan] / ownBefore, 0.0, 1.0);
 }
 
-Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds)
+Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds, Stance enemyStance)
 {
 	DamageTable table;
 	table.build(stacks);
@@ -1006,7 +1037,7 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 	{
 		SimState sim = base;
 		sim.stance[ownIndex] = stance;
-		sim.stance[1 - ownIndex] = Stance::CHARGE;
+		sim.stance[1 - ownIndex] = enemyStance;
 		sim.playout(maxRounds);
 		result.ownAfter[plan] = sim.sideValue(ownSide);
 		result.enemyAfter[plan] = sim.sideValue(other);

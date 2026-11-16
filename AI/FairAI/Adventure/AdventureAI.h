@@ -33,6 +33,7 @@
 #include "../../../lib/constants/EntityIdentifiers.h"
 
 VCMI_LIB_NAMESPACE_BEGIN
+class CArtifact;
 class CCallback;
 class ResourceSet;
 class CGHeroInstance;
@@ -105,6 +106,17 @@ public:
 	// ---- answers to queries (called from worker threads with the gamestate lock held)
 	/// Hero level-up: index of the preferred skill in `skills` (0 if none)
 	int chooseSkill(const CGHeroInstance * hero, const std::vector<SecondarySkill> & skills) const;
+	/// what holding a secondary skill at a level is worth to this hero in its role (parameter skillChoice)
+	double skillValue(const CGHeroInstance * hero, SecondarySkill skill, int level) const;
+	double skillValueAs(const CGHeroInstance * hero, SecondarySkill skill, int level, bool fighter) const;
+	/// 0: a pure warrior ... 1: a hero whose fighting rests on spells
+	double magicReliance(const CGHeroInstance * hero) const;
+	/// what carrying an artifact is worth to this hero (negative: harmful), as leader of the army or as one of the others
+	double artifactValue(const CGHeroInstance * hero, const CArtifact * art, bool fighter) const;
+	/// wear the best per slot, take off what harms, assemble sets (parameter artifactCare)
+	void arrangeArtifacts(const CGHeroInstance * hero);
+	/// two of our heroes meet: artifacts go where they do more good
+	void exchangeArtifacts(const CGHeroInstance * leader, const CGHeroInstance * other);
 	/// Selection dialog (e.g. treasure chest gold vs experience): 1-based index
 	int chooseSelection(const std::vector<Component> & components) const;
 	/// Two of our heroes met: move troops to the main hero
@@ -172,6 +184,9 @@ private:
 	int idleDays = 0; ///< consecutive days the main hero achieved nothing (no visit, fight or exploration)
 	bool mainProductive = false; ///< the main hero visited, fought or explored today
 	std::map<int, int> resourceNeed; ///< resource -> amount our best blocked buildings lack
+	std::map<int, double> resourceScarcity; ///< resource -> what our towns will need / (stock + four weeks of income), see updateResourcePlan
+	void updateResourcePlan();
+	double scarcity(GameResID res) const;
 	std::set<ObjectInstanceID> heroesLastTurn;
 	std::set<ObjectInstanceID> usedTeleporters;
 	/// An enemy hero was seen within `radius` tiles of `tile` during the last `days` days

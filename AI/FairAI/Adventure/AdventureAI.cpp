@@ -13,12 +13,20 @@
 #include "../Perception/Perception.h"
 
 #include "../../../lib/CCreatureHandler.h"
+#include "../../../lib/CSkillHandler.h"
+#include "../../../lib/bonuses/Bonus.h"
+#include "../../../lib/bonuses/BonusCustomTypes.h"
+#include <vcmi/Faction.h>
 #include "../../../lib/CConfigHandler.h"
 #include "../../../lib/GameLibrary.h"
 #include "../../../lib/IGameSettings.h"
 #include "../../../lib/callback/CCallback.h"
 #include "../../../lib/entities/ResourceTypeHandler.h"
 #include "../../../lib/entities/artifact/CArtifact.h"
+#include "../../../lib/entities/artifact/ArtBearer.h"
+#include "../../../lib/networkPacks/ArtifactLocation.h"
+#include "../../../lib/entities/artifact/CArtifactInstance.h"
+#include "../../../lib/entities/artifact/ArtifactUtils.h"
 #include "../../../lib/entities/building/CBuilding.h"
 #include "../../../lib/entities/faction/CTown.h"
 #include "../../../lib/json/JsonNode.h"
@@ -26,6 +34,7 @@
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
 #include "../../../lib/mapObjects/IMarket.h"
+#include "../../../lib/mapObjects/IOwnableObject.h"
 #include "../../../lib/mapObjects/MiscObjects.h"
 #include "../../../lib/mapObjects/ObjectTemplate.h"
 #include "../../../lib/spells/CSpellHandler.h"
@@ -224,6 +233,9 @@ void Params::loadOverrides(int playerIndex)
 	read("heroesWeek3", heroesWeek3);
 	read("heroesLater", heroesLater);
 	read("sellSurplus", sellSurplus);
+	read("skillChoice", skillChoice);
+	read("resourcePlan", resourcePlan);
+	read("artifactCare", artifactCare);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -351,6 +363,7 @@ void AdventureAI::playTurn()
 		if(const auto * main = ownHero(mainHero))
 			checkReachAgainstEngine(main);
 	updateEconomy();
+	updateResourcePlan();
 	logAi->info("FairAI %s day %d economy: income %.0f/week, growth costs %.0f/week, rho %.2f", me.toString(), today,
 		economy.weeklyIncome, economy.weeklyRecruitCost, economy.rho);
 
@@ -456,6 +469,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 {
 	int failures = 0;
 	int boatAttempts = 0;
+	if(params.artifactCare)
+		arrangeArtifacts(ownHero(heroId));
 	struct EndOfDayLog
 	{
 		AdventureAI & ai;
@@ -1549,6 +1564,8 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		auto wanted = resourceNeed.find(res.getNum());
 		if(wanted != resourceNeed.end())
 			need += params.resourceNeedFactor * std::min(1.0, wanted->second / amount);
+		if(params.resourcePlan && res != GameResID::GOLD)
+			need = std::max(need, std::clamp(scarcity(res), 0.7, 3.0));
 		return amount * resourceValue(res) * (res == GameResID::GOLD ? goldFactor : need);
 	}
 	case Obj::CAMPFIRE:
@@ -1583,6 +1600,15 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			return hero->hasSpellbook() ? 800 : 300;
 		if(!art.hasValue())
 			return 1000;
+		if(params.artifactCare)
+		{
+			// what it would do for the hero leading our army; the others fetch it for that hero.
+			// Even an artifact that only does harm is worth picking up: the enemy shall not have it.
+			const CGHeroInstance * leader = ownHero(mainHero);
+			const double forLeader = artifactValue(leader ? leader : hero, art.toArtifact(), true);
+			const double forMe = main ? forLeader : std::max(artifactValue(hero, art.toArtifact(), false), 0.8 * forLeader);
+			return std::clamp(std::max(forMe, 0.1 * art.toArtifact()->getPrice()), 300.0, 20000.0);
+		}
 		double value = 1000;
 		switch(art.toArtifact()->aClass)
 		{
@@ -1603,7 +1629,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			return 0;
 		double perDay = res == GameResID::GOLD ? 1000 : ((res == GameResID::WOOD || res == GameResID::ORE) ? 2 : 1);
 		double value = perDay * resourceValue(res) * params.incomeHorizonDays * (res == GameResID::GOLD ? goldFactor : 1.0);
-		if(resourceNeed.count(res.getNum()))
+		if(params.resourcePlan && res != GameResID::GOLD)
+			value *= std::clamp(scarcity(res), 0.6, 3.5); // what our towns will need, not only what blocks us today
+		else if(resourceNeed.count(res.getNum()))
 			value *= 1.0 + 0.5 * params.resourceNeedFactor;
 		return enemy ? 1.5 * value : value;
 	}
@@ -2199,10 +2227,191 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 // ======================================================================= queries
 
+double AdventureAI::skillValue(const CGHeroInstance * hero, SecondarySkill skill, int level) const
+{
+	const bool leads = isMain(hero) || !ownHero(mainHero);
+	if(leads)
+		return skillValueAs(hero, skill, level, true);
+	// the others collect, ferry and scout - but one of them may lead the army one day
+	return skillValueAs(hero, skill, level, false) + 0.2 * skillValueAs(hero, skill, level, true);
+}
+
+double AdventureAI::skillValueAs(const CGHeroInstance * hero, SecondarySkill skill, int level, bool fighter) const
+{
+	// What holding `skill` at `level` is worth to this hero, in gold. Read from the bonuses the game
+	// attaches to the skill, so changed values and new skills of mods are covered. A hero who leads
+	// the army needs other things than one who collects, ferries troops or scouts.
+	const CSkill * info = skill.toSkill();
+	if(!hero || !info || level < 1 || level > 3)
+		return 0;
+	const bool caster = hero->hasSpellbook();
+	double shooters = 0;
+	double living = 0;
+	double army = 0;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		const double v = stackValue(stack.get());
+		army += v;
+		if(stack->getCreature()->hasBonusOfType(BonusType::SHOOTER))
+			shooters += v;
+		if(!stack->getCreature()->hasBonusOfType(BonusType::UNDEAD) && !stack->getCreature()->hasBonusOfType(BonusType::NON_LIVING))
+			living += v;
+	}
+	// today's army is a sample of the hero's career: never judge a skill by an extreme mix
+	const double rangedShare = army > 0 ? std::clamp(shooters / army, 0.15, 0.6) : 0.3;
+	const double livingShare = army > 0 ? std::clamp(living / army, 0.2, 1.0) : 0.8;
+	const double perPercent = fighter ? 140.0 : 15.0; // one percent more fighting strength
+	const double perMove = fighter ? 200.0 : 120.0;   // one percent more movement
+	const bool necromancer = hero->getFactionID().hasValue() && hero->getFactionID().toEntity(LIBRARY)->getJsonKey() == "necropolis";
+
+	double value = 0;
+	for(const auto & bonus : info->at(level).effects)
+	{
+		const double v = bonus->val;
+		switch(bonus->type)
+		{
+		case BonusType::MOVEMENT:
+			if(bonus->subtype == BonusSubtypeID(BonusCustomSubtype::heroMovementLand))
+				value += v * perMove;
+			else
+				value += std::min(v, 150.0) * (seaWanted ? 25.0 : 4.0);
+			break;
+		case BonusType::ROUGH_TERRAIN_DISCOUNT:
+			value += v * perMove * 0.15;
+			break;
+		case BonusType::SIGHT_RADIUS:
+			value += v * (fighter ? 250.0 : 700.0);
+			break;
+		case BonusType::GENERATE_RESOURCE:
+			// income is the same whoever holds it - but the main hero's eight places are worth more
+			value += v * 20.0 * (fighter ? 0.5 : 1.0);
+			break;
+		case BonusType::PERCENTAGE_DAMAGE_BOOST:
+			value += v * perPercent * (bonus->subtype == BonusSubtypeID(BonusCustomSubtype::damageTypeRanged) ? rangedShare : 1.0 - rangedShare);
+			break;
+		case BonusType::GENERAL_DAMAGE_REDUCTION:
+			value += v * 1.15 * perPercent;
+			break;
+		case BonusType::MORALE:
+			value += v * 4.2 * livingShare * perPercent;
+			break;
+		case BonusType::LUCK:
+			value += v * 4.2 * perPercent;
+			break;
+		case BonusType::MAGIC_RESISTANCE:
+			value += v * 0.25 * perPercent;
+			break;
+		case BonusType::UNDEAD_RAISE_PERCENTAGE:
+			value += v * (fighter ? (necromancer ? 270.0 : 80.0) : 20.0);
+			break;
+		case BonusType::MAX_LEARNABLE_SPELL_LEVEL:
+		{
+			// third level spells matter most; the fifth guild level is rarely built
+			const double steps = v >= 3 ? 3600 : (v >= 2 ? 3000 : (v >= 1 ? 2000 : 0));
+			value += fighter ? steps * (caster ? 1.0 : 0.5) : 150.0 * v;
+			break;
+		}
+		case BonusType::MAGIC_SCHOOL_SKILL:
+		{
+			double school = 2000;
+			if(bonus->subtype == BonusSubtypeID(SpellSchool::EARTH))
+				school = 3000;
+			else if(bonus->subtype == BonusSubtypeID(SpellSchool::AIR))
+				school = 2600;
+			else if(bonus->subtype == BonusSubtypeID(SpellSchool::WATER))
+				school = 1500;
+			else if(bonus->subtype == BonusSubtypeID(SpellSchool::FIRE))
+				school = 1400;
+			value += v * (fighter ? school * (caster ? 1.0 : 0.4) : 150.0);
+			break;
+		}
+		case BonusType::MANA_PER_KNOWLEDGE_PERCENTAGE:
+			value += v * 20.0 * (fighter ? (caster ? 1.0 : 0.2) : 0.05);
+			break;
+		case BonusType::MANA_REGENERATION:
+			value += v * (fighter && caster ? 150.0 : 20.0);
+			break;
+		case BonusType::SPELL_DAMAGE:
+			value += v * (fighter && caster ? 40.0 : 2.0);
+			break;
+		case BonusType::WANDERING_CREATURES_JOIN_BONUS:
+			value += v * (fighter ? 500.0 : 100.0);
+			break;
+		case BonusType::SURRENDER_DISCOUNT:
+			value += v * 2.0;
+			break;
+		case BonusType::HERO_EXPERIENCE_GAIN_PERCENT:
+			value += v * (fighter ? 60.0 : 5.0);
+			break;
+		case BonusType::BEFORE_BATTLE_REPOSITION:
+			value += v * (fighter ? 80.0 : 5.0); // FairAI does not arrange its troops before a battle yet
+			break;
+		case BonusType::BEFORE_BATTLE_REPOSITION_BLOCK:
+			value += v * (fighter ? 40.0 : 2.0);
+			break;
+		case BonusType::CATAPULT_EXTRA_SHOTS:
+			value += v * (fighter ? 300.0 : 10.0);
+			break;
+		case BonusType::BONUS_DAMAGE_CHANCE:
+			value += v * (fighter ? 6.0 : 0.5);
+			break;
+		case BonusType::SPECIFIC_SPELL_POWER:
+			value += v * (fighter ? 3.0 : 0.3);
+			break;
+		case BonusType::LEARN_BATTLE_SPELL_CHANCE:
+			value += v * (fighter && caster ? 3.0 : 0.3);
+			break;
+		case BonusType::LEARN_MEETING_SPELL_LIMIT:
+			value += v * 60.0;
+			break;
+		case BonusType::MANUAL_CONTROL:
+		case BonusType::IMPROVED_NECROMANCY:
+		case BonusType::LEARN_BATTLE_SPELL_LEVEL_LIMIT:
+		case BonusType::HERO_GRANTS_ATTACKS:
+		case BonusType::BONUS_DAMAGE_PERCENTAGE:
+			break; // side effects of a skill valued by its main bonus
+		default:
+			value += fighter ? 150.0 : 50.0; // a skill FairAI does not know: assume it does something
+			break;
+		}
+	}
+	return value;
+}
+
 int AdventureAI::chooseSkill(const CGHeroInstance * hero, const std::vector<SecondarySkill> & skills) const
 {
 	if(skills.size() < 2)
 		return 0;
+	if(params.skillChoice && hero)
+	{
+		const int limit = static_cast<int>(cb->getSettings().getInteger(EGameSettings::HEROES_SKILL_PER_HERO));
+		const double used = static_cast<double>(hero->secSkills.size()) / std::max(1, limit);
+		int best = 0;
+		double bestGain = -1e18;
+		std::string text;
+		for(size_t i = 0; i < skills.size(); ++i)
+		{
+			const int have = hero->getSecSkillLevel(skills[i]);
+			double gain = skillValue(hero, skills[i], std::min(3, have + 1)) - skillValue(hero, skills[i], have);
+			if(have == 0)
+			{
+				// a new skill takes one of the few places for good: count what it can grow into,
+				// and the better skill it may keep out later
+				gain += 0.35 * (skillValue(hero, skills[i], 3) - skillValue(hero, skills[i], 1));
+				gain -= used * used * 1500.0;
+			}
+			text += boost::str(boost::format(" %s %d->%d: %.0f") % skills[i].toSkill()->getJsonKey() % have % std::min(3, have + 1) % gain);
+			if(gain > bestGain)
+			{
+				bestGain = gain;
+				best = static_cast<int>(i);
+			}
+		}
+		logAi->info("FairAI %s: %s%s learns%s -> %s", me.toString(), hero->getNameTranslated(), isMain(hero) ? " (main)" : "", text, skills[best].toSkill()->getJsonKey());
+		return best;
+	}
 	int best = 0;
 	double bestScore = -1e9;
 	for(size_t i = 0; i < skills.size(); ++i)
@@ -2247,6 +2456,412 @@ int AdventureAI::chooseSelection(const std::vector<Component> & components) cons
 	return static_cast<int>(components.size());
 }
 
+// ======================================================================= artifacts
+
+double AdventureAI::magicReliance(const CGHeroInstance * hero) const
+{
+	// how much of this hero's fighting rests on spells: 0 a pure warrior, 1 a pure spell caster
+	if(!hero || !hero->hasSpellbook())
+		return 0.05;
+	double reliance = 0.15 + 0.03 * std::min(10, hero->getPrimSkillLevel(PrimarySkill::SPELL_POWER)) + 0.02 * std::min(10, hero->getPrimSkillLevel(PrimarySkill::KNOWLEDGE));
+	for(const auto & [skill, level] : hero->secSkills)
+	{
+		const int s = skill.getNum();
+		if(s >= FIRST_MAGIC_SCHOOL && s <= LAST_MAGIC_SCHOOL)
+			reliance += 0.07 * level;
+		if(skill == SecondarySkill::WISDOM)
+			reliance += 0.05 * level;
+	}
+	return std::clamp(reliance, 0.05, 1.0);
+}
+
+double AdventureAI::artifactValue(const CGHeroInstance * hero, const CArtifact * art, bool fighter) const
+{
+	// What carrying this artifact is worth to this hero, in gold; negative: it does harm (a hero
+	// living on spells with the Orb of Inhibition). Read from the artifact's bonuses, so the same
+	// rule covers every artifact of the game and of mods.
+	if(!hero || !art)
+		return 0;
+	const bool caster = hero->hasSpellbook();
+	const double reliance = magicReliance(hero);
+	double shooters = 0;
+	double living = 0;
+	double army = 0;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		const double v = stackValue(stack.get());
+		army += v;
+		if(stack->getCreature()->hasBonusOfType(BonusType::SHOOTER))
+			shooters += v;
+		if(!stack->getCreature()->hasBonusOfType(BonusType::UNDEAD) && !stack->getCreature()->hasBonusOfType(BonusType::NON_LIVING))
+			living += v;
+	}
+	const double rangedShare = army > 0 ? std::clamp(shooters / army, 0.15, 0.6) : 0.3;
+	const double livingShare = army > 0 ? std::clamp(living / army, 0.2, 1.0) : 0.8;
+	const double perPercent = fighter ? 140.0 : 15.0;
+	const double perMove = fighter ? 200.0 : 120.0;
+	const double skillPoint = fighter ? params.primarySkillValueMain : params.primarySkillValueOther;
+
+	double value = 0;
+	int known = 0;
+	auto add = [&](const Bonus & bonus)
+	{
+		const double v = bonus.val;
+		const double scope = bonus.limiter ? 0.3 : 1.0; // only some troops profit (dragons, one creature kind...)
+		++known;
+		switch(bonus.type)
+		{
+		case BonusType::PRIMARY_SKILL:
+			if(bonus.subtype == BonusSubtypeID(PrimarySkill::ATTACK) || bonus.subtype == BonusSubtypeID(PrimarySkill::DEFENSE))
+				value += v * skillPoint * scope;
+			else if(bonus.subtype == BonusSubtypeID(PrimarySkill::SPELL_POWER))
+				value += v * skillPoint * (0.25 + 0.75 * reliance);
+			else
+				value += v * skillPoint * (0.2 + 0.6 * reliance);
+			break;
+		case BonusType::MOVEMENT:
+		{
+			const double percent = bonus.valType == BonusValueType::ADDITIVE_VALUE ? v / 17.0 : v;
+			if(bonus.subtype == BonusSubtypeID(BonusCustomSubtype::heroMovementLand))
+				value += percent * perMove;
+			else
+				value += std::min(percent, 150.0) * (seaWanted ? 25.0 : 4.0);
+			break;
+		}
+		case BonusType::FLYING_MOVEMENT:
+			value += fighter ? 6000 : 4000;
+			break;
+		case BonusType::WATER_WALKING:
+			value += seaWanted ? 4000 : 1200;
+			break;
+		case BonusType::FREE_SHIP_BOARDING:
+		case BonusType::WHIRLPOOL_PROTECTION:
+			value += seaWanted ? 1500 : 100;
+			break;
+		case BonusType::SIGHT_RADIUS:
+			value += v * (fighter ? 250.0 : 700.0);
+			break;
+		case BonusType::GENERATE_RESOURCE:
+		{
+			GameResID res = bonus.subtype.as<GameResID>();
+			value += v * (res.hasValue() ? resourceValue(res) : 1.0) * 20.0; // the same for every bearer
+			break;
+		}
+		case BonusType::MORALE:
+			if(bonus.valType == BonusValueType::INDEPENDENT_MIN)
+				break; // nobody has morale: cuts both ways
+			value += v * 4.2 * livingShare * perPercent;
+			break;
+		case BonusType::LUCK:
+			if(bonus.valType == BonusValueType::INDEPENDENT_MIN)
+				break;
+			value += v * 4.2 * perPercent;
+			break;
+		case BonusType::STACKS_SPEED:
+			value += v * 8.0 * perPercent * scope;
+			break;
+		case BonusType::STACK_HEALTH:
+			value += (bonus.valType == BonusValueType::PERCENT_TO_BASE ? v : v * 3.5) * perPercent * scope;
+			break;
+		case BonusType::HP_REGENERATION:
+			value += 3.0 * perPercent;
+			break;
+		case BonusType::PERCENTAGE_DAMAGE_BOOST:
+			value += v * perPercent * (bonus.subtype == BonusSubtypeID(BonusCustomSubtype::damageTypeRanged) ? rangedShare : 1.0 - rangedShare);
+			break;
+		case BonusType::GENERAL_DAMAGE_REDUCTION:
+			value += v * 1.15 * perPercent;
+			break;
+		case BonusType::NO_DISTANCE_PENALTY:
+			value += 25.0 * rangedShare * perPercent;
+			break;
+		case BonusType::NO_WALL_PENALTY:
+		case BonusType::FREE_SHOOTING:
+			value += 8.0 * rangedShare * perPercent;
+			break;
+		case BonusType::MAGIC_RESISTANCE:
+			if(bonus.valType != BonusValueType::INDEPENDENT_MIN)
+				value += v * 0.25 * perPercent;
+			break;
+		case BonusType::SPELL_DAMAGE:
+			value += v * (fighter ? 60.0 * reliance : 2.0);
+			break;
+		case BonusType::SPELL_DURATION:
+			value += v * (fighter ? 300.0 * reliance : 10.0);
+			break;
+		case BonusType::MANA_REGENERATION:
+			value += v * (fighter ? 300.0 * reliance : 20.0);
+			break;
+		case BonusType::MANA_PERCENTAGE_REGENERATION:
+			value += fighter ? 3000.0 * reliance : 100.0;
+			break;
+		case BonusType::SPELLS_OF_SCHOOL:
+			value += fighter && caster ? 2500.0 + 4000.0 * reliance : 300.0;
+			break;
+		case BonusType::SPELLS_OF_LEVEL:
+			value += fighter && caster ? 2000.0 + 3000.0 * reliance : 300.0;
+			break;
+		case BonusType::SPELL:
+			value += fighter && caster ? 500.0 : 100.0;
+			break;
+		case BonusType::OPENING_BATTLE_SPELL:
+			value += fighter ? 600.0 : 50.0;
+			break;
+		case BonusType::BLOCK_ALL_MAGIC:
+			// nobody casts in battle: good for a warrior facing wizards, ruin for a wizard
+			value += fighter ? 6000.0 * (0.5 - reliance) : 0.0;
+			break;
+		case BonusType::BLOCK_MAGIC_ABOVE:
+			value += fighter ? 3000.0 * (0.5 - reliance) : 0.0;
+			break;
+		case BonusType::SPELL_IMMUNITY:
+		case BonusType::LEVEL_SPELL_IMMUNITY:
+		case BonusType::MIND_IMMUNITY:
+		case BonusType::SPELL_RESISTANCE_AURA:
+			value += fighter ? 300.0 : 30.0;
+			break;
+		case BonusType::NEGATE_ALL_NATURAL_IMMUNITIES:
+			value += fighter ? 1500.0 * reliance : 0.0;
+			break;
+		case BonusType::UNDEAD_RAISE_PERCENTAGE:
+			value += v * (fighter ? 150.0 : 10.0);
+			break;
+		case BonusType::CREATURE_GROWTH_PERCENT:
+			value += 1500;
+			break;
+		case BonusType::SURRENDER_DISCOUNT:
+			value += v * 2.0;
+			break;
+		case BonusType::LEARN_BATTLE_SPELL_CHANCE:
+			value += v * (fighter && caster ? 3.0 : 0.3);
+			break;
+		case BonusType::HERO_EXPERIENCE_GAIN_PERCENT:
+			value += v * (fighter ? 60.0 : 5.0);
+			break;
+		case BonusType::WANDERING_CREATURES_JOIN_BONUS:
+			value += v * (fighter ? 500.0 : 100.0);
+			break;
+		case BonusType::BATTLE_NO_FLEEING:
+		case BonusType::IMPROVED_NECROMANCY:
+		case BonusType::NONEVIL_ALIGNMENT_MIX:
+			break; // side effects, or cutting both ways
+		default:
+			--known; // unknown to FairAI: the price decides below
+			break;
+		}
+	};
+	for(const auto & bonus : art->getExportedBonusList())
+		add(*bonus);
+	for(const auto & bonus : art->instanceBonuses)
+		add(*bonus);
+	// what the bonuses do not tell: fall back on the price the game gives the artifact
+	if(known == 0)
+		return art->getPrice() * (fighter ? 0.25 : 0.05);
+	return value;
+}
+
+void AdventureAI::arrangeArtifacts(const CGHeroInstance * hero)
+{
+	// Requests are carried out before the call returns (waitTillRealize). No waitTillFree here: this
+	// also runs while two heroes meet, when the meeting itself is the open question we would wait for.
+	if(!params.artifactCare || !hero)
+		return;
+	const ObjectInstanceID id = hero->id;
+	const bool fighter = isMain(hero) || !ownHero(mainHero);
+	auto usable = [](ArtifactPosition slot)
+	{
+		return slot != ArtifactPosition::SPELLBOOK && !(slot >= ArtifactPosition::MACH1 && slot <= ArtifactPosition::MACH4);
+	};
+	auto worth = [&](const CGHeroInstance * who, const CArtifactInstance * art)
+	{
+		// the others carry what helps their errands - and a little of what a leader would want
+		const double own = artifactValue(who, art->getType(), fighter);
+		return fighter ? own : own + 0.2 * std::max(0.0, artifactValue(who, art->getType(), true));
+	};
+	for(int round = 0; round < 24; ++round)
+	{
+		gateway.checkInterruption();
+		hero = ownHero(id);
+		if(!hero)
+			return;
+		bool changed = false;
+
+		// 1. take off what does harm
+		for(const auto & [slot, info] : hero->artifactsWorn)
+		{
+			const CArtifactInstance * art = info.getArt();
+			if(!art || info.locked || !usable(slot) || art->getType()->isBig())
+				continue;
+			if(worth(hero, art) < -1 && ArtifactUtils::isBackpackFreeSlots(hero))
+			{
+				logAi->info("FairAI %s: %s takes off %s", me.toString(), hero->getNameTranslated(), art->getType()->getJsonKey());
+				cb->swapArtifacts(ArtifactLocation(id, slot), ArtifactLocation(id, ArtifactPosition(ArtifactPosition::BACKPACK_START + static_cast<int>(hero->artifactsInBackpack.size()))));
+				changed = true;
+				break;
+			}
+		}
+		if(changed)
+			continue;
+
+		// 2. wear the best of what is in the backpack
+		for(size_t i = 0; i < hero->artifactsInBackpack.size() && !changed; ++i)
+		{
+			const CArtifactInstance * art = hero->artifactsInBackpack[i].getArt();
+			if(!art)
+				continue;
+			const double mine = worth(hero, art);
+			if(mine <= 1)
+				continue;
+			const auto & possible = art->getType()->getPossibleSlots();
+			auto slots = possible.find(ArtBearer::HERO);
+			if(slots == possible.end())
+				continue;
+			ArtifactPosition bestSlot = ArtifactPosition::PRE_FIRST;
+			double bestGain = 50; // not worth shuffling for less
+			for(const ArtifactPosition & slot : slots->second)
+			{
+				if(!usable(slot) || !art->getType()->canBePutAt(hero, slot, true))
+					continue;
+				const CArtifactInstance * worn = hero->getArt(slot, false);
+				double gain = mine;
+				if(worn)
+				{
+					auto wornInfo = hero->artifactsWorn.find(slot);
+					if(wornInfo != hero->artifactsWorn.end() && wornInfo->second.locked)
+						continue; // part of an assembled set
+					if(worn->getType()->isBig())
+						continue;
+					gain = mine - worth(hero, worn);
+				}
+				if(gain > bestGain)
+				{
+					bestGain = gain;
+					bestSlot = slot;
+				}
+			}
+			if(bestSlot != ArtifactPosition::PRE_FIRST)
+			{
+				logAi->info("FairAI %s: %s puts on %s (gain %.0f)", me.toString(), hero->getNameTranslated(), art->getType()->getJsonKey(), bestGain);
+				cb->swapArtifacts(ArtifactLocation(id, ArtifactPosition(ArtifactPosition::BACKPACK_START + static_cast<int>(i))), ArtifactLocation(id, bestSlot));
+				changed = true;
+			}
+		}
+		if(changed)
+			continue;
+
+		// 3. sets: assemble when the whole is worth more than its parts
+		for(const auto & [slot, info] : hero->artifactsWorn)
+		{
+			const CArtifactInstance * art = info.getArt();
+			if(!art || info.locked || !usable(slot))
+				continue;
+			for(const CArtifact * combined : ArtifactUtils::assemblyPossibilities(hero, art->getTypeId(), true))
+			{
+				double parts = 0;
+				for(const CArtifact * part : combined->getConstituents())
+					parts += std::max(0.0, artifactValue(hero, part, fighter));
+				if(artifactValue(hero, combined, fighter) + 0.25 * combined->getPrice() < parts)
+					continue;
+				logAi->info("FairAI %s: %s assembles %s", me.toString(), hero->getNameTranslated(), combined->getJsonKey());
+				cb->assembleArtifacts(id, slot, true, combined->getId());
+				changed = true;
+				break;
+			}
+			if(changed)
+				break;
+		}
+		if(!changed)
+			return;
+	}
+}
+
+void AdventureAI::exchangeArtifacts(const CGHeroInstance * leader, const CGHeroInstance * other)
+{
+	// Two of our heroes meet: every artifact goes where it does more good. The leader of the army
+	// gets what makes it fight, move and cast better; the other keeps what serves its errands.
+	if(!params.artifactCare || !leader || !other || leader == other)
+		return;
+	const ObjectInstanceID leaderId = leader->id;
+	const ObjectInstanceID otherId = other->id;
+	auto usable = [](ArtifactPosition slot)
+	{
+		return slot != ArtifactPosition::SPELLBOOK && !(slot >= ArtifactPosition::MACH1 && slot <= ArtifactPosition::MACH4);
+	};
+	// what `receiver` gains by getting `art` (it may replace something it wears), given the role it plays
+	auto gainFor = [&](const CGHeroInstance * receiver, const CArtifactInstance * art, bool asFighter)
+	{
+		const double mine = artifactValue(receiver, art->getType(), asFighter);
+		if(mine <= 0)
+			return 0.0;
+		const auto & possible = art->getType()->getPossibleSlots();
+		auto slots = possible.find(ArtBearer::HERO);
+		if(slots == possible.end())
+			return 0.0;
+		double best = 0;
+		for(const ArtifactPosition & slot : slots->second)
+		{
+			if(!usable(slot))
+				continue;
+			const CArtifactInstance * worn = receiver->getArt(slot, false);
+			auto wornInfo = receiver->artifactsWorn.find(slot);
+			if(wornInfo != receiver->artifactsWorn.end() && wornInfo->second.locked)
+				continue;
+			best = std::max(best, worn ? mine - artifactValue(receiver, worn->getType(), asFighter) : mine);
+		}
+		return best;
+	};
+	for(int round = 0; round < 40; ++round)
+	{
+		gateway.checkInterruption();
+		leader = ownHero(leaderId);
+		other = ownHero(otherId);
+		if(!leader || !other)
+			return;
+		bool moved = false;
+		for(int direction = 0; direction < 2 && !moved; ++direction)
+		{
+			const CGHeroInstance * from = direction == 0 ? other : leader;
+			const CGHeroInstance * to = direction == 0 ? leader : other;
+			const bool toFighter = direction == 0;
+			if(!ArtifactUtils::isBackpackFreeSlots(to))
+				continue;
+			std::vector<std::pair<ArtifactPosition, const CArtifactInstance *>> carried;
+			for(const auto & [slot, info] : from->artifactsWorn)
+			{
+				if(info.getArt() && !info.locked && usable(slot))
+					carried.emplace_back(slot, info.getArt());
+			}
+			for(size_t i = 0; i < from->artifactsInBackpack.size(); ++i)
+			{
+				if(const auto * art = from->artifactsInBackpack[i].getArt())
+					carried.emplace_back(ArtifactPosition(ArtifactPosition::BACKPACK_START + static_cast<int>(i)), art);
+			}
+			for(const auto & [slot, art] : carried)
+			{
+				if(art->getType()->isBig() || art->getTypeId() == ArtifactID::SPELLBOOK)
+					continue;
+				const bool worn = ArtifactUtils::isSlotEquipment(slot);
+				const double keep = worn ? std::max(0.0, artifactValue(from, art->getType(), !toFighter)) : 0.0;
+				const double gain = gainFor(to, art, toFighter);
+				if(gain <= keep + 100)
+					continue;
+				logAi->info("FairAI %s: %s hands %s to %s (worth %.0f there, %.0f here)", me.toString(), from->getNameTranslated(),
+					art->getType()->getJsonKey(), to->getNameTranslated(), gain, keep);
+				cb->swapArtifacts(ArtifactLocation(from->id, slot), ArtifactLocation(to->id, ArtifactPosition(ArtifactPosition::BACKPACK_START + static_cast<int>(to->artifactsInBackpack.size()))));
+				moved = true;
+				break;
+			}
+		}
+		if(!moved)
+			break;
+		// wear it right away: the next comparison must see what is really worn
+		arrangeArtifacts(ownHero(leaderId));
+		arrangeArtifacts(ownHero(otherId));
+	}
+}
+
 void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second)
 {
 	const CGHeroInstance * a = ownHero(first);
@@ -2255,7 +2870,11 @@ void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second
 		return;
 	if(isMain(b) || (!isMain(a) && b->getTotalStrength() > a->getTotalStrength()))
 		std::swap(a, b);
+	const ObjectInstanceID receiver = a->id;
+	const ObjectInstanceID giver = b->id;
 	pickBestCreatures(a, b);
+	// the hero that got the troops leads: it gets the artifacts that make an army fight better, too
+	exchangeArtifacts(ownHero(receiver), ownHero(giver));
 }
 
 void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedInstance * destination)
@@ -2606,6 +3225,63 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 			recruitInTown(town, hero, economy.rho > 1.5 ? 0 : 1000);
 		pickBestCreatures(hero, town);
 	}
+}
+
+void AdventureAI::updateResourcePlan()
+{
+	// What will our towns need, and what comes in? Costs of every building still missing and of four
+	// weeks of creatures (the faction's whole line-up: the angels' gems are wanted before the portal
+	// stands) against the stock and four weeks of income. All from the game's data, for any faction.
+	resourceScarcity.clear();
+	if(!params.resourcePlan)
+		return;
+	ResourceSet demand;
+	for(const auto * town : perception.ownTowns())
+	{
+		const CTown * info = town->getTown();
+		for(const auto & [id, building] : info->buildings)
+		{
+			if(town->hasBuilt(id) || id == BuildingID::GRAIL)
+				continue;
+			const EBuildingState state = cb->canBuildStructure(town, id);
+			if(state == EBuildingState::ALLOWED || state == EBuildingState::NO_RESOURCES || state == EBuildingState::PREREQUIRES)
+				demand += building->resources;
+		}
+		for(const auto & tier : info->creatures)
+		{
+			if(tier.empty())
+				continue;
+			const CCreature * creature = tier.back().toCreature();
+			if(!creature)
+				continue;
+			for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+				demand[res] += 4 * creature->getGrowth() * creature->getRecruitCost(res);
+		}
+	}
+	ResourceSet income;
+	for(const auto * object : cb->getMyObjects())
+	{
+		if(const auto * ownable = dynamic_cast<const IOwnableObject *>(object))
+			income += ownable->dailyIncome();
+	}
+	const ResourceSet stock = cb->getResourceAmount();
+	std::string text;
+	for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+	{
+		if(res == GameResID::GOLD)
+			continue;
+		const double supply = stock[res] + 28.0 * income[res];
+		const double factor = demand[res] <= 0 ? 0.5 : std::clamp(demand[res] / std::max(1.0, supply), 0.5, 4.0);
+		resourceScarcity[res.getNum()] = factor;
+		text += boost::str(boost::format(" %s %.1f (need %d, have %d, +%d/day)") % res.toResource()->getJsonKey() % factor % demand[res] % stock[res] % income[res]);
+	}
+	logAi->debug("FairAI %s day %d resource plan:%s", me.toString(), today, text);
+}
+
+double AdventureAI::scarcity(GameResID res) const
+{
+	auto it = resourceScarcity.find(res.getNum());
+	return it == resourceScarcity.end() ? 1.0 : it->second;
 }
 
 void AdventureAI::updateEconomy()

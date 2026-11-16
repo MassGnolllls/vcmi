@@ -60,6 +60,7 @@ struct SearchSettings
 	bool engineOutcome = envInt("FAI_OUTCOME", 1) != 0;   ///< use engine-evaluated results for attacks
 	double exposureWeight = envInt("FAI_EXPOSURE_PCT", 0) / 100.0; ///< weight of the next-round potential
 	int planRounds = envInt("FAI_PLAN_ROUNDS", 8);          ///< battle plan: rounds played ahead when comparing "hold" and "advance"
+	int enemyModel = envInt("FAI_ENEMY_MODEL", 0);          ///< play-outs: 0 the enemy advances at once, 1 it waits and stalks like VCMI's BattleAI, 2 the worse of both for us
 	int spellRounds = envInt("FAI_SPELL_ROUNDS", 2);        ///< spell search: rounds after the current one
 	int manaPricePermille = envInt("FAI_MANA_PRICE", 4);   ///< spell search: price of a scarce spell point, per mille of our army
 };
@@ -627,7 +628,7 @@ void FairBattleAI::logForecast(const BattleID & battleID)
 	{
 		SimState sim = base;
 		sim.stance[ownSide] = stance;
-		sim.stance[1 - ownSide] = Stance::CHARGE;
+		sim.stance[1 - ownSide] = searchSettings().enemyModel == 1 ? Stance::STALK : Stance::CHARGE;
 		sim.playout(base.round + 30);
 		text += boost::str(boost::format("|%.0f|%.0f|%d") % sim.sideValue(side) % sim.sideValue(other) % (sim.round - base.round));
 	}
@@ -653,7 +654,7 @@ void FairBattleAI::logForecast(const BattleID & battleID)
 				stacks.push_back({type, type, unit->getCount(), unit->unitSide()});
 		}
 		const JsonNode & layout = LIBRARY->engineSettings()->getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
-		const Forecast map = forecastBattle(stacks, side, layout);
+		const Forecast map = forecastBattle(stacks, side, layout, 30, searchSettings().enemyModel == 1 ? Stance::STALK : Stance::CHARGE);
 		text += boost::str(boost::format("|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f") % map.ownBefore % map.enemyBefore % map.ownAfter[0] % map.enemyAfter[0] % map.ownAfter[1] % map.enemyAfter[1]);
 	}
 	catch(const std::exception & e)
@@ -810,6 +811,10 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 	const int lastRound = base.round + (roundsAhead >= 0 ? roundsAhead : config.roundsAhead);
 	const int enemySide = side == BattleSide::ATTACKER ? 1 : 0;
 	std::vector<Stance> enemyStances = {Stance::CHARGE};
+	if(config.enemyModel == 1)
+		enemyStances = {Stance::STALK};
+	else if(config.enemyModel == 2)
+		enemyStances = {Stance::CHARGE, Stance::STALK};
 	if(config.robustStances)
 		enemyStances.push_back(Stance::HOLD);
 	Candidate * best = nullptr;

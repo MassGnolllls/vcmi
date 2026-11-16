@@ -132,7 +132,8 @@ private:
 enum class Stance : uint8_t
 {
 	CHARGE, ///< melee units advance towards the enemy
-	HOLD    ///< melee units only attack what is already in reach, otherwise stay
+	HOLD,   ///< melee units only attack what is already in reach, otherwise stay
+	STALK   ///< like VCMI's BattleAI: with nothing in reach wait for the others to move, then close in on the most rewarding target
 };
 
 /// Engine-evaluated result of one attack (including special abilities and retaliation)
@@ -243,6 +244,6 @@ struct Forecast
 	double lossShare(int plan) const;
 };
 
-Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30);
+Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30, Stance enemyStance = Stance::CHARGE);
 
 }

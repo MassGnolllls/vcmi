@@ -62,7 +62,7 @@ struct Params
 	double huntFactor = 2.0;           ///< exploration bonus for the main hero while the enemy town is unknown
 
 	// --- economy
-	double incomeHorizonDays = 14;     ///< days of income a mine/building is worth
+	double incomeHorizonDays = 28;     ///< days of income a mine/building is worth (as long as a dwelling counts; 14 was measurably worse on medium maps)
 	double neutralTownValue = 12000;   ///< capturing a neutral town (income, creatures, a base)
 	double enemyTownValue = 20000;     ///< capturing an enemy town (also takes it from the enemy)
 	double dwellingHorizonWeeks = 4; ///< weeks of growth a dwelling is worth
@@ -84,11 +84,14 @@ struct Params
 	int boats = 1;                     ///< heroes board boats, buy one when they run out of land (town shipyard, or a shipyard they stand at) and sail
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
 	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero; a big reinforcement counts more than its size (it makes fights possible). Off until a test shows a gain
-	double earlyGoldDays = 0;          ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full. 0: off
+	double earlyGoldDays = 21;         ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full, fading out over the two weeks after. 0: off. On by default: +0.05 and +0.12 score in two tests on medium maps (town hall and city hall in week one)
 	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)
 	int heroesWeek3 = 3;               ///< ... until day 21
 	int heroesLater = 4;               ///< ... afterwards
 	int sellSurplus = 0;               ///< resources piling up are traded for the ones our buildings lack. Off until a test shows a gain
+	int skillChoice = 0;               ///< secondary skills are valued by the hero's role and army (what the skill's bonuses do) instead of one fixed ranking for everybody. Off until a test shows a gain
+	int resourcePlan = 0;              ///< mines and resource piles are valued by what our towns will need (buildings still missing, weekly creature costs) against stock and income - before a building is blocked. Off until a test shows a gain
+	int artifactCare = 0;              ///< artifacts are valued by what they do for the hero that would carry them; heroes wear the best per slot, hand artifacts on when they meet, assemble sets; artifacts on the map are targets by that value. Off until a test shows a gain
 
 	// --- combat (read by the battle AI of the same player)
 	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)

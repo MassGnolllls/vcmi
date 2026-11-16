@@ -1,5 +1,5 @@
 {
- "note": "expansion switches over six map categories (new build: troop hand-overs fixed, so 'base' against the earlier baseline 022zz2 shows the fix): early gold, more heroes, couriers, forecast-based fights, all together",
+ "note": "expansion and knowledge switches over five map categories. New defaults: early gold (income horizon 28 days, gold scarce in the first three weeks) and the troop hand-over fix; 'old' switches the early gold off again to confirm it on all kinds of maps",
  "script": "matrix.py",
  "args": [
   "play",
@@ -14,9 +14,9 @@
   "--seeds",
   "42",
   "--only",
-  "s-land-2p,m-land-2p,m-ffa-4p,m-teams-4p,m-islands-2p,l-land-2p",
+  "s-land-2p,m-land-2p,m-ffa-4p,m-islands-2p,l-land-2p",
   "--configs",
-  "{\"base\": {}, \"econ\": {\"incomeHorizonDays\": 28, \"earlyGoldDays\": 21}, \"h3\": {\"heroesWeek1\": 3, \"heroesWeek3\": 4, \"heroesLater\": 6, \"collectorsRoam\": 2}, \"ffv\": {\"fightForecast\": 1, \"guardKillValue\": 0.3}, \"combo\": {\"incomeHorizonDays\": 28, \"earlyGoldDays\": 21, \"heroesWeek1\": 3, \"heroesWeek3\": 4, \"heroesLater\": 6, \"collectorsRoam\": 2, \"couriers\": 1, \"sellSurplus\": 1}}"
+  "{\"base\": {}, \"old\": {\"incomeHorizonDays\": 14, \"earlyGoldDays\": 0}, \"ffv\": {\"fightForecast\": 1, \"guardKillValue\": 0.3}, \"sc2\": {\"scouts\": 2}, \"know\": {\"skillChoice\": 1, \"artifactCare\": 1, \"resourcePlan\": 1}, \"cour\": {\"couriers\": 1}}"
  ],
  "jobs": 6
 }
