@@ -178,7 +178,8 @@ int main(int argc, char * argv[])
 		("arena-genbattle", po::value<std::string>(), "arena: build a battle-only map from this scenario JSON and exit")
 		("arena-out", po::value<std::string>(), "arena: output file for --arena-genbattle")
 		("arena-dump-library", po::value<std::string>(), "arena: write creatures/heroes/spells/skills to this JSON file and exit")
-		("arena-battle-ai", po::value<std::vector<std::string>>(), "arena: combat AI per player (red, blue, ...), used by FairAI as adventure AI");
+		("arena-battle-ai", po::value<std::vector<std::string>>(), "arena: combat AI per player (red, blue, ...), used by FairAI as adventure AI")
+		("arena-fairai-params", po::value<std::vector<std::string>>(), "arena: FairAI parameter overrides per player as JSON objects (red, blue, ...)");
 
 	if(argc > 1)
 	{

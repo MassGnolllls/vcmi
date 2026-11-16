@@ -133,6 +133,12 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
            "--logLocation", str(log_dir)]
     if getattr(args, "allow_cheats", False):
         cmd.append("--arena-allow-cheats")
+    # FairAI parameters per seat: jobs come in pairs, odd match ids have the AI under test as blue
+    ai_params = getattr(args, "ai_params", "") or ""
+    opp_params = getattr(args, "opponent_params", "") or ""
+    if not battle_mode and (ai_params or opp_params):
+        red_params, blue_params = (opp_params, ai_params) if match_id % 2 else (ai_params, opp_params)
+        cmd += ["--arena-fairai-params", red_params or "{}", "--arena-fairai-params", blue_params or "{}"]
 
     started = time.time()
     record = {"match": match_id, "map": map_name, "red": ai_red, "blue": ai_blue, "seed": seed}
@@ -442,6 +448,8 @@ def main() -> int:
     p.add_argument("--base-port", type=int, default=3100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--keep-logs", action="store_true")
+    p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the AI under test")
+    p.add_argument("--opponent-params", default="", help="FairAI parameter overrides (JSON) for the opponent")
     p.add_argument("--out", required=True)
 
     gb = sub.add_parser("genbattles", help="generate battle scenarios and battle-only maps")

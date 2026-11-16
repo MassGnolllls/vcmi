@@ -74,6 +74,18 @@ python3 battle_stats.py lauf1 --list 20 # FairAIs Kämpfe: wer greift wen an, we
 - `ARENA_AI_LOG=debug` schreibt die Entscheidungen der KIs ins Log (`--keep-logs`), `FAI_DUMP_MAP=1` zusätzlich FairAIs Kartenwissen an den Tagen 7, 14 und 28.
 - Für lange Läufe eine feste Kopie des Builds verwenden (sonst wechseln laufende Turniere mitten drin die Bibliothek), z. B. `cp -al build/bin snap/v1` und `--client snap/v1/vcmiclient`.
 
+## Automatisches Tuning (Phase 4)
+
+`tune.py` sucht bessere FairAI-Parameter (siehe `AI/FairAI/Adventure/Params.h`) per (1+λ)-Evolutionsstrategie: Mutanten der besten Einstellung spielen auf denselben Karten (beide Startplätze) gegen einen festen Gegner; Punkte je Partie: Sieg 1, Niederlage 0, sonst Armee-Anteil am Tageslimit.
+
+```bash
+python3 tune.py --client snap/v1/vcmiclient --opponent Nullkiller2 --maps 12 --days 28 \
+    --generations 30 --lam 4 --jobs 6 --out tune1
+FAI_PARAMS="$(cat tune1/best.json)" python3 run_tournament.py play ...   # Ergebnis prüfen
+```
+
+Eine Bewertung (24 Partien à 28 Tage) dauert mit 2 Kernen etwa 5 Minuten, mit 6 Kernen etwa 2. Für ernsthaftes Tuning (Hunderte Bewertungen) ist der Zweitrechner gedacht. Per Seat lassen sich Parameter auch direkt setzen: `run_tournament.py play --ai-params '{...}' --opponent-params '{...}'` (Client-Option `--arena-fairai-params`).
+
 ## Fairness-Regeln für FairAI
 
 1. Keine Cheat-Codes, keine Chat-Befehle. In Turnieren sind Cheats serverseitig verboten, jeder Versuch wird als `cheated` im Ergebnis gemeldet.

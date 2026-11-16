@@ -169,6 +169,24 @@ void storeOptions(const po::variables_map & vm)
 		arena["stallSeconds"].Integer() = vm["arena-stall-seconds"].as<int>();
 	arena["cheatsAllowed"].Bool() = vm.count("arena-allow-cheats") > 0;
 
+	if(vm.count("arena-fairai-params"))
+	{
+		JsonNode list;
+		for(const auto & text : vm["arena-fairai-params"].as<std::vector<std::string>>())
+		{
+			try
+			{
+				list.Vector().push_back(JsonNode(reinterpret_cast<const std::byte *>(text.data()), text.size(), "arena-fairai-params"));
+			}
+			catch(const std::exception & e)
+			{
+				logGlobal->error("ARENA: cannot parse FairAI parameters '%s': %s", text, e.what());
+				list.Vector().emplace_back();
+			}
+		}
+		arena["fairaiParams"] = list;
+	}
+
 	if(vm.count("arena-battle-ai"))
 	{
 		JsonNode list;
