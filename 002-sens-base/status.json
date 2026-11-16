@@ -1,9 +1,9 @@
 {
  "job": "002-sens-base",
  "state": "running",
- "commit": "c1e970218ee048294ef856c08e27a69af75a67db",
+ "commit": "176eb30444b0e2e74e691aa5d668b12f8ad894f2",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
- "started": "2026-11-16T11:34:39",
+ "started": "2026-11-16T11:53:37",
  "note": "sensitivity at day 45, 72 games: {}"
 }
