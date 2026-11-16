@@ -124,12 +124,34 @@ public:
 		return total;
 	}
 
+	/// unexplored tiles (weighted) in the square of side 2r+1 around a tile: is there a whole region out there?
+	double countBox(const int3 & c, int r)
+	{
+		if(sums.empty())
+		{
+			// summed-area table per level, with a border of zeros
+			const size_t w = size.x + 1;
+			sums.assign(w * (size.y + 1) * size.z, 0.0);
+			for(int z = 0; z < size.z; ++z)
+				for(int y = 0; y < size.y; ++y)
+					for(int x = 0; x < size.x; ++x)
+						sumAt(x + 1, y + 1, z) = weights[index(x, y, z)] + sumAt(x, y + 1, z) + sumAt(x + 1, y, z) - sumAt(x, y, z);
+		}
+		const int x0 = std::max(0, c.x - r);
+		const int y0 = std::max(0, c.y - r);
+		const int x1 = std::min(size.x, c.x + r + 1);
+		const int y1 = std::min(size.y, c.y + r + 1);
+		return sumAt(x1, y1, c.z) - sumAt(x0, y1, c.z) - sumAt(x1, y0, c.z) + sumAt(x0, y0, c.z);
+	}
+
 private:
 	int3 size;
 	std::vector<float> weights;
+	std::vector<double> sums;
 	std::vector<std::pair<int, int>> offsets;
 	int cachedRadius = -1;
 	size_t index(int x, int y, int z) const { return (static_cast<size_t>(z) * size.y + y) * size.x + x; }
+	double & sumAt(int x, int y, int z) { return sums[(static_cast<size_t>(z) * (size.y + 1) + y) * (size.x + 1) + x]; }
 };
 
 }
@@ -259,6 +281,8 @@ void Params::loadOverrides(int playerIndex)
 	read("mainHorizon", mainHorizon);
 	read("refillShare", refillShare);
 	read("supplyRuns", supplyRuns);
+	read("exploreRegion", exploreRegion);
+	read("fetchRoundTrip", fetchRoundTrip);
 	read("supplyShare", supplyShare);
 	read("supplyDays", supplyDays);
 	read("seekTowns", seekTowns);
@@ -2967,6 +2991,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				if(threat > garrison)
 					value += params.townDefenceValue * std::min(1.0, (threat - garrison) / std::max(1.0, threat));
 			}
+			// Fetching troops at home is a round trip: afterwards the hero stands at home, not where
+			// its work is. Counted as twice the way - unless the town calls for its defender.
+			if(params.fetchRoundTrip && isMain(hero) && object.type == Obj::TOWN && object.owner == me)
+			{
+				const auto * town = dynamic_cast<const CGTownInstance *>(instance);
+				if(town && townNeed(town, hero) <= 0.2)
+					value *= (node->cost + params.travelOffset) / (2.0 * node->cost + params.travelOffset);
+			}
 			addTarget(object.visitablePos, id, value, loss, node->cost, "object " + std::to_string(object.type.getNum()));
 		}
 		else if(const CGPathNode * free = reachable(freePaths, object.visitablePos))
@@ -3048,6 +3080,12 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 						if(tile.z == a.town.z)
 							value *= 1.0 + 4.0 * std::max(0.0, 1.0 - tile.dist2d(a.town) / 24.0);
 					}
+					// (regionValue) Not a pocket of fog but land for a whole region beyond this tile: it holds
+					// mines, treasure and most likely a town - worth more than the strip the first step shows.
+					// (A hero that had just broken through a border guard walked home for three days
+					// instead of looking around; the town of that region stood eight tiles further on.)
+					if(params.regionValue > 0 && isMain(hero) && params.exploreRegion)
+						value += params.regionValue * std::clamp((grid.countBox(tile, 12) - 150.0) / 250.0, 0.0, 1.0);
 					for(const auto & s : seek)
 					{
 						// the town's worth, less for every day's march still to go beyond this tile
