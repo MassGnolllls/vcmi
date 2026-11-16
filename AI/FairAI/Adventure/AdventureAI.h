@@ -144,6 +144,7 @@ private:
 
 	ObjectInstanceID mainHero;
 	std::atomic<int> activeHero{-1};                         ///< hero currently moving (for dialogs)
+	std::atomic<int> exchanges{0};                           ///< meetings of two of our heroes so far (to tell a meeting from standing next to each other)
 	std::map<ObjectInstanceID, ObjectInstanceID> reservedBy; ///< target object -> hero (this turn)
 	std::map<ObjectInstanceID, int3> currentGoal;            ///< hero -> tile (stickiness)
 	std::set<std::pair<int, int3>> failedToday;              ///< hero, tile
@@ -193,6 +194,7 @@ private:
 	std::vector<uint16_t> fogDistances(const int3 & from) const;
 	bool inPass(const int3 & tile, const CPathsInfo & paths, const int3 * alsoOpen = nullptr) const;
 	mutable std::set<int> courierLog; ///< diagnostics: day and hero already reported
+	std::set<std::pair<int, int3>> pocketExits; ///< hero, tile: stepped onto to leave a pocket (this turn)
 	void dumpKnowledge() const;
 	int lastHeroLossDay = -100;
 	int idleDays = 0; ///< consecutive days the main hero achieved nothing (no visit, fight or exploration)

@@ -413,6 +413,7 @@ void AdventureAI::playTurn()
 	today = cb->getDate(Date::DAY);
 	failedToday.clear();
 	reservedBy.clear();
+	pocketExits.clear();
 	trail.clear();
 	abandonedToday.clear();
 	roundTrip.clear();
@@ -631,6 +632,47 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 				continue; // a boat is waiting: plan again
 			}
 		}
+		if(targets.empty() && !hero->getVisitedTown() && !(supply && supply->courier == heroId))
+		{
+			// In a pocket: a tile whose only way out leads over a place one visits (a dwelling, a
+			// mine...). A path never runs across such a place, so from here nothing else is in reach
+			// - the hero has to step onto it first. (A main hero stood nine days behind a dwelling.)
+			const int3 size = cb->getMapSize();
+			const int3 here = hero->visitablePos();
+			int open = 0;
+			int3 exit(-1);
+			float exitCost = std::numeric_limits<float>::max();
+			for(int x = std::max(0, here.x - 6); x < std::min(size.x, here.x + 7); ++x)
+			{
+				for(int y = std::max(0, here.y - 6); y < std::min(size.y, here.y + 7); ++y)
+				{
+					const int3 tile(x, y, here.z);
+					const CGPathNode * node = tile == here ? nullptr : paths->getPathInfo(tile);
+					if(!node || !node->reachable())
+						continue;
+					if(node->action == EPathNodeAction::NORMAL)
+						++open;
+					else if(node->action == EPathNodeAction::VISIT && node->turns == 0 && node->cost < exitCost
+						&& !failedToday.count({heroId.getNum(), tile}) && !pocketExits.count({heroId.getNum(), tile}))
+					{
+						exit = tile;
+						exitCost = node->cost;
+					}
+				}
+			}
+			if(open < 6 && exit.isValid())
+			{
+				pocketExits.insert({heroId.getNum(), exit}); // once a day: no stepping to and fro
+				logAi->debug("FairAI %s: %s is in a pocket (%d tiles), the way out leads over %s", me.toString(), hero->getNameTranslated(), open, exit.toString());
+				Target t;
+				t.tile = exit;
+				t.value = 1;
+				t.travel = exitCost;
+				t.score = 1;
+				t.description = "way out";
+				targets.push_back(t);
+			}
+		}
 		if(targets.empty() && isMain(hero) && !hero->getVisitedTown())
 		{
 			// nothing to do: wait in the nearest own town, where garrison and walls help
@@ -730,7 +772,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		logAi->debug("FairAI %s: %s -> %s %s value %.0f loss %.0f travel %.2f score %.0f", me.toString(), hero->getNameTranslated(),
 			best.description, best.tile.toString(), best.value, best.loss, best.travel, best.score);
 
-		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside";
+		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside" || best.description == "way out";
 		if(params.antiOscillation)
 		{
 			// giving up an unreached goal: do not come back to it today (A-B-A wastes the day's movement)
@@ -772,6 +814,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		const int mpBefore = hero->movementPointsRemaining();
 		const auto objectBefore = perception.knownObjects();
 		const bool meetingOwnHero = best.object.hasValue() && ownHero(best.object) != nullptr;
+		const int exchangesBefore = exchanges.load();
 		const uint64_t ownArmyBefore = hero->getArmyStrength();
 		activeHero = heroId.getNum();
 		bool sent = stepTowards(hero, best.tile, *paths);
@@ -821,19 +864,32 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 
 		if(!progress)
 		{
+			if(logAi->isDebugEnabled())
+			{
+				CGPath path;
+				std::string next = "no path";
+				if(paths->getPath(path, best.tile) && path.nodes.size() >= 2)
+				{
+					const CGPathNode & n = path.nodes[path.nodes.size() - 2];
+					next = boost::str(boost::format("next %s action %d turns %d cost %.2f") % n.coord.toString() % static_cast<int>(n.action) % static_cast<int>(n.turns) % n.cost);
+				}
+				logAi->debug("FairAI %s: %s made no progress towards %s %s (at %s, mp %d, %s, order %s)", me.toString(), hero->getNameTranslated(),
+					best.description, best.tile.toString(), hero->visitablePos().toString(), hero->movementPointsRemaining(), next, sent ? "sent" : "not sent");
+			}
 			failedToday.insert({heroId.getNum(), best.tile});
+			// Met our other hero and nothing changed hands: once is enough - for as long as neither
+			// army changes. (Only when the two really met. Judged by the distance alone, every
+			// approach ended one tile short, written off as fruitless, and troops were never handed
+			// over unless the heroes started side by side.)
+			if(meetingOwnHero && exchanges.load() != exchangesBefore)
+			{
+				if(const auto * other = ownHero(best.object))
+					fruitlessMeetings[{std::min(heroId.getNum(), best.object.getNum()), std::max(heroId.getNum(), best.object.getNum())}]
+						= {hero->getArmyStrength(), other->getArmyStrength()};
+			}
 			if(++failures >= MAX_FAILURES_PER_HERO)
 				return;
 			continue;
-		}
-		if(meetingOwnHero && hero->visitablePos().dist2d(best.tile) < 1.5 && hero->getArmyStrength() == ownArmyBefore)
-		{
-			// met our other hero and nothing changed hands: once is enough for today - and for as
-			// long as neither army changes
-			failedToday.insert({heroId.getNum(), best.tile});
-			if(const auto * other = ownHero(best.object))
-				fruitlessMeetings[{std::min(heroId.getNum(), best.object.getNum()), std::max(heroId.getNum(), best.object.getNum())}]
-					= {hero->getArmyStrength(), other->getArmyStrength()};
 		}
 		failures = 0;
 		if(best.object.hasValue() && !meetingOwnHero && hero->visitablePos() == best.tile)
@@ -2202,8 +2258,11 @@ std::vector<Target> AdventureAI::supplyTargets(const CGHeroInstance * hero, cons
 		supply->waiting = true;
 		// no way, or enemies about: wait in a town of ours (below) and try again tomorrow
 		if(supplyLog != today)
-			logAi->debug("FairAI %s day %d: supply run of %s waits (%s)", me.toString(), today, hero->getNameTranslated(),
-				unsafe ? "the road is not safe" : "no way to the leader");
+			logAi->debug("FairAI %s day %d: supply run of %s at %s waits (%s; leader at %s%s%s, node %s accessible %d action %d turns %d)", me.toString(), today,
+				hero->getNameTranslated(), hero->visitablePos().toString(), unsafe ? "the road is not safe" : "no way to the leader",
+				leader->visitablePos().toString(), leader->getVisitedTown() ? " in town" : "", leader->isGarrisoned() ? " garrisoned" : "",
+				node && node->reachable() ? "reachable" : "unreachable", node ? static_cast<int>(node->accessible) : -1,
+				node ? static_cast<int>(node->action) : -1, node ? static_cast<int>(node->turns) : -1);
 		supplyLog = today;
 	}
 	// to a town of ours: the one it came from, else the nearest
@@ -3977,6 +4036,7 @@ void AdventureAI::exchangeArtifacts(const CGHeroInstance * leader, const CGHeroI
 
 void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second)
 {
+	++exchanges;
 	const CGHeroInstance * a = ownHero(first);
 	const CGHeroInstance * b = ownHero(second);
 	if(!a || !b)
