@@ -1,0 +1,9 @@
+{
+ "job": "022zz2c-long-gen",
+ "state": "running",
+ "commit": "474df93fa99a2712f46dfcf6e4434c9d42fb402f",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T19:47:14",
+ "note": "maps for long games (pool long1): 12 small and 12 medium land maps for two players, 6 each of medium islands, free-for-all, teams and large land"
+}
