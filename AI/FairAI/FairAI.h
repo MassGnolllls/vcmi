@@ -83,6 +83,8 @@ private:
 	std::unique_ptr<AdventureAI> adventure; // after perception: destroyed first
 	Status status;
 	BattleSide battleSide = BattleSide::NONE;
+	uint64_t battleOwnStrength = 0; ///< our army strength when the battle started (loss calibration log)
+	uint64_t battleEnemyStrength = 0;
 
 	void makeTurn();
 	void endTurn();

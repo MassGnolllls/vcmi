@@ -16,6 +16,7 @@
 #include "../../lib/AsyncRunner.h"
 #include "../../lib/UnlockGuard.h"
 #include "../../lib/mapObjects/CGDwelling.h"
+#include "../../lib/CCreatureHandler.h"
 #include "../../lib/CConfigHandler.h"
 #include "../../lib/json/JsonNode.h"
 #include "../../lib/CThreadHelper.h"
@@ -344,6 +345,8 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 			describe(weAttack ? army1 : army2, weAttack ? hero1 : hero2), weAttack ? "attacks" : "is attacked by",
 			weAttack ? (hero2 ? hero2->getNameTranslated() : std::string("guards")) : (hero1 ? hero1->getNameTranslated() : std::string("monsters")));
 		battleSide = side;
+		battleOwnStrength = weAttack ? (army1 ? army1->getArmyStrength() : 0) : (army2 ? army2->getArmyStrength() : 0);
+		battleEnemyStrength = weAttack ? (army2 ? army2->getArmyStrength() : 0) : (army1 ? army1->getArmyStrength() : 0);
 
 		// calibration (log only, never used for decisions): what the UI showed vs. the real enemy
 		const CCreatureSet * enemyArmy = weAttack ? army2 : army1;
@@ -366,10 +369,15 @@ void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br
 	if(br)
 	{
 		int lost = 0;
+		uint64_t lostValue = 0;
 		for(const auto & entry : br->casualties[battleSide])
+		{
 			lost += entry.second;
-		logAi->info("FairAI %s battle result: %s, %d of our creatures died", playerID.toString(),
-			br->winner == battleSide ? "won" : "lost", lost);
+			lostValue += static_cast<uint64_t>(entry.second) * entry.first.toCreature()->getAIValue();
+		}
+		logAi->info("FairAI %s battle result: %s, %d of our creatures died (value %llu of %llu, enemy %llu)", playerID.toString(),
+			br->winner == battleSide ? "won" : "lost", lost, (unsigned long long)lostValue, (unsigned long long)battleOwnStrength,
+			(unsigned long long)battleEnemyStrength);
 	}
 	CAdventureAI::battleEnd(battleID, br, queryID);
 

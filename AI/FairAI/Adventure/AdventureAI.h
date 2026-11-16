@@ -59,7 +59,6 @@ struct Threat
 	double radius = 0;
 	int age = 0; ///< days since we saw it
 	ObjectInstanceID hero;
-	double army = 0; ///< observed army strength (without hero bonuses), decides which guards it can pass
 };
 
 /// Walking distances of one enemy hero, judged from our map knowledge (see AdventureAI::enemyDistance)
@@ -69,7 +68,7 @@ struct ReachMap
 	int day = -1;
 	double maxTiles = 0;
 	double strength = 0;
-	std::vector<float> tiles; ///< tile units (100 movement points) per tile of the origin's level; < 0: not reached
+	std::vector<float> tiles; ///< tile units (100 movement points) per tile, all levels; < 0: not reached
 };
 
 /// Where the economy stands: is gold or creature supply the bottleneck?
@@ -160,11 +159,22 @@ private:
 	/// Walking distance (tiles of normal terrain) an enemy hero at `from` needs to reach `tile`, judged
 	/// from what we know of the map: unexplored land counts as open, obstacles and water block, and so
 	/// do tiles guarded by known monsters stronger than the hero. Our towns end the walk, roads speed
-	/// it up, terrain penalties are ignored (the enemy may be native). Teleports are ignored.
+	/// it up, terrain penalties are ignored (the enemy may be native). Teleporters and subterranean gates
+	/// count when we know where they lead (exits we have seen). Buildings that can only be entered
+	/// from some sides are entered and left only there.
 	/// Infinity if the tile is further than maxTiles. Cached per day.
 	double enemyDistance(ObjectInstanceID enemy, const int3 & from, double strength, const int3 & tile, double maxTiles) const;
-	void computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles) const;
+	/// validation mode (FAI_CHECK_REACH): unexplored land blocks and our towns do not stop the walk,
+	/// so that the result can be compared with the game's pathfinder for one of our own heroes
+	void computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles, bool validation = false) const;
+	void checkReachAgainstEngine(const CGHeroInstance * hero);
 	mutable std::map<std::pair<int, int3>, ReachMap> reachCache;
+	/// teleporter -> its channel, remembered while we see it (static, so it stays valid)
+	std::map<ObjectInstanceID, TeleportChannelID> teleportChannels;
+	/// objects that can be entered (and left) only from some sides, as the game's pathfinder rules
+	/// say: object -> mask of allowed directions (bit (dy+1)*3+(dx+1)), remembered while we see it
+	std::map<ObjectInstanceID, uint16_t> entryMasks;
+	void rememberStaticObjects();
 
 	// ---- helpers
 	const CGHeroInstance * ownHero(ObjectInstanceID id) const;

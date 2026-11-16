@@ -24,6 +24,8 @@
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
 #include "../../../lib/mapObjects/IMarket.h"
+#include "../../../lib/mapObjects/MiscObjects.h"
+#include "../../../lib/mapObjects/ObjectTemplate.h"
 #include "../../../lib/ResourceSet.h"
 #include "../../../lib/gameState/UpgradeInfo.h"
 #include "../../../lib/mapObjects/army/CStackInstance.h"
@@ -288,6 +290,9 @@ void AdventureAI::playTurn()
 		heroesLastTurn = current;
 	}
 	chooseMainHero();
+	if(std::getenv("FAI_CHECK_REACH"))
+		if(const auto * main = ownHero(mainHero))
+			checkReachAgainstEngine(main);
 	updateEconomy();
 	logAi->info("FairAI %s day %d economy: income %.0f/week, growth costs %.0f/week, rho %.2f", me.toString(), today,
 		economy.weeklyIncome, economy.weeklyRecruitCost, economy.rho);
@@ -609,6 +614,7 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 
 void AdventureAI::updateThreats()
 {
+	rememberStaticObjects();
 	threats.clear();
 	for(const auto & [id, object] : perception.knownObjects())
 	{
@@ -621,8 +627,7 @@ void AdventureAI::updateThreats()
 			continue;
 		Threat t;
 		t.pos = object.visitablePos;
-		t.army = observedDanger(object);
-		t.strength = t.army * params.enemyHeroFactor;
+		t.strength = observedDanger(object) * params.enemyHeroFactor;
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
@@ -635,15 +640,12 @@ double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, boo
 	double worst = 0;
 	for(const auto & t : threats)
 	{
-		if(t.hero == ignoreHero || t.pos.z != tile.z || t.strength <= worst)
+		if(t.hero == ignoreHero || t.strength <= worst)
 			continue;
 		if(!cautious && t.age > 2)
 			continue;
 		double radius = cautious ? params.threatRadius + 8.0 * t.age : t.radius;
-		// roads at most halve the way: tiles further than this are out of reach anyway
-		if(t.pos.dist2d(tile) * 0.5 > radius)
-			continue;
-		if(enemyDistance(t.hero, t.pos, t.army, tile, radius) <= radius)
+		if(enemyDistance(t.hero, t.pos, t.strength, tile, radius) <= radius)
 			worst = t.strength;
 	}
 	return worst;
@@ -651,73 +653,185 @@ double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, boo
 
 double AdventureAI::enemyDistance(ObjectInstanceID enemy, const int3 & from, double strength, const int3 & tile, double maxTiles) const
 {
-	if(from.z != tile.z || !cb->isInTheMap(tile))
+	if(!cb->isInTheMap(tile) || !cb->isInTheMap(from))
 		return std::numeric_limits<double>::infinity();
 	if(!params.pathThreats)
 	{
 		const double straight = from.dist2d(tile);
-		return straight <= maxTiles ? straight : std::numeric_limits<double>::infinity();
+		return from.z == tile.z && straight <= maxTiles ? straight : std::numeric_limits<double>::infinity();
 	}
 	ReachMap & reach = reachCache[{enemy.getNum(), from}];
 	if(reach.day != today || reach.strength != strength || reach.maxTiles < maxTiles)
 		computeReach(reach, from, strength, std::max(maxTiles, reach.day == today ? reach.maxTiles : 0.0));
-	const float d = reach.tiles[tile.y * cb->getMapSize().x + tile.x];
-	return d < 0 ? std::numeric_limits<double>::infinity() : d;
+	const int3 size = cb->getMapSize();
+	const float d = reach.tiles[(static_cast<size_t>(tile.z) * size.y + tile.y) * size.x + tile.x];
+	return d < 0 || d > maxTiles ? std::numeric_limits<double>::infinity() : d;
 }
 
-void AdventureAI::computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles) const
+void AdventureAI::checkReachAgainstEngine(const CGHeroInstance * hero)
+{
+	// our own hero, guards ignored on both sides: where the game's pathfinder can go, our model must go too
+	rememberStaticObjects();
+	auto engine = computePaths(hero, true);
+	ReachMap model;
+	computeReach(model, hero->visitablePos(), 1e18, 1e9, true);
+	const int3 size = cb->getMapSize();
+	int both = 0, onlyEngine = 0, onlyModel = 0;
+	std::string examples, modelExamples;
+	for(int z = 0; z < size.z; ++z)
+		for(int y = 0; y < size.y; ++y)
+			for(int x = 0; x < size.x; ++x)
+			{
+				const int3 tile(x, y, z);
+				const CGPathNode * node = engine->getPathInfo(tile);
+				const bool e = node && node->reachable();
+				const bool m = model.tiles[(static_cast<size_t>(z) * size.y + y) * size.x + x] >= 0;
+				if(e && m)
+					++both;
+				else if(e)
+				{
+					if(++onlyEngine <= 5)
+						examples += " " + tile.toString();
+				}
+				else if(m)
+				{
+					if(++onlyModel <= 4)
+					{
+						const TerrainTile * t = cb->getTile(tile, false);
+						modelExamples += " " + tile.toString() + (node ? "[acc " + std::to_string(static_cast<int>(node->accessible)) + "]" : "[-]");
+						if(t)
+							for(const auto & id : t->visitableObjects)
+								if(const auto * o = cb->getObj(id, true))
+									modelExamples += o->getObjectName() + ";";
+					}
+				}
+			}
+	logAi->info("FairAI %s reach check day %d (%s at %s%s): both %d, only engine %d%s, only model %d%s", me.toString(), today,
+		hero->getNameTranslated(), hero->visitablePos().toString(), hero->isGarrisoned() ? " garrisoned" : "", both, onlyEngine, examples, onlyModel, modelExamples);
+}
+
+void AdventureAI::rememberStaticObjects()
+{
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type == Obj::HERO || (entryMasks.count(id) && teleportChannels.count(id)))
+			continue;
+		const CGObjectInstance * instance = perception.visibleObject(id);
+		if(!instance)
+			continue;
+		if(!entryMasks.count(id))
+		{
+			// only objects that block their entrance restrict the direction (game rule, see CMap::checkForVisitableDir)
+			uint16_t mask = 0x1FF;
+			if(instance->blockingAt(instance->visitablePos()))
+			{
+				mask = 0;
+				for(int dx = -1; dx <= 1; ++dx)
+					for(int dy = -1; dy <= 1; ++dy)
+						if((dx || dy) && instance->appearance->isVisitableFrom(dx, dy))
+							mask |= 1 << ((dy + 1) * 3 + dx + 1);
+			}
+			entryMasks[id] = mask;
+		}
+		if(object.type == Obj::MONOLITH_ONE_WAY_ENTRANCE || object.type == Obj::MONOLITH_TWO_WAY
+			|| object.type == Obj::SUBTERRANEAN_GATE || object.type == Obj::WHIRLPOOL)
+		{
+			if(const auto * teleport = dynamic_cast<const CGTeleport *>(instance))
+				teleportChannels[id] = teleport->channel;
+		}
+	}
+}
+
+void AdventureAI::computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles, bool validation) const
 {
 	const int3 size = cb->getMapSize();
-	const int width = size.x;
+	const size_t width = size.x;
+	const size_t height = size.y;
+	auto indexOf = [&](const int3 & pos) { return (static_cast<size_t>(pos.z) * height + pos.y) * width + pos.x; };
 	reach.origin = from;
 	reach.day = today;
 	reach.strength = strength;
 	reach.maxTiles = maxTiles;
-	reach.tiles.assign(static_cast<size_t>(size.x) * size.y, -1.f);
+	reach.tiles.assign(width * height * size.z, -1.f);
 
 	// what we know of the land: 0 open, 1 blocked, 2 ends the walk (our towns: attacking them)
 	std::vector<uint8_t> kind(reach.tiles.size(), 0);
 	std::vector<float> stepCost(reach.tiles.size(), 1.f);
 	const TerrainTile * start = cb->getTile(from, false);
 	const bool onWater = start && start->isWater();
-	for(int y = 0; y < size.y; ++y)
-		for(int x = 0; x < size.x; ++x)
-		{
-			const TerrainTile * t = cb->getTile(int3(x, y, from.z), false);
-			if(!t)
-				continue; // never seen: assume open land
-			const size_t i = static_cast<size_t>(y) * width + x;
-			if(!t->getTerrain()->isPassable() || (t->isWater() && !onWater) || (t->blocked() && !t->visitable()))
-				kind[i] = 1;
-			else if(t->hasRoad())
-				stepCost[i] = std::max(0.5f, t->getRoad()->movementCost / 100.f);
-		}
+	for(int z = 0; z < size.z; ++z)
+		for(int y = 0; y < size.y; ++y)
+			for(int x = 0; x < size.x; ++x)
+			{
+				const int3 pos(x, y, z);
+				const TerrainTile * t = cb->getTile(pos, false);
+				const size_t i = indexOf(pos);
+				if(!t)
+				{
+					if(validation)
+						kind[i] = 1;
+					continue; // never seen: assume open land
+				}
+				// resources, artifacts and other things to pick up do not block: the hero takes them and walks on
+				if(!t->getTerrain()->isPassable() || (t->isWater() != onWater) || (t->blocked() && !t->visitable()))
+					kind[i] = 1;
+				else if(t->hasRoad())
+					stepCost[i] = std::max(0.5f, t->getRoad()->movementCost / 100.f);
+			}
 	// known monsters this hero would not beat block the tiles they guard
-	for(const auto & [id, object] : perception.knownObjects())
+	const auto known = perception.knownObjects();
+	for(const auto & [id, object] : known)
 	{
-		if(object.type != Obj::MONSTER || object.visitablePos.z != from.z || observedDanger(object) <= strength)
+		if(object.type != Obj::MONSTER || observedDanger(object) <= strength)
 			continue;
 		for(int dx = -1; dx <= 1; ++dx)
 			for(int dy = -1; dy <= 1; ++dy)
 			{
-				const int x = object.visitablePos.x + dx;
-				const int y = object.visitablePos.y + dy;
-				if(x >= 0 && y >= 0 && x < size.x && y < size.y)
-					kind[static_cast<size_t>(y) * width + x] = 1;
+				const int3 pos = object.visitablePos + int3(dx, dy, 0);
+				if(cb->isInTheMap(pos))
+					kind[indexOf(pos)] = 1;
 			}
 	}
 	for(const auto * town : perception.ownTowns())
+		if(!validation)
+			kind[indexOf(town->visitablePos())] = 2;
+	// entrances that only open to some sides (towns, mines, dwellings...): entered and left only there
+	std::vector<uint16_t> entry(reach.tiles.size(), 0x1FF);
+	for(const auto & [id, mask] : entryMasks)
 	{
-		const int3 gate = town->visitablePos();
-		if(gate.z == from.z)
-			kind[static_cast<size_t>(gate.y) * width + gate.x] = 2;
+		auto object = known.find(id);
+		if(object != known.end() && mask != 0x1FF)
+			entry[indexOf(object->second.visitablePos)] &= mask;
+	}
+	auto dirBit = [](int dx, int dy) { return static_cast<uint16_t>(1 << ((dy + 1) * 3 + dx + 1)); };
+
+	// teleporters and subterranean gates: entrance tile -> exit tiles we have seen
+	std::map<size_t, std::vector<size_t>> jumps;
+	for(const auto & [id, channel] : teleportChannels)
+	{
+		auto entrance = known.find(id);
+		if(entrance == known.end())
+			continue;
+		for(ObjectInstanceID exitId : cb->getTeleportChannelExits(channel, me))
+		{
+			auto exit = known.find(exitId);
+			if(exitId != id && exit != known.end())
+				jumps[indexOf(entrance->second.visitablePos)].push_back(indexOf(exit->second.visitablePos));
+		}
 	}
 
-	using Entry = std::pair<float, int>;
+	using Entry = std::pair<float, size_t>;
 	std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
-	const int startIndex = from.y * width + from.x;
+	const size_t startIndex = indexOf(from);
 	reach.tiles[startIndex] = 0;
 	open.emplace(0.f, startIndex);
+	auto relax = [&](size_t next, float total)
+	{
+		if(kind[next] == 1 || total > maxTiles || (reach.tiles[next] >= 0 && reach.tiles[next] <= total))
+			return;
+		reach.tiles[next] = total;
+		open.emplace(total, next);
+	};
 	while(!open.empty())
 	{
 		auto [cost, index] = open.top();
@@ -726,25 +840,24 @@ void AdventureAI::computeReach(ReachMap & reach, const int3 & from, double stren
 			continue;
 		if(index != startIndex && kind[index] == 2)
 			continue; // attacking our town ends the move
-		const int x = index % width;
-		const int y = index / width;
+		const int x = static_cast<int>(index % width);
+		const int y = static_cast<int>((index / width) % height);
+		const int z = static_cast<int>(index / (width * height));
 		for(int dx = -1; dx <= 1; ++dx)
 			for(int dy = -1; dy <= 1; ++dy)
 			{
-				const int nx = x + dx;
-				const int ny = y + dy;
-				if((dx == 0 && dy == 0) || nx < 0 || ny < 0 || nx >= size.x || ny >= size.y)
+				const int3 next(x + dx, y + dy, z);
+				if((dx == 0 && dy == 0) || !cb->isInTheMap(next))
 					continue;
-				const int next = ny * width + nx;
-				if(kind[next] == 1)
+				const size_t n = indexOf(next);
+				// leaving an entrance and entering one: only through the sides it opens to
+				if(!(entry[index] & dirBit(dx, dy)) || !(entry[n] & dirBit(-dx, -dy)))
 					continue;
-				const float step = stepCost[next] * ((dx != 0 && dy != 0) ? 1.41421356f : 1.f);
-				const float total = cost + step;
-				if(total > maxTiles || (reach.tiles[next] >= 0 && reach.tiles[next] <= total))
-					continue;
-				reach.tiles[next] = total;
-				open.emplace(total, next);
+				relax(n, cost + stepCost[n] * ((dx != 0 && dy != 0) ? 1.41421356f : 1.f));
 			}
+		if(auto jump = jumps.find(index); jump != jumps.end())
+			for(size_t exit : jump->second)
+				relax(exit, cost + 1.f);
 	}
 }
 
@@ -767,10 +880,10 @@ bool AdventureAI::enemySeenNear(const int3 & tile, int days, double radius) cons
 	{
 		if(object.type != Obj::HERO || !object.owner.isValidPlayer() || object.owner == me)
 			continue;
-		if(today - object.lastSeenDay > days || object.visitablePos.z != tile.z)
+		if(today - object.lastSeenDay > days)
 			continue;
 		if(cb->getPlayerRelations(me, object.owner) == PlayerRelations::ENEMIES
-			&& enemyDistance(id, object.visitablePos, observedDanger(object), tile, radius) <= radius)
+			&& enemyDistance(id, object.visitablePos, observedDanger(object) * params.enemyHeroFactor, tile, radius) <= radius)
 			return true;
 	}
 	return false;
@@ -1360,8 +1473,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				double nearest = 1e9;
 				for(const auto & t : threats)
 				{
-					if(t.pos.z == tile.z && (!cautious ? t.age <= 2 : true) && t.strength > params.threatTolerance * ownStrength)
-						nearest = std::min(nearest, enemyDistance(t.hero, t.pos, t.army, tile, 60));
+					if((!cautious ? t.age <= 2 : true) && t.strength > params.threatTolerance * ownStrength)
+						nearest = std::min(nearest, enemyDistance(t.hero, t.pos, t.strength, tile, 60));
 				}
 				return nearest;
 			};
@@ -2201,7 +2314,7 @@ void AdventureAI::defendTowns()
 		for(const auto & [id, object] : known)
 		{
 			if(object.type == Obj::HERO && object.visibleNow && object.owner.isValidPlayer() && object.owner != me
-				&& enemyDistance(id, object.visitablePos, observedDanger(object), town->visitablePos(), 14) < 14)
+				&& enemyDistance(id, object.visitablePos, observedDanger(object) * params.enemyHeroFactor, town->visitablePos(), 14) < 14)
 			{
 				threatened = true;
 				break;
