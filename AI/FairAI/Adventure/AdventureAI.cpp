@@ -191,6 +191,7 @@ void Params::loadOverrides(int playerIndex)
 	read("mageGuildValue", mageGuildValue);
 	read("buyWarMachines", buyWarMachines);
 	read("pathThreats", pathThreats);
+	read("townGuard", townGuard);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -469,6 +470,21 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		reservedBy.erase(heroId);
 		if(best.object.hasValue())
 			reservedBy[heroId] = best.object;
+
+		if(params.townGuard && isMain(hero) && best.object.hasValue())
+		{
+			for(const auto * town : perception.ownTowns())
+			{
+				if(town->id == best.object)
+				{
+					clearGate(town, hero);
+					break;
+				}
+			}
+			hero = ownHero(heroId);
+			if(!hero)
+				return;
+		}
 
 		const int3 posBefore = hero->visitablePos();
 		const int mpBefore = hero->movementPointsRemaining();
@@ -943,6 +959,40 @@ double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) co
 	return strength;
 }
 
+double AdventureAI::townNeed(const CGTownInstance * town, const CGHeroInstance * mainHero) const
+{
+	const double threat = threatAt(town->visitablePos());
+	if(threat <= 0)
+		return 0;
+	double local = 0;
+	for(const auto & slot : town->Slots())
+		local += stackValue(slot.second.get());
+	if(const auto * guard = town->getGarrisonHero(); guard && guard != mainHero)
+		local += static_cast<double>(guard->getArmyStrength());
+	if(const auto * visitor = town->getVisitingHero(); visitor && visitor != mainHero && visitor->tempOwner == me)
+		local += static_cast<double>(visitor->getArmyStrength());
+	// troops still for sale are bought when the enemy shows up (defendTowns)
+	local += static_cast<double>(recruitableValue(town, cb->getResourceAmount(GameResID::GOLD)));
+	const double walls = town->fortLevel() >= CGTownInstance::CITADEL ? 1.5 : (town->fortLevel() >= CGTownInstance::FORT ? 1.3 : 1.0);
+	local *= walls;
+	if(threat <= local)
+		return 0;
+	return std::min(1.0, (threat - local) / threat);
+}
+
+void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero)
+{
+	const CGHeroInstance * visitor = town->getVisitingHero();
+	if(!visitor || visitor == mainHero || visitor->tempOwner != me || town->getGarrisonHero())
+		return;
+	if(!visitor->canBeMergedWith(*town))
+		return;
+	logAi->debug("FairAI %s: %s steps into the garrison of %s to let %s in", me.toString(), visitor->getNameTranslated(),
+		town->getNameTranslated(), mainHero->getNameTranslated());
+	cb->swapGarrisonHero(town);
+	gateway.waitTillFree();
+}
+
 double AdventureAI::transferableValue(const CGHeroInstance * from) const
 {
 	double total = 0;
@@ -1121,9 +1171,13 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor;
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
 				value += 300;
-			// enemies seen near the town: the main hero should stand guard
-			if(enemySeenNear(town->visitablePos(), 3, 20))
-				value += 2500;
+			if(params.townGuard)
+			{
+				// the town cannot hold on its own against what can reach it: the main hero should stand guard
+				value += params.townDefenceValue * townNeed(town, hero);
+			}
+			else if(enemySeenNear(town->visitablePos(), 3, 20))
+				value += 2500; // enemies seen near the town: the main hero should stand guard
 			return value > 300 ? value : 0;
 		}
 		// without a town the game is lost after seven days: any town is worth everything
@@ -1225,8 +1279,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		return stop.isValid() && stop != tile && threatAt(stop, object, cautious) > params.threatTolerance * defenceAt(hero, stop);
 	};
 
+	// standing in a town that cannot hold on its own: only trips that end back home today,
+	// except to attack an enemy hero (the threat itself)
+	double roundTripBudget = -1;
+	if(params.townGuard && isMain(hero))
+	{
+		if(const auto * home = hero->getVisitedTown(); home && home->visitablePos() == heroPos && townNeed(home, hero) > 0.2)
+			roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
+	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
 	{
+		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget)
+		{
+			auto it = object.hasValue() ? known.find(object) : known.end();
+			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && it->second.owner != me;
+			if(!enemyHero)
+				return;
+		}
 		Target t;
 		t.tile = tile;
 		t.object = object;
@@ -1293,7 +1362,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				continue;
 			}
 			// a threatened own town needs its defender
-			if(object.type == Obj::TOWN && object.owner == me && isMain(hero))
+			if(!params.townGuard && object.type == Obj::TOWN && object.owner == me && isMain(hero))
 			{
 				double garrison = 0;
 				if(const auto * town = dynamic_cast<const CGTownInstance *>(instance))

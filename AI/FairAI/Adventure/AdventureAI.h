@@ -154,6 +154,12 @@ private:
 	std::set<ObjectInstanceID> usedTeleporters;
 	/// An enemy hero was seen within `radius` tiles of `tile` during the last `days` days
 	bool enemySeenNear(const int3 & tile, int days, double radius) const;
+	/// How much a town needs the main hero now (0..1): the strongest enemy that can reach it before our
+	/// next turn against what the town fields without the main hero (garrison, other heroes, troops we
+	/// can still buy, walls)
+	double townNeed(const CGTownInstance * town, const CGHeroInstance * mainHero) const;
+	/// Our other hero stands in the gate the main hero wants to enter: move it into the garrison
+	void clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero);
 	/// Strength the hero would defend with on this tile (own town: garrison and walls help)
 	double defenceAt(const CGHeroInstance * hero, const int3 & tile) const;
 	/// Walking distance (tiles of normal terrain) an enemy hero at `from` needs to reach `tile`, judged

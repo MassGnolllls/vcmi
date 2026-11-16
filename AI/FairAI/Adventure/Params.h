@@ -41,6 +41,7 @@ struct Params
 	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
 	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
+	int townGuard = 1;                 ///< 1: town defence weighs the town's own means, the main hero only makes round trips from a town that needs it and clears the gate of our other heroes (0: old rules)
 	double wallsFactor = 1.5;          ///< sieges: defenders behind town walls count this much more
 
 	// --- movement and planning
