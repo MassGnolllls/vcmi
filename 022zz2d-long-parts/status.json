@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d-long-parts",
+ "state": "running",
+ "commit": "474df93fa99a2712f46dfcf6e4434c9d42fb402f",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T19:48:21",
+ "note": "long games on medium land maps (150 days, 2x24 paired games per config): which of today's ideas win games? share = troops waiting at home count by what they add to the main hero's army (no more circling the town for a trickle); hero = hero against hero judged in one measure (army times what attack, defence, offence and armourer add; the enemy's from battles, thieves' guild, class and specialty); camp = hero + campaign mode (a clearly superior main hero marches on the enemy's towns, no errands, no chasing); expand = the main hero looks 12 days ahead, what a guard blocks counts from the guard's place, unexplored land behind a guard counts as a new region; all = everything together"
+}
