@@ -1,0 +1,426 @@
+{
+	"battles" : {
+		"blue" : {
+			"guardFights" : 2,
+			"guardFightsLost" : 0,
+			"guardKills" : 4420,
+			"guardLosses" : 1259,
+			"playerFights" : 4,
+			"playerFightsWon" : 3,
+			"playerKills" : 6305,
+			"playerLosses" : 3754
+		},
+		"red" : {
+			"guardFights" : 1,
+			"guardFightsLost" : 0,
+			"guardKills" : 2028,
+			"guardLosses" : 275,
+			"playerFights" : 4,
+			"playerFightsWon" : 1,
+			"playerKills" : 3754,
+			"playerLosses" : 6305
+		}
+	},
+	"cheatsAllowed" : false,
+	"day" : 11,
+	"difficulty" : "king",
+	"endEvents" : [
+		{
+			"day" : 11,
+			"player" : "red",
+			"victory" : false
+		}
+	],
+	"lastTurnOf" : "blue",
+	"lastTurnOfAI" : "Nullkiller2",
+	"map" : "MAPS/MIX1-S-LAND-2P/2SM4D_S_L1_NONE_21002",
+	"outcome" : "victory",
+	"players" : {
+		"blue" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 5282,
+			"cheated" : false,
+			"faction" : "core:castle",
+			"gold" : 19325,
+			"heroes" : 1,
+			"income" : 3000,
+			"mapExploredRatio" : 0.25054,
+			"maxHeroLevel" : 3,
+			"mines" : 0,
+			"numberArtifacts" : 4,
+			"numberDwellings" : 0,
+			"score" : 446,
+			"status" : "ingame",
+			"team" : 1,
+			"totalExperience" : 2841,
+			"townBuiltRatio" : 0.19469,
+			"towns" : 3
+		},
+		"red" : {
+			"ai" : "FairAI",
+			"armyStrength" : 0,
+			"cheated" : false,
+			"faction" : "core:conflux",
+			"gold" : 6550,
+			"heroes" : 0,
+			"income" : 0,
+			"mapExploredRatio" : 0.200864,
+			"maxHeroLevel" : 0,
+			"mines" : 1,
+			"numberArtifacts" : 0,
+			"numberDwellings" : 0,
+			"score" : 392,
+			"status" : "loser",
+			"team" : 0,
+			"totalExperience" : 0,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		}
+	},
+	"seed" : 53710185,
+	"timeline" : [
+		{
+			"day" : 1,
+			"players" : {
+				"blue" : [
+					2784,
+					1,
+					1,
+					500,
+					0,
+					5,
+					1,
+					10000,
+					0,
+					0,
+					0
+				],
+				"red" : [
+					1893,
+					1,
+					1,
+					500,
+					0,
+					8,
+					1,
+					10000,
+					0,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"day" : 2,
+			"players" : {
+				"blue" : [
+					3221,
+					1,
+					1,
+					500,
+					0,
+					15,
+					1,
+					9410,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					4177,
+					2,
+					1,
+					1000,
+					0,
+					20,
+					1,
+					7700,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 3,
+			"players" : {
+				"blue" : [
+					3221,
+					1,
+					1,
+					500,
+					0,
+					15,
+					1,
+					8360,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					4177,
+					2,
+					1,
+					1000,
+					0,
+					20,
+					1,
+					3400,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 4,
+			"players" : {
+				"blue" : [
+					5181,
+					2,
+					2,
+					1350,
+					0,
+					22,
+					2,
+					6885,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					4177,
+					1,
+					1,
+					500,
+					0,
+					20,
+					1,
+					3150,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 5,
+			"players" : {
+				"blue" : [
+					4479,
+					2,
+					2,
+					1350,
+					1,
+					23,
+					2,
+					6910,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4177,
+					1,
+					1,
+					500,
+					0,
+					20,
+					1,
+					3900,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 6,
+			"players" : {
+				"blue" : [
+					4479,
+					2,
+					2,
+					2350,
+					1,
+					24,
+					2,
+					5435,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4177,
+					1,
+					1,
+					500,
+					0,
+					20,
+					1,
+					4150,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 7,
+			"players" : {
+				"blue" : [
+					4479,
+					2,
+					2,
+					2350,
+					1,
+					24,
+					2,
+					8960,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4177,
+					1,
+					1,
+					1000,
+					0,
+					20,
+					1,
+					3150,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 8,
+			"players" : {
+				"blue" : [
+					4479,
+					2,
+					2,
+					2350,
+					1,
+					25,
+					2,
+					12485,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4177,
+					1,
+					1,
+					1000,
+					0,
+					20,
+					1,
+					4650,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 9,
+			"players" : {
+				"blue" : [
+					4128,
+					2,
+					1,
+					2000,
+					1,
+					25,
+					2,
+					13325,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4793,
+					1,
+					1,
+					1000,
+					0,
+					20,
+					1,
+					5550,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 10,
+			"players" : {
+				"blue" : [
+					6978,
+					2,
+					1,
+					2000,
+					0,
+					25,
+					2,
+					16325,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4793,
+					1,
+					1,
+					1000,
+					1,
+					20,
+					1,
+					5050,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 11,
+			"players" : {
+				"blue" : [
+					8658,
+					2,
+					1,
+					2000,
+					0,
+					25,
+					2,
+					19325,
+					0,
+					2,
+					1259
+				],
+				"red" : [
+					4793,
+					1,
+					1,
+					1000,
+					1,
+					20,
+					1,
+					6550,
+					0,
+					1,
+					275
+				]
+			}
+		}
+	],
+	"wallTimeSec" : 2.45752,
+	"winner" : "blue"
+}

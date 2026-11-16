@@ -1,0 +1,240 @@
+{
+	"battles" : {
+		"blue" : {
+			"guardFights" : 1,
+			"guardFightsLost" : 0,
+			"guardKills" : 2200,
+			"guardLosses" : 557,
+			"playerFights" : 3,
+			"playerFightsWon" : 3,
+			"playerKills" : 6383,
+			"playerLosses" : 1827
+		},
+		"red" : {
+			"guardFights" : 1,
+			"guardFightsLost" : 0,
+			"guardKills" : 2028,
+			"guardLosses" : 275,
+			"playerFights" : 3,
+			"playerFightsWon" : 0,
+			"playerKills" : 1827,
+			"playerLosses" : 6383
+		}
+	},
+	"cheatsAllowed" : false,
+	"day" : 5,
+	"difficulty" : "king",
+	"endEvents" : [
+		{
+			"day" : 5,
+			"player" : "red",
+			"victory" : false
+		}
+	],
+	"lastTurnOf" : "blue",
+	"lastTurnOfAI" : "Nullkiller2",
+	"map" : "MAPS/MIX1-S-LAND-2P/2SM4D_S_L1_NONE_21002",
+	"outcome" : "victory",
+	"players" : {
+		"blue" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 1520,
+			"cheated" : false,
+			"faction" : "core:castle",
+			"gold" : 6660,
+			"heroes" : 1,
+			"income" : 2500,
+			"mapExploredRatio" : 0.231102,
+			"maxHeroLevel" : 3,
+			"mines" : 0,
+			"numberArtifacts" : 3,
+			"numberDwellings" : 0,
+			"score" : 448,
+			"status" : "ingame",
+			"team" : 1,
+			"totalExperience" : 2174,
+			"townBuiltRatio" : 0.159292,
+			"towns" : 3
+		},
+		"red" : {
+			"ai" : "FairAI",
+			"armyStrength" : 0,
+			"cheated" : false,
+			"faction" : "core:conflux",
+			"gold" : 3200,
+			"heroes" : 0,
+			"income" : 0,
+			"mapExploredRatio" : 0.211663,
+			"maxHeroLevel" : 0,
+			"mines" : 0,
+			"numberArtifacts" : 0,
+			"numberDwellings" : 0,
+			"score" : 394,
+			"status" : "loser",
+			"team" : 0,
+			"totalExperience" : 0,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		}
+	},
+	"seed" : 53710185,
+	"timeline" : [
+		{
+			"day" : 1,
+			"players" : {
+				"blue" : [
+					2784,
+					1,
+					1,
+					500,
+					0,
+					5,
+					1,
+					10000,
+					0,
+					0,
+					0
+				],
+				"red" : [
+					1893,
+					1,
+					1,
+					500,
+					0,
+					8,
+					1,
+					10000,
+					0,
+					0,
+					0
+				]
+			}
+		},
+		{
+			"day" : 2,
+			"players" : {
+				"blue" : [
+					3221,
+					1,
+					1,
+					500,
+					0,
+					15,
+					1,
+					9410,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					4177,
+					2,
+					1,
+					1000,
+					0,
+					20,
+					1,
+					7700,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 3,
+			"players" : {
+				"blue" : [
+					2240,
+					1,
+					1,
+					500,
+					0,
+					15,
+					2,
+					8360,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					4177,
+					2,
+					1,
+					2000,
+					0,
+					21,
+					1,
+					3200,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 4,
+			"players" : {
+				"blue" : [
+					2240,
+					1,
+					1,
+					500,
+					0,
+					17,
+					2,
+					8110,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					4177,
+					2,
+					1,
+					2000,
+					0,
+					21,
+					1,
+					4200,
+					0,
+					1,
+					275
+				]
+			}
+		},
+		{
+			"day" : 5,
+			"players" : {
+				"blue" : [
+					1520,
+					2,
+					1,
+					1500,
+					0,
+					18,
+					3,
+					7160,
+					0,
+					1,
+					557
+				],
+				"red" : [
+					0,
+					1,
+					0,
+					1000,
+					0,
+					21,
+					0,
+					3200,
+					0,
+					1,
+					275
+				]
+			}
+		}
+	],
+	"wallTimeSec" : 1.54365,
+	"winner" : "blue"
+}
