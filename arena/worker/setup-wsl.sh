@@ -20,6 +20,11 @@ ask() { local reply; read -r -p "$1" reply < /dev/tty; echo "$reply"; }
 echo
 echo "== 1/5 Programme installieren (Ubuntu fragt nach deinem Linux-Passwort)"
 sudo apt-get update
+# Ubuntu 22.04 ships g++ 11, which is too old for parts of VCMI's C++20: use g++ 12 there
+if [ "$(. /etc/os-release && echo "$VERSION_ID")" = "22.04" ]; then
+    sudo apt-get install -y gcc-12 g++-12
+    export CC=gcc-12 CXX=g++-12
+fi
 sudo apt-get install -y git cmake ninja-build g++ ccache python3 \
     libsdl2-dev libsdl2-image-dev libsdl2-ttf-dev libsdl2-mixer-dev zlib1g-dev \
     libboost-dev libboost-filesystem-dev libboost-system-dev libboost-thread-dev \
