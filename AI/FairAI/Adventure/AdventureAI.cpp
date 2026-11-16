@@ -185,6 +185,7 @@ void Params::loadOverrides(int playerIndex)
 	read("defenceWallsFort", defenceWallsFort);
 	read("defenceWallsCitadel", defenceWallsCitadel);
 	read("fleeGain", fleeGain);
+	read("antiOscillation", antiOscillation);
 	read("townDefenceValue", townDefenceValue);
 	read("retreatValue", retreatValue);
 	read("collectorRadius", collectorRadius);
@@ -290,6 +291,8 @@ void AdventureAI::playTurn()
 	failedToday.clear();
 	reservedBy.clear();
 	trail.clear();
+	abandonedToday.clear();
+	roundTrip.clear();
 	perception.refresh();
 	{
 		// heroes killed during the enemy's turn
@@ -400,9 +403,13 @@ void AdventureAI::playTurn()
 		dumpKnowledge();
 
 	const auto * main = ownHero(mainHero);
-	logAi->info("FairAI %s day %d end: gold %d, heroes %d, towns %d, main hero %s army %d", me.toString(), today,
+	int mines = 0;
+	for(const auto * object : cb->getMyObjects())
+		mines += object->ID == Obj::MINE ? 1 : 0;
+	logAi->info("FairAI %s day %d end: gold %d, heroes %d, towns %d, main hero %s army %d, mines %d, wood %d, ore %d", me.toString(), today,
 		cb->getResourceAmount(GameResID::GOLD), static_cast<int>(perception.ownHeroes().size()), static_cast<int>(perception.ownTowns().size()),
-		main ? main->getNameTranslated() : "-", main ? static_cast<int>(main->getArmyStrength()) : 0);
+		main ? main->getNameTranslated() : "-", main ? static_cast<int>(main->getArmyStrength()) : 0, mines,
+		cb->getResourceAmount(GameResID::WOOD), cb->getResourceAmount(GameResID::ORE));
 }
 
 void AdventureAI::playHero(ObjectInstanceID heroId)
@@ -498,6 +505,24 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		logAi->debug("FairAI %s: %s -> %s %s value %.0f loss %.0f travel %.2f score %.0f", me.toString(), hero->getNameTranslated(),
 			best.description, best.tile.toString(), best.value, best.loss, best.travel, best.score);
 
+		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home";
+		if(params.antiOscillation)
+		{
+			// giving up an unreached goal: do not come back to it today (A-B-A wastes the day's movement)
+			auto previous = currentGoal.find(heroId);
+			if(previous != currentGoal.end() && previous->second != best.tile && previous->second != hero->visitablePos())
+				abandonedToday[heroId].insert(previous->second);
+			// a short trip out of a town that needs its defender: the town calls the hero back only once the trip's goal is reached
+			auto trip = roundTrip.find(heroId);
+			if(trip != roundTrip.end() && trip->second.goal != best.tile)
+				roundTrip.erase(trip);
+			if(isMain(hero) && !safetyMove && params.townGuard)
+			{
+				if(const auto * home = hero->getVisitedTown(); home && home->visitablePos() == hero->visitablePos() && best.object != home->id
+					&& townNeed(home, hero) > 0.2)
+					roundTrip[heroId] = RoundTrip{home->id, best.tile};
+			}
+		}
 		currentGoal[heroId] = best.tile;
 		reservedBy.erase(heroId);
 		if(best.object.hasValue())
@@ -572,6 +597,20 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		failures = 0;
 		if(isMain(hero) && (best.object.hasValue() || best.description == "explore") && best.description != "home")
 			mainProductive = true;
+		if(auto trip = roundTrip.find(heroId); trip != roundTrip.end())
+		{
+			bool reached = hero->visitablePos() == trip->second.goal;
+			if(!reached && best.object.hasValue())
+			{
+				// visiting an adjacent object or winning a fight does not always move the hero onto the tile
+				auto now = perception.knownObjects();
+				auto after = now.find(best.object);
+				auto before = objectBefore.find(best.object);
+				reached = after == now.end() || (before != objectBefore.end() && before->second.owner != after->second.owner);
+			}
+			if(reached)
+				roundTrip.erase(trip);
+		}
 
 		if(const auto * town = hero->getVisitedTown())
 			manageTownVisit(hero, town);
@@ -1094,6 +1133,18 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 	gateway.waitTillFree();
 }
 
+double AdventureAI::townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const
+{
+	double troops = 0;
+	for(const auto & slot : town->Slots())
+		troops += stackValue(slot.second.get());
+	// troops recruited while a hero guards the garrison sit in that hero's army
+	if(const auto * guard = town->getGarrisonHero(); guard && guard != hero && guard->tempOwner == me)
+		troops += transferableValue(guard);
+	troops += recruitableValue(town, cb->getResourceAmount(GameResID::GOLD));
+	return troops;
+}
+
 double AdventureAI::transferableValue(const CGHeroInstance * from) const
 {
 	double total = 0;
@@ -1262,17 +1313,16 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			const auto * town = dynamic_cast<const CGTownInstance *>(instance);
 			if(!town || !main)
 				return 0;
-			double troops = 0;
-			for(const auto & slot : town->Slots())
-				troops += stackValue(slot.second.get());
-			// troops recruited while a hero guards the garrison sit in that hero's army
-			if(const auto * guard = town->getGarrisonHero(); guard && guard != hero && guard->tempOwner == me)
-				troops += transferableValue(guard);
-			troops += recruitableValue(town, cb->getResourceAmount(GameResID::GOLD));
+			double troops = townTroops(town, hero);
+			// what the hero left behind on its last visit (no free slot, garrison share) is no reason to return
+			if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
+				troops = std::max(0.0, troops - left->second);
 			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor;
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
 				value += 300;
-			if(params.townGuard)
+			auto trip = roundTrip.find(hero->id);
+			const bool onTrip = trip != roundTrip.end() && trip->second.town == town->id;
+			if(params.townGuard && !onTrip)
 			{
 				// the town cannot hold on its own against what can reach it: the main hero should stand guard
 				value += params.townDefenceValue * townNeed(town, hero);
@@ -1404,7 +1454,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && it->second.owner != me;
-			if(!enemyHero)
+			// the threat itself may be attacked, but only today: walking off towards it leaves the town open
+			if(!enemyHero || (params.antiOscillation && travel > roundTripBudget))
+				return;
+		}
+		if(params.antiOscillation && description != "retreat" && description != "flee")
+		{
+			auto gaveUp = abandonedToday.find(hero->id);
+			if(gaveUp != abandonedToday.end() && gaveUp->second.count(tile))
 				return;
 		}
 		Target t;
@@ -1526,6 +1583,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				&& cb->getPlayerRelations(me, object.owner) == PlayerRelations::ENEMIES)
 				enemyTownKnown = true;
 		}
+		const std::set<int3> * gaveUp = nullptr;
+		if(auto it = abandonedToday.find(hero->id); it != abandonedToday.end() && params.antiOscillation)
+			gaveUp = &it->second;
 		double decay = enemyTownKnown ? std::max(0.25, 1.0 - today / 56.0) : std::max(0.6, 1.0 - today / 56.0);
 		if(!enemyTownKnown && isMain(hero) && today > 14)
 			decay *= params.huntFactor;
@@ -1542,6 +1602,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				{
 					int3 tile(x, y, z);
 					if(tile == heroPos || failedToday.count({heroNum, tile}) || trail[hero->id].count(tile))
+						continue;
+					if(gaveUp && gaveUp->count(tile))
 						continue;
 					const CGPathNode * node = reachable(paths, tile);
 					const bool normal = node && node->turns <= params.exploreMaxTurns && node->action == EPathNodeAction::NORMAL;
@@ -1640,8 +1702,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			hero->getNameTranslated(), ownStrength, weakestRejected, reachableTiles, freeTiles, reasons);
 	}
 
-	// ---- standing where a stronger enemy hero can reach us: get away (own towns preferred)
-	if(threatAt(heroPos, ObjectInstanceID(), cautious) > tolerance(hero) * defenceAt(hero, heroPos))
+	// ---- standing where a stronger enemy hero can reach us: get away (own towns preferred).
+	// Every target above ends the day on a tile that is not threatened, so with the anti-oscillation
+	// rules the retreat is the fallback, not a competitor that calls the hero back after every step.
+	if((out.empty() || !params.antiOscillation) && threatAt(heroPos, ObjectInstanceID(), cautious) > tolerance(hero) * defenceAt(hero, heroPos))
 	{
 		const int3 size = cb->getMapSize();
 		Target bestRetreat;
@@ -2116,6 +2180,8 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 					cb->buyArtifact(hero, machine);
 			}
 		}
+		if(const auto * now = ownHero(hero->id))
+			townLeftover[town->id] = townTroops(town, now);
 	}
 	else if(ownHero(mainHero) && params.collectorsTakeGarrison)
 	{

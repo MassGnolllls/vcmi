@@ -160,6 +160,9 @@ ObservedArmy Perception::observeArmy(const CArmedInstance * army) const
 
 	if(army->ID == Obj::HERO)
 	{
+		// a hero half inside the fog: the info window needs the tile he stands on
+		if(!cb->isVisible(army->visitablePos()))
+			return {};
 		InfoAboutHero info;
 		if(cb->getHeroInfo(army, info))
 			return ObservedArmy::fromDescriptor(info.army);

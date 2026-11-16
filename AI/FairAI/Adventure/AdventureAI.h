@@ -126,6 +126,16 @@ private:
 	std::map<ObjectInstanceID, int3> currentGoal;            ///< hero -> tile (stickiness)
 	std::set<std::pair<int, int3>> failedToday;              ///< hero, tile
 	std::map<ObjectInstanceID, std::set<int3>> trail;        ///< tiles each hero stood on today
+	std::map<ObjectInstanceID, std::set<int3>> abandonedToday; ///< goals a hero gave up unreached today (no A-B-A oscillation)
+	struct RoundTrip
+	{
+		ObjectInstanceID town; ///< needy own town the main hero left for a short trip
+		int3 goal;             ///< the trip's target: the town does not call the hero back before it is reached
+	};
+	std::map<ObjectInstanceID, RoundTrip> roundTrip;
+	std::map<ObjectInstanceID, double> townLeftover;         ///< own town -> troop value the main hero left behind on its last visit (not a reason to come back)
+	/// Troops the main hero could pick up in an own town: garrison, a garrison hero's army, creatures for sale
+	double townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const;
 	int today = 0;
 
 	// ---- turn parts

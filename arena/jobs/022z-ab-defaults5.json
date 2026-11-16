@@ -1,0 +1,27 @@
+{
+ "note": "new build (anti-oscillation on, concentrate and siege cost off by default): confirm the anti-oscillation gain and re-test the two features that were switched off, this time with enough games (5 seeds = 360 pairs per config; one A/A-equivalent pair difference has SD ~0.3)",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"osc0\": {\"antiOscillation\": 0}, \"conc1\": {\"concentrate\": 1}, \"siege1\": {\"siegeCost\": 1}}",
+  "--seeds",
+  "42,43,44,45,46",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

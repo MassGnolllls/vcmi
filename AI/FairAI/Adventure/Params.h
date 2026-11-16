@@ -48,11 +48,12 @@ struct Params
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
 	int townGuard = 1;                 ///< 1: town defence weighs the town's own means, the main hero only makes round trips from a town that needs it and clears the gate of our other heroes (0: old rules)
 	double wallsFactor = 1.5;          ///< sieges: defenders behind town walls count this much more
-	int siegeCost = 1;                 ///< sieges: moat and arrow towers cost troops before the walls fall (0: ignore)
+	int siegeCost = 0;                 ///< sieges: moat and arrow towers cost troops before the walls fall (0: ignore). Off until a test shows a gain: the first A/B leaned against it (-0.055 +- 0.055)
 
 	// --- movement and planning
 	double travelOffset = 0.15;        ///< days added to every travel time (visit overhead)
 	double stickiness = 1.2;           ///< score multiplier for the target chosen last step
+	int antiOscillation = 1;           ///< goals given up unreached are not taken up again the same day; trips out of a needy town are finished before the town calls the hero back
 	double explorationTileValue = 36;  ///< gold per newly revealed tile (decays over the game)
 	double staleTileWeight = 0.3;      ///< tiles hidden again (Cover of Darkness) vs never seen
 	int maxTravelTurns = 4;            ///< targets further away are ignored
@@ -80,7 +81,7 @@ struct Params
 	int collectorsRoam = 1;            ///< how many secondary heroes roam; the others guard towns from the garrison
 	int scouts = 0;                    ///< extra secondary heroes that explore beyond our territory (avoiding known threats)
 	int moveSpells = 1;                ///< paths may use Fly / Water Walk when the hero can cast them (cast on the way)
-	int concentrate = 1;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero
+	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
 
 	// --- combat (read by the battle AI of the same player)
 	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)

@@ -235,7 +235,9 @@ bool FairBattleAI::tryHeroSpell(const BattleID & battleID, const CStack * stack)
 		return trySpellSearch(battleID, stack);
 
 	auto battle = cb->getBattle(battleID);
-	const int simulationTurns = env->game()->getStartInfo()->difficulty < 4 ? 2 : 10;
+	// always the deep setting: VCMI's BattleAI plays its spells weaker below the highest difficulty,
+	// FairAI's strength must not depend on the difficulty the human picked
+	const int simulationTurns = 10;
 	BattleEvaluator evaluator(env, cb, stack, playerID, battleID, side, strengthRatio(battle, side), simulationTurns);
 	return evaluator.canCastSpell() && evaluator.attemptCastingSpell(stack);
 }
