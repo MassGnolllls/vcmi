@@ -1,0 +1,12 @@
+s-land-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-s-land-2p
+s-ring-ffa-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-s-ring-ffa-4p
+m-land-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-m-land-2p
+m-water-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-m-water-2p
+m-islands-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-m-islands-2p
+m-ffa-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-m-ffa-4p
+m-teams-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-m-teams-4p
+l-land-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-l-land-2p
+l-ffa-6p-u: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-l-ffa-6p-u
+l-teams-6p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-l-teams-6p
+xl-ffa-8p-u: 4/4 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-xl-ffa-8p-u
+xl-islands-8p: 4/4 maps ready in /home/alex/.local/share/vcmi/Maps/mix1-xl-islands-8p
