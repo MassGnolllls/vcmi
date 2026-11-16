@@ -76,6 +76,7 @@ struct Params
 	int fetchRoundTrip = 0;            ///< 1: the main hero counts the way home for troops twice (it has to come back to where its work is). Off until a test shows a gain
 	int armyFirst = 0;                 ///< 1: a building that would leave troops unbought in our dwellings is built only if it is worth more per gold piece than those troops (until now buildings always came first, and the main hero led a few thousand in weeks two and three). Off until a test shows a gain
 	int townAmbush = 0;                ///< 1: within a day's march of an enemy town, the strongest enemy hero seen in the last three weeks but not visible today counts as a threat (it may sit in the town). Off until a test shows a gain
+	int campaignPrior = 0;             ///< 1: the campaign measures the main hero not only against the strongest enemy hero seen but also against what the enemy is likely to have - half of an army like ours, scaled by its number of towns against ours (thieves' guild, towns seen). Off until a test shows a gain
 	int mainHorizon = 0;               ///< main hero: targets and unexplored land up to this many days away count (0: maxTravelTurns / exploreMaxTurns). Off until a test shows a gain
 	int exploreMaxTurns = 4;           ///< exploration targets at most this many days away
 	int collectorsTakeGarrison = 1;    ///< collectors pick up garrison troops to ferry them

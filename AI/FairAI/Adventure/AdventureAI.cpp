@@ -283,6 +283,7 @@ void Params::loadOverrides(int playerIndex)
 	read("supplyRuns", supplyRuns);
 	read("armyFirst", armyFirst);
 	read("townAmbush", townAmbush);
+	read("campaignPrior", campaignPrior);
 	read("exploreRegion", exploreRegion);
 	read("fetchRoundTrip", fetchRoundTrip);
 	read("supplyShare", supplyShare);
@@ -364,6 +365,14 @@ void AdventureAI::chooseMainHero()
 		takeover = std::clamp(1.5 + 0.25 * (static_cast<double>(current->level) - static_cast<double>(strongest->level)), 1.5, 3.0);
 	if(!current || strongest->getTotalStrength() > takeover * current->getTotalStrength())
 		mainHero = strongest->id;
+	// The leader fell while a courier was on its way: if the courier leads now, its run is over.
+	// (It used to go on "delivering" to itself - and asking the server to merge a stack with itself
+	// kills the game: the engine does not check for that.)
+	if(supply && supply->courier == mainHero)
+	{
+		logAi->debug("FairAI %s day %d: supply run ended (the courier leads now)", me.toString(), today);
+		supply.reset();
+	}
 }
 
 bool AdventureAI::isMain(const CGHeroInstance * hero) const
@@ -1356,19 +1365,56 @@ void AdventureAI::updateThreats()
 		// no tavern, no guild: at least something of weight must have shown itself
 		if(!guildKnown && leader && oppositionHeroes < 0.25 * fieldStrength(leader))
 			mainsSeen = false;
+		// (campaignPrior) The strongest enemy hero we happened to see is a poor measure of what the
+		// enemy has: its main army may never have shown itself (a campaign begun at 3.6 times the
+		// strongest hero seen ran into an army twice that size). Until proven otherwise the enemy is
+		// taken to be as rich as we are, town for town, with half of its army in one hand.
+		double reference = oppositionHeroes;
+		if(params.campaignPrior && leader)
+		{
+			double ownTotal = 0;
+			for(const auto * hero : perception.ownHeroes())
+				ownTotal += static_cast<double>(hero->getArmyStrength());
+			for(const auto * town : perception.ownTowns())
+				for(const auto & slot : town->Slots())
+					ownTotal += stackValue(slot.second.get());
+			const int ownTowns = std::max<int>(1, static_cast<int>(perception.ownTowns().size()));
+			auto ownPlace = guildTownPlace.find(me);
+			double worst = 0;
+			for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
+			{
+				const PlayerColor color(c);
+				if(color == me || cb->getPlayerStatus(color, false) != EPlayerStatus::INGAME || !isEnemy(color))
+					continue;
+				int theirTowns = std::max(1, townsKnown[color]);
+				auto place = guildTownPlace.find(color);
+				if(place != guildTownPlace.end() && ownPlace != guildTownPlace.end())
+				{
+					if(place->second < ownPlace->second)
+						theirTowns = std::max(theirTowns, ownTowns + 1);
+					else if(place->second == ownPlace->second)
+						theirTowns = std::max(theirTowns, ownTowns);
+				}
+				else
+					theirTowns = std::max(theirTowns, ownTowns); // no guild: no reason to think them poorer
+				worst = std::max(worst, std::clamp(static_cast<double>(theirTowns) / ownTowns, 0.25, 2.0));
+			}
+			const double leaderFactor = fieldStrength(leader) / std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+			reference = std::max(reference, 0.5 * ownTotal * leaderFactor * worst);
+		}
 		if(!params.leaderFocus || !leader || today < 21 || oppositionHeroes <= 0)
 			campaignMode = false;
 		else
 		{
-			const double edge = fieldStrength(leader) / oppositionHeroes;
+			const double edge = fieldStrength(leader) / reference;
 			if(edge >= params.campaignEdge && mainsSeen)
 				campaignMode = true;
 			else if(edge < 0.65 * params.campaignEdge)
 				campaignMode = false;
 		}
 		if(before != campaignMode)
-			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f, their best heroes seen: %s)", me.toString(), today,
-				campaignMode ? "on" : "off", fieldStrength(leader), oppositionHeroes, mainsSeen ? "yes" : "no");
+			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f, measured against %.0f, their best heroes seen: %s)", me.toString(), today,
+				campaignMode ? "on" : "off", fieldStrength(leader), oppositionHeroes, reference, mainsSeen ? "yes" : "no");
 		// On campaign the hero does not walk home for a trickle. But what has grown at home to a good
 		// part of its own army is what decides the war (a campaign fought with half of our troops,
 		// the other half waiting in the towns, was how games were lost): fetch it, then march again.
@@ -2270,6 +2316,8 @@ std::vector<Target> AdventureAI::supplyTargets(const CGHeroInstance * hero, cons
 	if(!supply)
 		return targets;
 	const CGHeroInstance * leader = ownHero(mainHero);
+	if(leader == hero)
+		leader = nullptr; // no run to oneself (chooseMainHero ends such a run; this is the second lock)
 	// can the hero still take a step towards `tile` today? (a path exists, and the next tile is within today's movement)
 	auto stepToday = [&](const int3 & tile) -> int // 1 yes, 0 not today, -1 no way
 	{
@@ -4157,6 +4205,9 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 
 void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source)
 {
+	// never an army with itself: a stack merged into its own slot crashes the server
+	if(!destination || !source || destination == source)
+		return;
 	const bool sourceIsHero = source->ID == Obj::HERO;
 
 	// An empty town is taken by any scout walking in: leave the weakest stack behind
