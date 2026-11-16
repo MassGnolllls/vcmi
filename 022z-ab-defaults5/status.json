@@ -1,0 +1,9 @@
+{
+ "job": "022z-ab-defaults5",
+ "state": "running",
+ "commit": "f07691950146814dc6503ea82c5c2f59d9903751",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T14:33:42",
+ "note": "new build (anti-oscillation on, concentrate and siege cost off by default): confirm the anti-oscillation gain and re-test the two features that were switched off, this time with enough games (5 seeds = 360 pairs per config; one A/A-equivalent pair difference has SD ~0.3)"
+}
