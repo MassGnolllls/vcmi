@@ -1,0 +1,22 @@
+{
+ "note": "third seed (44) of the long-game tests on medium land maps, a half-fraction design over four further switches on top of f0 (campaign + hero model + pursuit, see 022zz2d5): M = magic (all five mage guild levels built for what their spells do for the leader, the leader visits to learn them, and secondary skills chosen by role - Wisdom and the schools count for a leader with a spellbook); H = the tavern hero worth most to us (troops, skills for its role, specialty income) instead of the one with the strongest starting army; A = artifacts by their effect for the bearer; E = campaign from twice the strongest enemy hero seen instead of three times. Measured: the enemy's main hero is worth about 1.3 times ours per unit (artifacts, damage spells), and ours casts Haste and Magic Arrow. Evaluate with arena/effects.py",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "44",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"f0\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2}, \"fAE\": {\"leaderFocus\": 1, \"campaignEdge\": 2.0, \"heroModel\": 1, \"noChase\": 2, \"artifactCare\": 1}, \"fHE\": {\"leaderFocus\": 1, \"campaignEdge\": 2.0, \"heroModel\": 1, \"noChase\": 2, \"heroChoice\": 1}, \"fHA\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"heroChoice\": 1, \"artifactCare\": 1}, \"fME\": {\"leaderFocus\": 1, \"campaignEdge\": 2.0, \"heroModel\": 1, \"noChase\": 2, \"magicFocus\": 1, \"skillChoice\": 1}, \"fMA\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"magicFocus\": 1, \"skillChoice\": 1, \"artifactCare\": 1}, \"fMH\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"magicFocus\": 1, \"skillChoice\": 1, \"heroChoice\": 1}, \"fMHAE\": {\"leaderFocus\": 1, \"campaignEdge\": 2.0, \"heroModel\": 1, \"noChase\": 2, \"magicFocus\": 1, \"skillChoice\": 1, \"heroChoice\": 1, \"artifactCare\": 1}}"
+ ],
+ "jobs": 6
+}
