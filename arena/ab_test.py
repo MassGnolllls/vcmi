@@ -102,6 +102,7 @@ def main() -> int:
     ap.add_argument("--ai", default="FairAI")
     ap.add_argument("--opponent", default="Nullkiller2")
     ap.add_argument("--summary-only", action="store_true", help="only rewrite ab_summary.md from existing runs")
+    ap.add_argument("--keep-existing", action="store_true", help="do not replay a config/seed that already has results (add configs to an earlier test)")
     args, play_args = ap.parse_known_args()
     configs = json.loads(args.configs)
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
@@ -110,6 +111,10 @@ def main() -> int:
     if not args.summary_only:
         for seed in seeds:
             for name, params in configs.items():
+                done = out / f"{name}-s{seed}" / "results.jsonl"
+                if args.keep_existing and done.exists() and done.stat().st_size > 0:
+                    print(f"keeping {name}-s{seed}", flush=True)
+                    continue
                 cmd = [sys.executable, str(HERE / "run_tournament.py"), "play", "--client", args.client,
                        "--ai", args.ai, "--opponent", args.opponent, "--jobs", str(args.jobs), "--seed", str(seed),
                        "--out", str(out / f"{name}-s{seed}"), *play_args]

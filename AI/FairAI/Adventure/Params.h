@@ -35,7 +35,7 @@ struct Params
 	double unlockFactor = 0.7;         ///< share of the value behind a guard credited to beating it
 	double guardFogFactor = 0.0;       ///< share of the unexplored land around a guard credited to beating it
 	int unlockDirect = 0;              ///< what a guard blocks counts from the guard's place (where the hero stands after the fight), not from where the hero is now. Off until a test shows a gain
-	double regionValue = 0;            ///< main hero: unexplored land behind a guard is a new region (mines, treasures, perhaps a town): worth this much early on, fading like exploration. 0: only the strip the first step reveals counts
+	double regionValue = 0;            ///< main hero: unexplored land behind a guard is a new region (early: mines, treasures, perhaps a town; late: where the enemy lives): beating the guard is worth this much more. 0: only the strip the first step reveals counts
 
 	// --- enemy heroes
 	double threatRadius = 16;          ///< tiles an enemy hero may cover until our next turn
@@ -70,6 +70,7 @@ struct Params
 	double explorationTileValue = 36;  ///< gold per newly revealed tile (decays over the game)
 	double staleTileWeight = 0.3;      ///< tiles hidden again (Cover of Darkness) vs never seen
 	int maxTravelTurns = 4;            ///< targets further away are ignored
+	int mainHorizon = 0;               ///< main hero: targets and unexplored land up to this many days away count (0: maxTravelTurns / exploreMaxTurns). Off until a test shows a gain
 	int exploreMaxTurns = 4;           ///< exploration targets at most this many days away
 	int collectorsTakeGarrison = 1;    ///< collectors pick up garrison troops to ferry them
 	double huntFactor = 2.0;           ///< exploration bonus for the main hero while the enemy town is unknown

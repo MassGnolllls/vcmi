@@ -9,7 +9,7 @@
   "--jobs",
   "{jobs}",
   "--configs",
-  "{\"base\": {}, \"old\": {\"incomeHorizonDays\": 14, \"earlyGoldDays\": 0}, \"contact\": {\"earlyGoldContact\": 1}, \"all\": {\"fetchByShare\": 1, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"unlockDirect\": 1, \"regionValue\": 8000}}",
+  "{\"base\": {}, \"old\": {\"incomeHorizonDays\": 14, \"earlyGoldDays\": 0}, \"contact\": {\"earlyGoldContact\": 1}, \"all\": {\"fetchByShare\": 1, \"leaderFocus\": 1, \"noChase\": 1, \"heroModel\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12}}",
   "--seeds",
   "42,43",
   "--map-filter",

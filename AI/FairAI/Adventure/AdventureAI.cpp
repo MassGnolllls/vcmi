@@ -256,6 +256,7 @@ void Params::loadOverrides(int playerIndex)
 	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
 	read("regionValue", regionValue);
+	read("mainHorizon", mainHorizon);
 	read("minSafetyRatio", minSafetyRatio);
 	read("exploreMaxTurns", exploreMaxTurns);
 	read("huntFactor", huntFactor);
@@ -356,6 +357,10 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 	// on campaign the main hero may march on a far town; couriers may follow it for a week to hand over troops
 	if(campaign(hero))
 		return std::max(params.maxTravelTurns, 30);
+	// the main hero looks further than a few days (mainHorizon): a guard that bars the way out of our
+	// corner of the map may stand a week's march from where the hero happens to be
+	if(isMain(hero) && params.mainHorizon > params.maxTravelTurns)
+		return params.mainHorizon;
 	return params.leaderFocus && params.couriers && !isMain(hero) ? std::max(params.maxTravelTurns, 8) : params.maxTravelTurns;
 }
 
@@ -2241,7 +2246,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	const int3 heroPos = hero->visitablePos();
 	const int heroNum = hero->id.getNum();
 	const int horizon = travelHorizon(hero);
-	const int exploreHorizon = campaign(hero) ? horizon : params.exploreMaxTurns;
+	const int exploreHorizon = campaign(hero) || (isMain(hero) && params.mainHorizon > params.exploreMaxTurns) ? horizon : params.exploreMaxTurns;
 
 	auto reachable = [&](const CPathsInfo & p, const int3 & tile) -> const CGPathNode *
 	{
@@ -2388,11 +2393,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	{
 		int3 town;
 		double value = 0;
-		int3 tile{-1, -1, -1};
-		double cost = 0;
-		double left = 1e9; ///< tiles from `tile` to the town
 	};
-	std::vector<Approach> approach;
+	std::vector<Approach> approach; ///< enemy towns we know of but cannot find a way to (campaign)
 	std::map<std::string, int> rejected; // diagnostics
 
 	// ---- objects other than monsters
@@ -2529,8 +2531,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		else if(campaign(hero) && object.type == Obj::TOWN && isEnemy(object.owner) && object.visitablePos.z == heroPos.z)
 		{
-			// an enemy town we know of but cannot find a way to (the land around it is hidden again):
-			// march to the nearest place we can reach, the way shows itself from there
+			// an enemy town we know of but cannot find a way to (the land around it is hidden, or the
+			// way leads around something): exploring is drawn towards it
 			approach.push_back({object.visitablePos, value});
 		}
 	}
@@ -2580,23 +2582,16 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					const CGPathNode * free = normal ? nullptr : reachable(freePaths, tile);
 					if(!normal && !(free && free->turns <= exploreHorizon && free->action == EPathNodeAction::NORMAL))
 						continue;
-					if(normal && !approach.empty())
-					{
-						for(auto & a : approach)
-						{
-							const double left = tile.z == a.town.z ? tile.dist2d(a.town) : 1e9;
-							if(left < a.left && !unsafe(node, ObjectInstanceID()))
-							{
-								a.left = left;
-								a.tile = tile;
-								a.cost = node->cost;
-							}
-						}
-					}
 					double reveal = grid.count(tile, radius);
 					if(reveal < 4)
 						continue;
 					double value = reveal * tileValue;
+					// an enemy town we know of but have no way to: uncovering the land around it is how the way is found
+					for(const auto & a : approach)
+					{
+						if(tile.z == a.town.z)
+							value *= 1.0 + 4.0 * std::max(0.0, 1.0 - tile.dist2d(a.town) / 24.0);
+					}
 					if(normal)
 					{
 						if(unsafe(node, ObjectInstanceID()))
@@ -2625,12 +2620,6 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		if(bestExplore.score > 0)
 			addTarget(bestExplore.tile, ObjectInstanceID(), bestExplore.value, 0, bestExplore.travel, "explore");
-		for(const auto & a : approach)
-		{
-			// half the town's value: what stands in the way from there on is unknown; the rest of the way at about 15 tiles a day
-			if(a.tile.isValid() && a.left < heroPos.dist2d(a.town) - 1.0)
-				addTarget(a.tile, ObjectInstanceID(), 0.5 * a.value, 0, a.cost + a.left / 15.0, "approach");
-		}
 		for(const auto & [guard, value] : behindGuard)
 		{
 			unlockValue[guard] += value;
@@ -2644,8 +2633,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			{
 				if(tiles >= 30)
 				{
-					unlockValue[guard] += params.regionValue * decay * std::min(1.0, tiles / 60.0);
-					strategicUnlock[guard] += params.regionValue * decay * std::min(1.0, tiles / 60.0);
+					// no fading with the days: early it is mines and treasure, late it is where the enemy lives
+					unlockValue[guard] += params.regionValue * std::min(1.0, tiles / 60.0);
+					strategicUnlock[guard] += params.regionValue * std::min(1.0, tiles / 60.0);
 				}
 			}
 		}
@@ -2728,8 +2718,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 	if(guardLog)
 	{
-		logAi->debug("FairAI %s day %d: %s (strength %.0f) guards in reach:%s", me.toString(), today, hero->getNameTranslated(), ownStrength,
-			guardLines.empty() ? " none" : guardLines);
+		std::string reasons;
+		for(const auto & [why, count] : rejected)
+			reasons += " " + why + "=" + std::to_string(count);
+		logAi->debug("FairAI %s day %d: %s (strength %.0f) guards in reach:%s; left aside:%s", me.toString(), today, hero->getNameTranslated(), ownStrength,
+			guardLines.empty() ? " none" : guardLines, reasons.empty() ? " nothing" : reasons);
 		guardLogDay = today;
 	}
 	if(!forecastLines.empty())
