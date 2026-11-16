@@ -30,9 +30,10 @@ def main() -> int:
         if day == 0:
             continue
         d = info[day]
-        m = re.search(rf"{tag}: (\S+) -> (\w+)(?: (\d+))? \((\d+) (\d+) (\d+)\) value (\d+) loss (\d+)", line)
+        m = re.search(rf"{tag}: (\S+) -> (\w+)(?: (\d+))?(?: (own|enemy))? \((\d+) (\d+) (\d+)\) value (\d+) loss (\d+)", line)
         if m:
-            d["targets"].append((m.group(1), m.group(2), m.group(3) or "", (m.group(4), m.group(5))))
+            # heroes: "34 own" (walking up to our own hero hands over troops) or "34 enemy" (a hunt)
+            d["targets"].append((m.group(1), m.group(2), (m.group(3) or "") + (" " + m.group(4) if m.group(4) else ""), (m.group(5), m.group(6))))
         if "battle at" in line and " attacks " in line:
             d["fights"] += 1
         m = re.search(rf"{tag}: (\S+) \(strength (\d+)\) has no target; weakest guard in reach (\d+);.*rejected:(.*)", line)

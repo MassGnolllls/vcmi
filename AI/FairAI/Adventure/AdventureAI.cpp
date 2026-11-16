@@ -3222,7 +3222,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				if(town && townNeed(town, hero) <= 0.2)
 					value *= (node->cost + params.travelOffset) / (2.0 * node->cost + params.travelOffset);
 			}
-			addTarget(object.visitablePos, id, value, loss, node->cost, "object " + std::to_string(object.type.getNum()));
+			// (heroes: whose - walking up to our own hero hands over troops, an enemy's is a hunt)
+			addTarget(object.visitablePos, id, value, loss, node->cost, "object " + std::to_string(object.type.getNum())
+				+ (object.type == Obj::HERO ? (object.owner == me ? " own" : " enemy") : ""));
 		}
 		else if(const CGPathNode * free = reachable(freePaths, object.visitablePos))
 		{
