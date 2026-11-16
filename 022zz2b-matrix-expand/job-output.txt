@@ -430,3 +430,15 @@ match   11 FairAI as blue,green of 4: timeout winner= day=61 score=0.27 [122.1s]
 - no decided games
 - cheat flags raised: 0
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/8705a06119/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2b-matrix-expand/m-ffa-4p/h3-s42 --pool mix1-m-ffa-4p --max-days 60 --timeout 1800 --stall-seconds 180 --base-port 7300 --ai-params {"heroesWeek1": 3, "heroesWeek3": 4, "heroesLater": 6, "collectorsRoam": 2}
+playing 12 matches on 6 maps with 6 parallel job(s)
+match    5 FairAI as blue,green of 4: timeout winner= day=61 score=0.30 [70.5s]
+match    4 FairAI as red,tan of 4: timeout winner= day=61 score=0.39 [78.1s]
+match    3 FairAI as blue,green of 4: timeout winner= day=61 score=0.22 [92.0s]
+match    0 FairAI as red,tan of 4: timeout winner= day=61 score=0.26 [95.2s]
+match    2 FairAI as red,tan of 4: victory winner=blue day=59 score=0.00 [106.5s]
+match    8 FairAI as red,tan of 4: victory winner=red day=49 score=1.00 [29.8s]
+match    9 FairAI as blue,green of 4: timeout winner= day=61 score=0.00 [68.5s]
+match   10 FairAI as red,tan of 4: timeout winner= day=61 score=0.69 [57.2s]
+match    6 FairAI as red,tan of 4: timeout winner= day=61 score=0.00 [106.3s]
+match    7 FairAI as blue,green of 4: timeout winner= day=61 score=0.00 [112.2s]
+match   11 FairAI as blue,green of 4: timeout winner= day=61 score=0.50 [101.3s]
