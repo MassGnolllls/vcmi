@@ -1,0 +1,2 @@
+{"note": "arena maps 2000-2029",
+ "script": "run_tournament.py", "args": ["genmaps", "--client", "{client}", "--count", "30", "--seed", "2000"]}

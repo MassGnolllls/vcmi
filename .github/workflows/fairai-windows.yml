@@ -6,6 +6,10 @@ on:
   push:
     branches:
       - fairai
+    paths-ignore:
+      - 'arena/jobs/**'
+      - 'arena/worker/**'
+      - '**.md'
   workflow_dispatch:
 
 concurrency:

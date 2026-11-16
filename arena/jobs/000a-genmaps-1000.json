@@ -1,0 +1,2 @@
+{"note": "arena maps 1000-1005 (same seeds as the cloud machine)",
+ "script": "run_tournament.py", "args": ["genmaps", "--client", "{client}", "--count", "6", "--seed", "1000"]}
