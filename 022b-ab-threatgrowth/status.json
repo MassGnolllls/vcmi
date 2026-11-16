@@ -1,0 +1,9 @@
+{
+ "job": "022b-ab-threatgrowth",
+ "state": "running",
+ "commit": "fdaed664cb538bed96d5ba4ba6fa052eafe1642a",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T13:12:52",
+ "note": "enemy heroes not seen for a while assumed 15%/day stronger vs not; 2x72 paired games, day 45"
+}
