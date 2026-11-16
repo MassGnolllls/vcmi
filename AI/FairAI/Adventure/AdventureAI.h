@@ -215,6 +215,10 @@ private:
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Upgrades the hero's creatures in the town it visits
 	void upgradeArmy(const CGHeroInstance * hero);
+	/// single creatures split off the cheapest stacks into free slots: they take retaliations and block
+	/// in battle (the combat search knows how to use them); merged back before troops are exchanged
+	void arrangeBaits(const CGHeroInstance * hero);
+	void mergeBaits(const CGHeroInstance * hero);
 	/// Leaves the weakest stacks in the town while enemy heroes are about
 	void leaveGarrison(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Moves the strongest stacks from `source` to `destination` (keeps one unit on a source hero)

@@ -193,6 +193,7 @@ void Params::loadOverrides(int playerIndex)
 	read("pathThreats", pathThreats);
 	read("townGuard", townGuard);
 	read("siegeCost", siegeCost);
+	read("baitStacks", baitStacks);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -419,6 +420,14 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			gateway.waitTillFree();
 			hero = ownHero(heroId);
 			if(!hero || hero->isGarrisoned())
+				return;
+		}
+
+		if(isMain(hero) && !hero->getVisitedTown())
+		{
+			arrangeBaits(hero);
+			hero = ownHero(heroId);
+			if(!hero)
 				return;
 		}
 
@@ -1365,6 +1374,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(const CGPathNode * node = reachable(paths, object.visitablePos))
 		{
 			double danger = guardDanger(object.visitablePos);
+			ObjectInstanceID siegedTown; // attacking this tile means a siege (a hero in a town gate, too)
 			if((object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner != me)
 			{
 				// everything defending this tile: heroes (with their skills) and a town behind walls
@@ -1380,6 +1390,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					{
 						defenders += observedDanger(other);
 						town = true;
+						siegedTown = otherId;
 					}
 				}
 				danger += town ? defenders * params.wallsFactor : defenders;
@@ -1392,10 +1403,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				++rejected["too strong"];
 				continue;
 			}
-			if(object.type == Obj::TOWN && object.owner != me && !desperate)
+			if(siegedTown.hasValue() && !desperate)
 			{
 				// moat and arrow towers take their share before the walls fall
-				auto fort = townFortLevel.find(id);
+				auto fort = townFortLevel.find(siegedTown);
 				const double overhead = fort != townFortLevel.end() ? siegeOverhead(hero, fort->second) : 0;
 				if(overhead > 0)
 				{
@@ -1917,6 +1928,79 @@ void AdventureAI::leaveGarrison(const CGHeroInstance * hero, const CGTownInstanc
 	}
 }
 
+void AdventureAI::mergeBaits(const CGHeroInstance * hero)
+{
+	if(params.baitStacks <= 0)
+		return;
+	for(int guard = 0; guard < GameConstants::ARMY_SIZE && hero; ++guard)
+	{
+		SlotID single;
+		SlotID target;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(!stack || stack->getCount() != 1)
+				continue;
+			for(const auto & [other, otherStack] : hero->Slots())
+			{
+				if(other != slot && otherStack && otherStack->getCreature() == stack->getCreature())
+				{
+					single = slot;
+					target = other;
+					break;
+				}
+			}
+			if(single.validSlot())
+				break;
+		}
+		if(!single.validSlot())
+			return;
+		cb->mergeStacks(hero, hero, single, target);
+		gateway.waitTillFree();
+		hero = ownHero(hero->id);
+	}
+}
+
+void AdventureAI::arrangeBaits(const CGHeroInstance * hero)
+{
+	if(params.baitStacks <= 0 || !hero)
+		return;
+	int singles = 0;
+	const CStackInstance * cheapest = nullptr;
+	SlotID cheapestSlot;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		if(stack->getCount() == 1)
+			++singles;
+		else if(stack->getCount() >= 3 + params.baitStacks)
+		{
+			const auto * type = stack->getCreature();
+			if(!cheapest || type->getAIValue() < cheapest->getCreature()->getAIValue()
+				|| (type->getAIValue() == cheapest->getCreature()->getAIValue() && type->getMovementRange() > cheapest->getCreature()->getMovementRange()))
+			{
+				cheapest = stack.get();
+				cheapestSlot = slot;
+			}
+		}
+	}
+	for(int wanted = params.baitStacks - singles; wanted > 0 && cheapest; --wanted)
+	{
+		const SlotID free = hero->getFreeSlot();
+		if(!free.validSlot())
+			return;
+		logAi->debug("FairAI %s: %s splits off one %s as bait", me.toString(), hero->getNameTranslated(), cheapest->getCreature()->getNameSingularTranslated());
+		cb->splitStack(hero, hero, cheapestSlot, free, 1);
+		gateway.waitTillFree();
+		hero = ownHero(hero->id);
+		if(!hero)
+			return;
+		cheapest = hero->getStackPtr(cheapestSlot);
+		if(!cheapest || cheapest->getCount() < 3)
+			return;
+	}
+}
+
 void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town)
 {
 	if(!hero || !town || town->tempOwner != me)
@@ -1924,6 +2008,10 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 	const bool main = isMain(hero);
 	if(main)
 	{
+		mergeBaits(hero);
+		hero = ownHero(hero->id);
+		if(!hero)
+			return;
 		recruitInTown(town, hero, 0);
 		pickBestCreatures(hero, town);
 		const CGHeroInstance * garrisoned = town->getGarrisonHero();

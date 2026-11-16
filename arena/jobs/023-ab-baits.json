@@ -1,0 +1,27 @@
+{
+ "note": "main hero keeps 1 or 2 single-creature bait stacks vs none; 2x72 paired games each, day 45",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"bait2\": {\"baitStacks\": 2}, \"bait1\": {\"baitStacks\": 1}}",
+  "--seeds",
+  "42,43",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

@@ -72,6 +72,7 @@ struct Params
 	int tavernArmies = 1;              ///< spend surplus gold on tavern heroes' starting armies
 	int collectorsRoam = 1;            ///< how many secondary heroes roam; the others guard towns from the garrison
 	int keepGarrison = 1;              ///< heroes leave the weakest stack in a town they take troops from
+	int baitStacks = 0;                ///< main hero keeps this many single creatures of its cheapest troops (retaliation bait, blockers)
 
 	/// Apply overrides from the arena settings for this player (no-op in normal games)
 	void loadOverrides(int playerIndex);
