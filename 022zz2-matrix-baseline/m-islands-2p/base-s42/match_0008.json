@@ -1,0 +1,61 @@
+{
+	"cheatsAllowed" : false,
+	"day" : 52,
+	"difficulty" : "king",
+	"endEvents" : [
+		{
+			"day" : 52,
+			"player" : "red",
+			"victory" : false
+		}
+	],
+	"lastTurnOf" : "red",
+	"lastTurnOfAI" : "FairAI",
+	"map" : "MAPS/MIX1-M-ISLANDS-2P/2SM4D_M_L1_ISLANDS_21404",
+	"outcome" : "victory",
+	"players" : {
+		"blue" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 196908,
+			"cheated" : false,
+			"faction" : "core:tower",
+			"gold" : 27565,
+			"heroes" : 8,
+			"income" : 11350,
+			"mapExploredRatio" : 0.458571,
+			"maxHeroLevel" : 13,
+			"mines" : 9,
+			"numberArtifacts" : 26,
+			"numberDwellings" : 1,
+			"score" : 388,
+			"status" : "ingame",
+			"team" : 1,
+			"totalExperience" : 27884,
+			"townBuiltRatio" : 0.490196,
+			"towns" : 4
+		},
+		"red" : {
+			"ai" : "FairAI",
+			"armyStrength" : 30071,
+			"cheated" : false,
+			"faction" : "core:tower",
+			"gold" : 2470,
+			"heroes" : 1,
+			"income" : 0,
+			"mapExploredRatio" : 0.255429,
+			"maxHeroLevel" : 3,
+			"mines" : 1,
+			"numberArtifacts" : 4,
+			"numberDwellings" : 0,
+			"score" : 376,
+			"status" : "loser",
+			"team" : 0,
+			"totalExperience" : 2676,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		}
+	},
+	"seed" : 590620972,
+	"wallTimeSec" : 59.3391,
+	"winner" : "blue"
+}

@@ -1,0 +1,111 @@
+{
+	"cheatsAllowed" : false,
+	"day" : 45,
+	"difficulty" : "king",
+	"endEvents" : [
+		{
+			"day" : 10,
+			"player" : "tan",
+			"victory" : false
+		},
+		{
+			"day" : 18,
+			"player" : "green",
+			"victory" : false
+		},
+		{
+			"day" : 45,
+			"player" : "red",
+			"victory" : false
+		}
+	],
+	"lastTurnOf" : "blue",
+	"lastTurnOfAI" : "Nullkiller2",
+	"map" : "MAPS/MIX1-S-RING-FFA-4P/SMALLRING_S_L1_NONE_P4_21102",
+	"outcome" : "victory",
+	"players" : {
+		"blue" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 228625,
+			"cheated" : false,
+			"faction" : "core:castle",
+			"gold" : 95240,
+			"heroes" : 8,
+			"income" : 13500,
+			"mapExploredRatio" : 1,
+			"maxHeroLevel" : 7,
+			"mines" : 17,
+			"numberArtifacts" : 18,
+			"numberDwellings" : 0,
+			"score" : 442,
+			"status" : "ingame",
+			"team" : 1,
+			"totalExperience" : 12347,
+			"townBuiltRatio" : 0.311688,
+			"towns" : 8
+		},
+		"green" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 0,
+			"cheated" : false,
+			"faction" : "core:conflux",
+			"gold" : 12840,
+			"heroes" : 0,
+			"income" : 0,
+			"mapExploredRatio" : 0.368209,
+			"maxHeroLevel" : 0,
+			"mines" : 0,
+			"numberArtifacts" : 0,
+			"numberDwellings" : 0,
+			"score" : 378,
+			"status" : "loser",
+			"team" : 3,
+			"totalExperience" : 0,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		},
+		"red" : {
+			"ai" : "FairAI",
+			"armyStrength" : 0,
+			"cheated" : false,
+			"faction" : "core:tower",
+			"gold" : 5275,
+			"heroes" : 0,
+			"income" : 0,
+			"mapExploredRatio" : 0.55332,
+			"maxHeroLevel" : 0,
+			"mines" : 1,
+			"numberArtifacts" : 0,
+			"numberDwellings" : 0,
+			"score" : 378,
+			"status" : "loser",
+			"team" : 0,
+			"totalExperience" : 0,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		},
+		"tan" : {
+			"ai" : "FairAI",
+			"armyStrength" : 0,
+			"cheated" : false,
+			"faction" : "core:castle",
+			"gold" : 6910,
+			"heroes" : 0,
+			"income" : 0,
+			"mapExploredRatio" : 0.179074,
+			"maxHeroLevel" : 0,
+			"mines" : 0,
+			"numberArtifacts" : 0,
+			"numberDwellings" : 0,
+			"score" : 378,
+			"status" : "loser",
+			"team" : 2,
+			"totalExperience" : 0,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		}
+	},
+	"seed" : 53710185,
+	"wallTimeSec" : 34.6276,
+	"winner" : "blue"
+}
