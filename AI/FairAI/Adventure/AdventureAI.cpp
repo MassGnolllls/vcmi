@@ -186,6 +186,7 @@ void Params::loadOverrides(int playerIndex)
 	read("defenceWallsCitadel", defenceWallsCitadel);
 	read("fleeGain", fleeGain);
 	read("antiOscillation", antiOscillation);
+	read("boats", boats);
 	read("townDefenceValue", townDefenceValue);
 	read("retreatValue", retreatValue);
 	read("collectorRadius", collectorRadius);
@@ -229,6 +230,16 @@ AdventureAI::AdventureAI(FairAIGateway & gateway, std::shared_ptr<CCallback> cb,
 }
 
 AdventureAI::~AdventureAI() = default;
+
+ResourceSet AdventureAI::spendable() const
+{
+	ResourceSet stock = cb->getResourceAmount();
+	if(today - earmarkDay > 3)
+		return stock;
+	for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+		stock[res] = std::max<TResource>(0, stock[res] - earmark[res]);
+	return stock;
+}
 
 bool AdventureAI::isEnemy(PlayerColor owner) const
 {
@@ -280,8 +291,8 @@ std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * her
 	auto result = std::make_shared<CPathsInfo>(cb->getMapSize(), hero);
 	auto config = std::make_shared<SingleHeroPathfinderConfig>(*result, *cb, hero);
 	config->options.ignoreGuards = ignoreGuards;
-	// land only (no boats); monoliths and gates whose exits we know
-	config->options.useEmbarkAndDisembark = false;
+	// boats we can see and board; monoliths and gates whose exits we know
+	config->options.useEmbarkAndDisembark = params.boats != 0;
 	config->options.useTeleportTwoWay = true;
 	config->options.useTeleportOneWay = true;
 	config->options.useTeleportOneWayRandom = false;
@@ -425,6 +436,7 @@ void AdventureAI::playTurn()
 void AdventureAI::playHero(ObjectInstanceID heroId)
 {
 	int failures = 0;
+	int boatAttempts = 0;
 	struct EndOfDayLog
 	{
 		AdventureAI & ai;
@@ -474,6 +486,17 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		auto paths = computePaths(hero, false);
 		auto freePaths = computePaths(hero, true);
 		auto targets = collectTargets(hero, *paths, *freePaths);
+		{
+			// nothing worth doing on this landmass: the sea is the way on
+			bool somethingToDo = false;
+			for(const auto & t : targets)
+				somethingToDo = somethingToDo || (t.description != "retreat" && t.description != "flee");
+			if(!somethingToDo && boatAttempts < 2 && seekBoat(hero, *paths, targets))
+			{
+				++boatAttempts;
+				continue; // a boat is waiting: plan again
+			}
+		}
 		if(targets.empty() && isMain(hero) && !hero->getVisitedTown())
 		{
 			// nothing to do: wait in the nearest own town, where garrison and walls help
@@ -625,6 +648,100 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		if(const auto * town = hero->getVisitedTown())
 			manageTownVisit(hero, town);
 	}
+}
+
+bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets)
+{
+	if(!params.boats || hero->inBoat())
+		return false;
+	// the hero that carries the game (and scouts) goes to sea; collectors stay with their towns
+	if(!isMain(hero) && !scoutsToday.count(hero->id))
+		return false;
+	{
+		// only while a good part of the map is still unknown
+		const int3 size = cb->getMapSize();
+		int hidden = 0;
+		for(int z = 0; z < size.z; ++z)
+			for(int x = 0; x < size.x; ++x)
+				for(int y = 0; y < size.y; ++y)
+					hidden += cb->isVisible(int3(x, y, z)) ? 0 : 1;
+		if(hidden * 20 < size.x * size.y * size.z)
+			return false;
+	}
+	seaWanted = true;
+	auto affordable = [this](const IShipyard * yard)
+	{
+		ResourceSet cost;
+		yard->getBoatCost(cost);
+		if(cb->getResourceAmount().canAfford(cost))
+			return true;
+		// put the price aside from now on (towns stop spending it) and trade for missing wood
+		earmark = cost;
+		earmarkDay = today;
+		return buyResourcesFor(nullptr, cost, true) && cb->getResourceAmount().canAfford(cost);
+	};
+	auto buy = [&](const IShipyard * yard, const std::string & where)
+	{
+		logAi->info("FairAI %s day %d: %s has run out of land, buying a boat at %s", me.toString(), today, hero->getNameTranslated(), where);
+		cb->buildBoat(yard);
+		lastBoatDay = today;
+		earmarkDay = -100;
+		return true;
+	};
+	if(today - lastBoatDay >= 2)
+	{
+		// a town's shipyard sells from the town screen, wherever our heroes are; the boat must be in this hero's reach
+		for(const auto * town : perception.ownTowns())
+		{
+			if(!town->hasBuilt(BuildingID::SHIPYARD) || town->shipyardStatus() != IBoatGenerator::GOOD || !affordable(town))
+				continue;
+			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+			if(hero->getVisitedTown() == town || (node && node->reachable() && node->turns <= params.maxTravelTurns))
+				return buy(town, town->getNameTranslated());
+		}
+		// a shipyard on the map sells to the hero standing at it
+		for(const auto * object : cb->getVisitableObjs(hero->visitablePos(), false))
+		{
+			const auto * yard = object->ID == Obj::SHIPYARD ? dynamic_cast<const IShipyard *>(object) : nullptr;
+			if(yard && yard->shipyardStatus() == IBoatGenerator::GOOD && affordable(yard))
+				return buy(yard, "the shipyard at " + hero->visitablePos().toString());
+		}
+	}
+	// otherwise walk to the nearest shipyard we know
+	const CGPathNode * bestNode = nullptr;
+	ObjectInstanceID bestId;
+	int3 bestTile;
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type != Obj::SHIPYARD || object.visitablePos == hero->visitablePos() || failedToday.count({hero->id.getNum(), object.visitablePos}))
+			continue;
+		const CGPathNode * node = paths.getPathInfo(object.visitablePos);
+		if(!node || !node->reachable() || node->turns > params.maxTravelTurns)
+			continue;
+		if(!bestNode || node->cost < bestNode->cost)
+		{
+			bestNode = node;
+			bestId = id;
+			bestTile = object.visitablePos;
+		}
+	}
+	if(bestNode)
+	{
+		Target t;
+		t.tile = bestTile;
+		t.object = bestId;
+		t.value = 1500;
+		t.travel = bestNode->cost;
+		t.score = t.value / (t.travel + params.travelOffset);
+		t.description = "shipyard";
+		targets.push_back(t);
+		if(const auto * yard = dynamic_cast<const IShipyard *>(perception.visibleObject(bestId)))
+		{
+			yard->getBoatCost(earmark);
+			earmarkDay = today;
+		}
+	}
+	return false;
 }
 
 bool AdventureAI::stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths)
@@ -1092,7 +1209,7 @@ double AdventureAI::townNeed(const CGTownInstance * town, const CGHeroInstance *
 	if(const auto * visitor = town->getVisitingHero(); visitor && visitor != mainHero && visitor->tempOwner == me)
 		local += static_cast<double>(visitor->getArmyStrength());
 	// troops still for sale are bought when the enemy shows up (defendTowns)
-	local += static_cast<double>(recruitableValue(town, cb->getResourceAmount(GameResID::GOLD)));
+	local += static_cast<double>(recruitableValue(town, spendable()[GameResID::GOLD]));
 	local *= defenceWalls(town);
 	if(threat <= local)
 		return 0;
@@ -1149,7 +1266,7 @@ double AdventureAI::townTroops(const CGTownInstance * town, const CGHeroInstance
 	// troops recruited while a hero guards the garrison sit in that hero's army
 	if(const auto * guard = town->getGarrisonHero(); guard && guard != hero && guard->tempOwner == me)
 		troops += transferableValue(guard);
-	troops += recruitableValue(town, cb->getResourceAmount(GameResID::GOLD));
+	troops += recruitableValue(town, spendable()[GameResID::GOLD]);
 	return troops;
 }
 
@@ -1199,6 +1316,12 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 	}
 	case Obj::CAMPFIRE:
 		return 500 + 5 * resourceValue(GameResID::MERCURY);
+	case Obj::FLOTSAM:
+		return 400;
+	case Obj::SEA_CHEST:
+		return 900;
+	case Obj::SHIPWRECK_SURVIVOR:
+		return 1500;
 	case Obj::TREASURE_CHEST:
 		return main ? 1500 : 1300;
 	case Obj::SCHOLAR:
@@ -1287,7 +1410,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		return visitedByHero() ? 0 : 2 * primary;
 	case Obj::SCHOOL_OF_MAGIC:
 	case Obj::SCHOOL_OF_WAR:
-		if(visitedByHero() || !main || cb->getResourceAmount(GameResID::GOLD) < 3000)
+		if(visitedByHero() || !main || spendable()[GameResID::GOLD] < 3000)
 			return 0;
 		return 2 * primary - 1000;
 	case Obj::WITCH_HUT:
@@ -1864,7 +1987,7 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 			continue;
 		CreatureID creature = entry.second.back();
 		const CCreature * type = creature.toCreature();
-		ResourceSet available = cb->getResourceAmount();
+		ResourceSet available = spendable();
 		int amount = static_cast<int>(entry.first);
 		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
 		{
@@ -2017,7 +2140,7 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 			continue;
 		CreatureID creature = entry.second.back();
 		const CCreature * type = creature.toCreature();
-		ResourceSet available = cb->getResourceAmount();
+		ResourceSet available = spendable();
 		available[GameResID::GOLD] = std::max<int64_t>(0, available[GameResID::GOLD] - goldReserve);
 		int amount = static_cast<int>(entry.first);
 		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
@@ -2174,7 +2297,7 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 			pickBestCreatures(hero, garrisoned);
 		leaveGarrison(hero, town);
 		if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1)
-			&& cb->getResourceAmount(GameResID::GOLD) >= GameConstants::SPELLBOOK_GOLD_COST + 500)
+			&& spendable()[GameResID::GOLD] >= GameConstants::SPELLBOOK_GOLD_COST + 500)
 		{
 			cb->buyArtifact(hero, ArtifactID::SPELLBOOK);
 		}
@@ -2187,7 +2310,7 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 			{
 				const int price = static_cast<int>(machine.toArtifact()->getPrice());
 				const int64_t reserve = economy.rho > 1.5 ? 500 : 3000;
-				if(cb->getResourceAmount(GameResID::GOLD) >= price + reserve)
+				if(spendable()[GameResID::GOLD] >= price + reserve)
 					cb->buyArtifact(hero, machine);
 			}
 		}
@@ -2220,7 +2343,7 @@ void AdventureAI::updateEconomy()
 		if(object.type == Obj::MINE && object.owner == me && object.subtype.getNum() == GameResID::GOLD)
 			e.weeklyIncome += 7000;
 	}
-	const double stock = cb->getResourceAmount(GameResID::GOLD);
+	const double stock = spendable()[GameResID::GOLD];
 	e.rho = (e.weeklyIncome + 0.5 * stock) / std::max(500.0, e.weeklyRecruitCost);
 	e.armyPremium = std::clamp(e.rho, 1.0, 4.0);
 	e.goldWeight = 1.0 / e.armyPremium;
@@ -2247,7 +2370,7 @@ void AdventureAI::upgradeArmy(const CGHeroInstance * hero)
 				continue;
 			CreatureID upgrade = info.getUpgrade();
 			ResourceSet cost = info.getUpgradeCosts() * stack->getCount();
-			ResourceSet have = cb->getResourceAmount();
+			ResourceSet have = spendable();
 			have[GameResID::GOLD] -= reserve;
 			if(!have.canAfford(cost))
 				continue;
@@ -2384,7 +2507,9 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 	}
 	else if(id == BuildingID::BLACKSMITH)
 		value += 200;
-	else if(id == BuildingID::SHIPYARD || id == BuildingID::SHIP)
+	else if(id == BuildingID::SHIPYARD)
+		value += seaWanted && params.boats ? 6000 : 0;
+	else if(id == BuildingID::SHIP)
 		value += 0;
 	else if(value <= 0)
 		value += 100;
@@ -2395,7 +2520,7 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 void AdventureAI::buildInTown(const CGTownInstance * town)
 {
 	const CTown * info = town->getTown();
-	const ResourceSet have = cb->getResourceAmount();
+	const ResourceSet have = spendable();
 	// When creatures, not gold, are the bottleneck, gold is cheap: income is worth less and gold
 	// costs hurt less, while dwellings are worth more. Rare resources keep their value.
 	const double goldWeight = economy.goldWeight;
@@ -2478,7 +2603,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 			ranked.front().score);
 	{
 		// remember what our most wanted buildings lack: heroes value those resources more
-		const ResourceSet have = cb->getResourceAmount();
+		const ResourceSet have = spendable();
 		int counted = 0;
 		for(const auto & option : ranked)
 		{
@@ -2506,6 +2631,8 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 			return;
 		if(option.state == EBuildingState::NO_RESOURCES && !buyResourcesFor(town, info->buildings.at(option.build)->resources))
 			continue;
+		if(!spendable().canAfford(info->buildings.at(option.build)->resources))
+			continue; // the rest is put aside (see earmark)
 		++attempts;
 		logAi->info("FairAI %s day %d: building %s in %s (for %s, score %.2f)", me.toString(), today,
 			info->buildings.at(option.build)->getNameTranslated(), town->getNameTranslated(), option.reason, option.score);
@@ -2516,7 +2643,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 	}
 }
 
-bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost)
+bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark)
 {
 	// any own town with a marketplace will do
 	const IMarket * market = nullptr;
@@ -2532,7 +2659,7 @@ bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet
 	if(!market)
 		return false;
 
-	ResourceSet have = cb->getResourceAmount();
+	ResourceSet have = forEarmark ? cb->getResourceAmount() : spendable();
 	// plan the purchase first: everything must be affordable with gold alone
 	int64_t goldNeeded = cost[GameResID::GOLD];
 	std::vector<std::pair<GameResID, int>> purchases;
@@ -2551,7 +2678,7 @@ bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet
 		goldNeeded += static_cast<int64_t>(lots) * give;
 		purchases.emplace_back(res, lots * give);
 	}
-	const int64_t reserve = 1000;
+	const int64_t reserve = forEarmark ? 0 : 1000;
 	if(purchases.empty() || goldNeeded + reserve > have[GameResID::GOLD])
 		return false;
 	for(const auto & [res, gold] : purchases)
@@ -2559,7 +2686,7 @@ bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet
 		logAi->info("FairAI %s day %d: buying %s for %d gold", me.toString(), today, res.toResource()->getJsonKey(), gold);
 		cb->trade(market->getObjInstanceID(), EMarketMode::RESOURCE_RESOURCE, GameResID(GameResID::GOLD), res, gold);
 	}
-	return cb->getResourceAmount().canAfford(cost);
+	return (forEarmark ? cb->getResourceAmount() : spendable()).canAfford(cost);
 }
 
 void AdventureAI::manageTowns(bool /*endOfTurn*/)
@@ -2578,7 +2705,7 @@ void AdventureAI::manageTowns(bool /*endOfTurn*/)
 void AdventureAI::hireHeroes()
 {
 	int wanted = (today <= 7 ? 2 : (today <= 21 ? 3 : 4)) + params.scouts;
-	if(economy.rho > 2 && cb->getResourceAmount(GameResID::GOLD) > 8000)
+	if(economy.rho > 2 && spendable()[GameResID::GOLD] > 8000)
 		wanted += 2;
 	// every lost hero feeds the enemy experience: after a loss only replace the minimum
 	if(today - lastHeroLossDay < 7)
@@ -2590,7 +2717,7 @@ void AdventureAI::hireHeroes()
 	{
 		if(static_cast<int>(perception.ownHeroes().size()) >= wanted)
 			return;
-		if(cb->getResourceAmount(GameResID::GOLD) < GameConstants::HERO_GOLD_COST + reserve)
+		if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + reserve)
 			return;
 		if(!town->hasBuilt(BuildingID::TAVERN))
 			continue;
@@ -2650,7 +2777,7 @@ void AdventureAI::buyTavernArmies()
 		for(int bought = 0; bought < 2; ++bought)
 		{
 			gateway.checkInterruption();
-			if(cb->getResourceAmount(GameResID::GOLD) < reserve || !town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero())
+			if(spendable()[GameResID::GOLD] < reserve || !town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero())
 				break;
 			auto offered = cb->getAvailableHeroes(town);
 			if(offered.empty())

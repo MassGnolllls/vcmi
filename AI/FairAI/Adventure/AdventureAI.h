@@ -27,6 +27,7 @@
 #pragma once
 
 #include "Params.h"
+#include "../../../lib/ResourceSet.h"
 
 #include "../../../lib/int3.h"
 #include "../../../lib/constants/EntityIdentifiers.h"
@@ -133,6 +134,16 @@ private:
 		int3 goal;             ///< the trip's target: the town does not call the hero back before it is reached
 	};
 	std::map<ObjectInstanceID, RoundTrip> roundTrip;
+	ResourceSet earmark;                                     ///< resources put aside for a planned purchase (a boat)
+	int earmarkDay = -100;                                   ///< day the earmark was (re)confirmed; it lapses after a few days
+	/// What towns and heroes may spend: our resources minus the earmark
+	ResourceSet spendable() const;
+	int lastBoatDay = -100;                                  ///< day we last bought a boat
+	bool seaWanted = false;                                  ///< a hero ran out of land: a town shipyard is worth building
+	/// A hero with nothing left to do on its landmass: buy a boat (own town with a shipyard, or the
+	/// shipyard the hero stands at - where a human could do the same) or head for a shipyard.
+	/// Returns true if a boat was bought (paths must be recomputed).
+	bool seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets);
 	std::map<ObjectInstanceID, double> townLeftover;         ///< own town -> troop value the main hero left behind on its last visit (not a reason to come back)
 	/// Troops the main hero could pick up in an own town: garrison, a garrison hero's army, creatures for sale
 	double townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const;
@@ -228,7 +239,7 @@ private:
 	void buildInTown(const CGTownInstance * town);
 	double buildingValue(const CGTownInstance * town, BuildingID building) const;
 	/// Buys the resources missing for `cost` with gold at a marketplace. True if `cost` is affordable now.
-	bool buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost);
+	bool buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark = false);
 	void recruitInTown(const CGTownInstance * town, const CArmedInstance * destination, int64_t goldReserve);
 	int64_t recruitableValue(const CGTownInstance * town, int64_t gold) const;
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);

@@ -81,6 +81,7 @@ struct Params
 	int collectorsRoam = 1;            ///< how many secondary heroes roam; the others guard towns from the garrison
 	int scouts = 0;                    ///< extra secondary heroes that explore beyond our territory (avoiding known threats)
 	int moveSpells = 1;                ///< paths may use Fly / Water Walk when the hero can cast them (cast on the way)
+	int boats = 1;                     ///< heroes board boats, buy one when they run out of land (town shipyard, or a shipyard they stand at) and sail
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
 
 	// --- combat (read by the battle AI of the same player)
