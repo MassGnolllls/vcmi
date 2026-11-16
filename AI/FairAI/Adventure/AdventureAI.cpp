@@ -194,6 +194,7 @@ void Params::loadOverrides(int playerIndex)
 	read("townGuard", townGuard);
 	read("siegeCost", siegeCost);
 	read("baitStacks", baitStacks);
+	read("scouts", scouts);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -330,6 +331,7 @@ void AdventureAI::playTurn()
 	hireHeroes();
 	chooseMainHero();
 
+	scoutsToday.clear();
 	std::vector<ObjectInstanceID> others;
 	for(const auto * hero : perception.ownHeroes())
 	{
@@ -351,7 +353,10 @@ void AdventureAI::playTurn()
 			logAi->warn("FairAI: turn time budget exhausted on day %d", today);
 			break;
 		}
-		if(roaming++ >= params.collectorsRoam)
+		const int role = roaming++;
+		if(role >= params.collectorsRoam && role < params.collectorsRoam + params.scouts)
+			scoutsToday.insert(id); // weakest roamers scout: they explore beyond our territory
+		else if(role >= params.collectorsRoam)
 		{
 			// secondary heroes guard towns from the garrison instead of roaming
 			const auto * hero = ownHero(id);
@@ -634,7 +639,7 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 	if(strength < danger * ratio)
 		return -1;
 	// Lanchester square law: survivors = sqrt(S^2 - D^2)
-	const double loss = strength - std::sqrt(strength * strength - danger * danger);
+	const double loss = strength - std::sqrt(std::max(0.0, strength * strength - danger * danger));
 	return loss * params.lossFactor * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
 }
 
@@ -1309,12 +1314,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		return node ? node->coord : int3(-1);
 	};
 	const bool cautious = !isMain(hero);
+	const bool scout = scoutsToday.count(hero->id) > 0;
 	auto unsafe = [&](const CGPathNode * node, ObjectInstanceID object) -> bool
 	{
 		int3 tile = node->coord;
 		int3 stop = stopTile(node);
-		// collectors are weak: they work close to home
-		if(cautious && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
+		// collectors are weak: they work close to home (scouts roam, but still avoid known enemies)
+		if(cautious && !scout && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
 			return true;
 		if(threats.empty())
 			return false;
@@ -2420,7 +2426,7 @@ void AdventureAI::manageTowns(bool /*endOfTurn*/)
 
 void AdventureAI::hireHeroes()
 {
-	int wanted = today <= 7 ? 2 : (today <= 21 ? 3 : 4);
+	int wanted = (today <= 7 ? 2 : (today <= 21 ? 3 : 4)) + params.scouts;
 	if(economy.rho > 2 && cb->getResourceAmount(GameResID::GOLD) > 8000)
 		wanted += 2;
 	// every lost hero feeds the enemy experience: after a loss only replace the minimum

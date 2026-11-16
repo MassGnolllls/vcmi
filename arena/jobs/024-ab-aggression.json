@@ -1,0 +1,27 @@
+{
+ "note": "guard fights at lower safety ratios (FairAI won 97% of its guard fights: too careful?); 2x72 paired games each, day 45",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"s115\": {\"safetyRatio\": 1.15, \"minSafetyRatio\": 1.0}, \"s100\": {\"safetyRatio\": 1.0, \"minSafetyRatio\": 0.9}}",
+  "--seeds",
+  "42,43",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

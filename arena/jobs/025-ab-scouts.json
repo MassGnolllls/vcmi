@@ -1,0 +1,27 @@
+{
+ "note": "1 or 2 extra scout heroes that explore beyond our territory vs none; 2x72 paired games each, day 45",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"scout1\": {\"scouts\": 1}, \"scout2\": {\"scouts\": 2}}",
+  "--seeds",
+  "42,43",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

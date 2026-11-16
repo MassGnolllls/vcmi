@@ -71,6 +71,7 @@ struct Params
 	double garrisonShare = 0.0;        ///< share of hero + garrison value left in a town while enemies are about
 	int tavernArmies = 1;              ///< spend surplus gold on tavern heroes' starting armies
 	int collectorsRoam = 1;            ///< how many secondary heroes roam; the others guard towns from the garrison
+	int scouts = 0;                    ///< extra secondary heroes that explore beyond our territory (avoiding known threats)
 	int keepGarrison = 1;              ///< heroes leave the weakest stack in a town they take troops from
 	int baitStacks = 0;                ///< main hero keeps this many single creatures of its cheapest troops (retaliation bait, blockers)
 
