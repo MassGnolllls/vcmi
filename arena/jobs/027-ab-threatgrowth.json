@@ -1,0 +1,27 @@
+{
+ "note": "enemy heroes not seen for a while assumed 15%/day stronger vs not; 2x72 paired games, day 45",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"nogrowth\": {\"threatGrowth\": 0}}",
+  "--seeds",
+  "42,43",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

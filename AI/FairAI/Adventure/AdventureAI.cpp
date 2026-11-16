@@ -198,6 +198,8 @@ void Params::loadOverrides(int playerIndex)
 	read("baitStacks", baitStacks);
 	read("scouts", scouts);
 	read("moveSpells", moveSpells);
+	read("concentrate", concentrate);
+	read("threatGrowth", threatGrowth);
 	read("spellSearch", spellSearch);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
@@ -325,9 +327,11 @@ void AdventureAI::playTurn()
 	{
 		const int3 start = main->visitablePos();
 		const ObjectInstanceID id = mainHero;
+		mainProductive = false;
 		playHero(mainHero);
 		const auto * after = ownHero(id);
-		if(after && after->visitablePos().dist2d(start) < 3)
+		// walking about without visiting, fighting or exploring is idle too (patience lowers the safety ratio)
+		if(after && (params.concentrate ? !mainProductive : after->visitablePos().dist2d(start) < 3))
 			++idleDays;
 		else
 			idleDays = 0;
@@ -558,6 +562,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			continue;
 		}
 		failures = 0;
+		if(isMain(hero) && (best.object.hasValue() || best.description == "explore") && best.description != "home")
+			mainProductive = true;
 
 		if(const auto * town = hero->getVisitedTown())
 			manageTownVisit(hero, town);
@@ -685,7 +691,7 @@ void AdventureAI::updateThreats()
 			continue;
 		Threat t;
 		t.pos = object.visitablePos;
-		t.strength = observedDanger(object) * params.enemyHeroFactor;
+		t.strength = observedDanger(object) * params.enemyHeroFactor * (1.0 + params.threatGrowth * age);
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
@@ -1342,19 +1348,28 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	const bool cautious = !isMain(hero);
 	const bool scout = scoutsToday.count(hero->id) > 0;
+	// meeting another of our heroes: at the meeting point both armies stand together
+	auto ownHeroAt = [&](ObjectInstanceID object) -> const CGHeroInstance *
+	{
+		return params.concentrate && object.hasValue() ? ownHero(object) : nullptr;
+	};
 	auto unsafe = [&](const CGPathNode * node, ObjectInstanceID object) -> bool
 	{
 		int3 tile = node->coord;
 		int3 stop = stopTile(node);
-		// collectors are weak: they work close to home (scouts roam, but still avoid known enemies)
-		if(cautious && !scout && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
+		const CGHeroInstance * partner = ownHeroAt(object);
+		// collectors are weak: they work close to home (scouts roam, but still avoid known enemies);
+		// bringing troops to the main hero is worth the trip
+		const bool toMain = partner && partner->id == mainHero;
+		if(cautious && !scout && !toMain && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
 			return true;
 		if(threats.empty())
 			return false;
 		// attacking the threat itself is judged by the battle estimate
-		if(threatAt(tile, object, cautious) > params.threatTolerance * defenceAt(hero, tile))
+		const double together = partner ? static_cast<double>(partner->getTotalStrength()) : 0.0;
+		if(threatAt(tile, partner ? ObjectInstanceID() : object, cautious) > params.threatTolerance * (defenceAt(hero, tile) + together))
 			return true;
-		return stop.isValid() && stop != tile && threatAt(stop, object, cautious) > params.threatTolerance * defenceAt(hero, stop);
+		return stop.isValid() && stop != tile && threatAt(stop, partner ? ObjectInstanceID() : object, cautious) > params.threatTolerance * defenceAt(hero, stop);
 	};
 
 	// standing in a town that cannot hold on its own: only trips that end back home today,

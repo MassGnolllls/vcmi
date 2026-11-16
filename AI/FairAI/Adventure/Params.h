@@ -39,6 +39,7 @@ struct Params
 	double threatRadius = 16;          ///< tiles an enemy hero may cover until our next turn
 	int pathThreats = 1;               ///< threat zones follow the walkable land we know (0: straight-line radius)
 	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
+	double threatGrowth = 0.15;        ///< an enemy hero we have not seen for a day has probably picked up this much more army (per day)
 	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
 	int townGuard = 1;                 ///< 1: town defence weighs the town's own means, the main hero only makes round trips from a town that needs it and clears the gate of our other heroes (0: old rules)
@@ -73,6 +74,7 @@ struct Params
 	int collectorsRoam = 1;            ///< how many secondary heroes roam; the others guard towns from the garrison
 	int scouts = 0;                    ///< extra secondary heroes that explore beyond our territory (avoiding known threats)
 	int moveSpells = 1;                ///< paths may use Fly / Water Walk when the hero can cast them (cast on the way)
+	int concentrate = 1;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero
 
 	// --- combat (read by the battle AI of the same player)
 	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)

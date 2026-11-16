@@ -148,7 +148,8 @@ private:
 	bool inTerritory(const int3 & tile) const;
 	void dumpKnowledge() const;
 	int lastHeroLossDay = -100;
-	int idleDays = 0; ///< consecutive days the main hero hardly moved
+	int idleDays = 0; ///< consecutive days the main hero achieved nothing (no visit, fight or exploration)
+	bool mainProductive = false; ///< the main hero visited, fought or explored today
 	std::map<int, int> resourceNeed; ///< resource -> amount our best blocked buildings lack
 	std::set<ObjectInstanceID> heroesLastTurn;
 	std::set<ObjectInstanceID> usedTeleporters;
