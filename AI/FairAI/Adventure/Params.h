@@ -49,7 +49,7 @@ struct Params
 	int heroForecast = 0;              ///< 1: attacking an enemy hero in the open field is judged by simulating the battle with the hero's estimated attack and defence (as for guards), not by army values alone. Off until a test shows a gain
 	int leaderFocus = 0;               ///< 1: campaign mode - once the main hero is campaignEdge times as strong as any enemy hero seen in three weeks it plans up to 30 days ahead, looks for the enemy's towns and takes them, and leaves the growth at home as garrison. Off until a test shows a gain
 	double campaignEdge = 2.0;         ///< see leaderFocus
-	double refillShare = 0.4;          ///< campaign: troops waiting in our towns worth this share of the main hero's army interrupt the campaign - the hero fetches them first (0: never)
+	double refillShare = 0;            ///< campaign: troops waiting in our towns worth this share of the main hero's army interrupt the campaign - the hero fetches them first (0: never). Off: the first test (0.4, with other changes) won no game where the campaign without it had won three
 	int fetchByShare = 0;              ///< 1: troops waiting for the main hero (in towns, with our other heroes) count by how much they would add to its army - full value from fetchShare of the army on, a tenth for a trickle. Off until a test shows a gain
 	double fetchShare = 0.5;           ///< see fetchByShare
 	int noChase = 0;                   ///< 1: enemy heroes are targets only when they can be reached today (or stand in a town): no running after heroes that move on. Off until a test shows a gain
@@ -100,6 +100,9 @@ struct Params
 	int boats = 1;                     ///< heroes board boats, buy one when they run out of land (town shipyard, or a shipyard they stand at) and sail
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
 	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero (trips of up to 8 days, also beyond our territory); the main hero keeps its role unless another army is three times as strong, and walks home for troops only at 35 % of their worth. Off until a test shows a gain
+	int supplyRuns = 0;                ///< 1: one hero at a time, standing in a town of ours, brings what has grown there to the main hero as soon as it is worth supplyShare of the leader's army and the leader is within supplyDays; other heroes leave garrison troops alone; while a run is on its way the main hero does not walk home for troops. Off until a test shows a gain
+	double supplyShare = 0.2;          ///< supply runs: smallest load worth a run, as a share of the main hero's army
+	int supplyDays = 4;                ///< supply runs: the leader must be within this many days' march
 	double earlyGoldDays = 21;         ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full, fading out over the two weeks after. 0: off. On by default: +0.05 and +0.12 score in two tests on medium maps (town hall and city hall in week one)
 	int earlyGoldContact = 0;          ///< 1: "gold first" ends when the first enemy hero or town comes into view (then troops count, fading within a week) - on small maps that is early, on large ones late. Off until a test shows a gain
 	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)

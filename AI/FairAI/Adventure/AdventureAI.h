@@ -211,6 +211,21 @@ private:
 	double townNeed(const CGTownInstance * town, const CGHeroInstance * mainHero) const;
 	/// Our other hero stands in the gate the main hero wants to enter: move it into the garrison
 	void clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero);
+	/// supply runs (parameter supplyRuns): a hero standing in a town brings what has grown there to the main hero
+	struct SupplyRun
+	{
+		ObjectInstanceID courier;
+		ObjectInstanceID town;
+		int startDay = 0;
+		bool returning = false;
+		bool waiting = false; ///< no way to the leader, or the road is not safe: it waits in a town
+	};
+	std::optional<SupplyRun> supply;
+	int supplyLog = -1;
+	bool supplyPossible = false; ///< some town of ours has a hero that could carry (the main hero need not walk home)
+	void planSupplyRun();
+	double supplyRoadThreat(const CGPathNode * node) const;
+	std::vector<Target> supplyTargets(const CGHeroInstance * hero, const CPathsInfo & paths);
 	/// Relations to the owner of an object: a valid player we are at war with / a team mate (never ourselves)
 	bool isEnemy(PlayerColor owner) const;
 	bool isAlly(PlayerColor owner) const;

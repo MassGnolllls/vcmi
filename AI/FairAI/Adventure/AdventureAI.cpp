@@ -258,6 +258,9 @@ void Params::loadOverrides(int playerIndex)
 	read("regionValue", regionValue);
 	read("mainHorizon", mainHorizon);
 	read("refillShare", refillShare);
+	read("supplyRuns", supplyRuns);
+	read("supplyShare", supplyShare);
+	read("supplyDays", supplyDays);
 	read("seekTowns", seekTowns);
 	read("minSafetyRatio", minSafetyRatio);
 	read("exploreMaxTurns", exploreMaxTurns);
@@ -317,6 +320,8 @@ void AdventureAI::chooseMainHero()
 	{
 		if(hero->isGarrisoned() && hero->getVisitedTown() == nullptr)
 			continue;
+		if(supply && supply->courier == hero->id && current)
+			continue; // carries the leader's troops: no candidate for the lead
 		if(!strongest || hero->getTotalStrength() > strongest->getTotalStrength())
 			strongest = hero;
 	}
@@ -366,6 +371,8 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 	// corner of the map may stand a week's march from where the hero happens to be
 	if(isMain(hero) && params.mainHorizon > params.maxTravelTurns)
 		return params.mainHorizon;
+	if(supply && supply->courier == hero->id)
+		return std::max(params.maxTravelTurns, params.supplyDays + 1);
 	return params.couriers && !isMain(hero) ? std::max(params.maxTravelTurns, 8) : params.maxTravelTurns;
 }
 
@@ -457,6 +464,7 @@ void AdventureAI::playTurn()
 		const auto * hb = ownHero(b);
 		return (ha ? ha->getTotalStrength() : 0) > (hb ? hb->getTotalStrength() : 0);
 	});
+	planSupplyRun();
 	int roaming = 0;
 	for(auto id : others)
 	{
@@ -464,6 +472,11 @@ void AdventureAI::playTurn()
 		{
 			logAi->warn("FairAI: turn time budget exhausted on day %d", today);
 			break;
+		}
+		if(supply && supply->courier == id)
+		{
+			playHero(id);
+			continue;
 		}
 		const int role = roaming++;
 		if(role >= params.collectorsRoam && role < params.collectorsRoam + params.scouts)
@@ -580,7 +593,9 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		updateThreats();
 		auto paths = computePaths(hero, false);
 		auto freePaths = computePaths(hero, true);
-		auto targets = collectTargets(hero, *paths, *freePaths);
+		auto targets = supply && supply->courier == heroId ? supplyTargets(hero, *paths) : collectTargets(hero, *paths, *freePaths);
+		if(supply && supply->courier == heroId && targets.empty())
+			return;
 		{
 			// nothing worth doing on this landmass: the sea is the way on
 			bool somethingToDo = false;
@@ -1512,6 +1527,9 @@ double AdventureAI::fetchFactor(const CGHeroInstance * hero) const
 	// With couriers the troops come to the hero: its own days are for fighting, not for the road home
 	if(params.couriers && perception.ownHeroes().size() > 1)
 		return 0.35;
+	// - while a supply run is really on its way; troops that no courier can bring are the leader's to fetch
+	if(params.supplyRuns && supply && !supply->returning && !supply->waiting)
+		return 0.35;
 	return 1.0;
 }
 
@@ -1994,6 +2012,220 @@ double AdventureAI::siegeOverhead(const CGHeroInstance * hero, int fortLevel) co
 	return std::min(1.0, hpLoss / totalHp) * static_cast<double>(hero->getArmyStrength());
 }
 
+void AdventureAI::planSupplyRun()
+{
+	// Supply runs: what has grown in a town is brought to the main hero by a hero that stands in
+	// that town, as soon as it is worth a share of the leader's army. The leader fights on instead
+	// of walking home every week - in the logged games that walk took four days out of ten, and
+	// weeks of growth waited in the towns meanwhile.
+	supplyPossible = false;
+	if(!params.supplyRuns)
+		return;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	if(supply)
+	{
+		const CGHeroInstance * courier = ownHero(supply->courier);
+		if(!courier || !leader || courier->id == mainHero || today - supply->startDay > 2 * params.supplyDays + 3)
+		{
+			logAi->debug("FairAI %s day %d: supply run ended (%s)", me.toString(), today, !courier ? "courier lost" : "given up");
+			supply.reset();
+		}
+		else if(const auto * town = courier->getVisitedTown(); town && !supply->returning && !courier->isGarrisoned())
+		{
+			// waiting in a town for a way to the leader: what grows meanwhile comes along
+			const ObjectInstanceID courierId = courier->id;
+			recruitInTown(town, courier, economy.rho > 1.5 ? 0 : 1000);
+			if(const auto * now = ownHero(courierId))
+				pickBestCreatures(now, town);
+		}
+	}
+	if(supply || !leader)
+		return;
+	const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+	const CGTownInstance * bestTown = nullptr;
+	const CGHeroInstance * bestCarrier = nullptr;
+	double bestStock = 0;
+	for(const auto * town : perception.ownTowns())
+	{
+		// a hero of ours in the gate carries; one in the garrison comes out when the gate is free
+		const CGHeroInstance * carrier = town->getVisitingHero();
+		if(carrier && (carrier->tempOwner != me || carrier->id == mainHero))
+			continue; // the leader itself is here (or a guest): it takes what it needs
+		if(!carrier)
+			carrier = town->getGarrisonHero();
+		if(!carrier || carrier->tempOwner != me || carrier->id == mainHero)
+			continue;
+		supplyPossible = true;
+		const double stock = townTroops(town, leader);
+		if(stock < std::max(1500.0, params.supplyShare * army) || stock <= bestStock)
+			continue;
+		bestTown = town;
+		bestCarrier = carrier;
+		bestStock = stock;
+	}
+	if(!bestTown || leader->getVisitedTown() == bestTown)
+		return;
+	const ObjectInstanceID carrierId = bestCarrier->id;
+	if(bestCarrier->isGarrisoned())
+	{
+		if(bestTown->getVisitingHero())
+			return;
+		cb->swapGarrisonHero(bestTown);
+		gateway.waitTillFree();
+	}
+	const CGHeroInstance * carrier = ownHero(carrierId);
+	if(!carrier || carrier->isGarrisoned())
+		return;
+	// is the leader within reach, and the road safe for what the courier will carry?
+	auto paths = computePaths(carrier, false);
+	const CGPathNode * node = paths->getPathInfo(leader->visitablePos());
+	if(!node || !node->reachable() || node->turns > params.supplyDays)
+	{
+		logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s, the leader is out of reach (%s)", me.toString(), today, bestStock,
+			bestTown->getNameTranslated(), node && node->reachable() ? (boost::format("%d days") % static_cast<int>(node->turns)).str() : "no way");
+		return;
+	}
+	const double carried = static_cast<double>(carrier->getArmyStrength()) + bestStock;
+	if(threatAt(leader->visitablePos(), ObjectInstanceID(), true) > fieldStrength(leader) + carried
+		|| supplyRoadThreat(node) > carried)
+	{
+		logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s, the road to the leader is not safe", me.toString(), today, bestStock,
+			bestTown->getNameTranslated());
+		return;
+	}
+	recruitInTown(bestTown, carrier, economy.rho > 1.5 ? 0 : 1000);
+	carrier = ownHero(carrierId);
+	if(!carrier)
+		return;
+	pickBestCreatures(carrier, bestTown);
+	carrier = ownHero(carrierId);
+	if(!carrier)
+		return;
+	supply = SupplyRun{carrierId, bestTown->id, today, false};
+	logAi->info("FairAI %s day %d: supply run - %s takes %llu from %s to %s (army %llu, %.1f days away)", me.toString(), today,
+		carrier->getNameTranslated(), static_cast<unsigned long long>(carrier->getArmyStrength()), bestTown->getNameTranslated(),
+		leader->getNameTranslated(), static_cast<unsigned long long>(leader->getArmyStrength()), node->cost);
+}
+
+double AdventureAI::supplyRoadThreat(const CGPathNode * node) const
+{
+	// the strongest known enemy that can reach a place where the courier ends a day
+	double worst = 0;
+	int turns = -1;
+	for(const CGPathNode * n = node; n; n = n->theNodeBefore)
+	{
+		if(n->turns != turns)
+		{
+			turns = n->turns;
+			worst = std::max(worst, threatAt(n->coord, ObjectInstanceID(), true));
+		}
+	}
+	return worst;
+}
+
+std::vector<Target> AdventureAI::supplyTargets(const CGHeroInstance * hero, const CPathsInfo & paths)
+{
+	std::vector<Target> targets;
+	if(!supply)
+		return targets;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	// can the hero still take a step towards `tile` today? (a path exists, and the next tile is within today's movement)
+	auto stepToday = [&](const int3 & tile) -> int // 1 yes, 0 not today, -1 no way
+	{
+		CGPath path;
+		if(!paths.getPath(path, tile) || path.nodes.size() < 2 || failedToday.count({hero->id.getNum(), tile}))
+			return -1;
+		return path.nodes[path.nodes.size() - 2].turns > 0 ? 0 : 1;
+	};
+	if(leader && !supply->returning && leader->getVisitedTown() && leader->getVisitedTown() == hero->getVisitedTown())
+	{
+		// both in the same town, one in the gate and one in the garrison: hand over on the spot
+		const ObjectInstanceID heroId = hero->id;
+		pickBestCreatures(leader, hero);
+		hero = ownHero(heroId);
+		leader = ownHero(mainHero);
+		if(!hero)
+			return targets;
+		supply->returning = true;
+		logAi->debug("FairAI %s day %d: supply run of %s: handed over in town", me.toString(), today, hero->getNameTranslated());
+	}
+	if(!leader || transferGain(leader, hero) < 1)
+	{
+		if(!supply->returning)
+			logAi->debug("FairAI %s day %d: supply run of %s: delivered", me.toString(), today, hero->getNameTranslated());
+		supply->returning = true;
+	}
+	if(!supply->returning)
+	{
+		const CGPathNode * node = paths.getPathInfo(leader->visitablePos());
+		const int step = stepToday(leader->visitablePos());
+		const bool unsafe = step >= 0 && node && supplyRoadThreat(node) > static_cast<double>(hero->getArmyStrength());
+		if(step == 1 && !unsafe)
+		{
+			Target t;
+			t.tile = leader->visitablePos();
+			t.object = leader->id;
+			t.value = 100000;
+			t.travel = node->cost;
+			t.score = 100000;
+			t.description = "supply";
+			targets.push_back(t);
+			supply->waiting = false;
+			return targets;
+		}
+		if(step == 0 && !unsafe)
+			return targets; // on the way: tomorrow
+		supply->waiting = true;
+		// no way, or enemies about: wait in a town of ours (below) and try again tomorrow
+		if(supplyLog != today)
+			logAi->debug("FairAI %s day %d: supply run of %s waits (%s)", me.toString(), today, hero->getNameTranslated(),
+				unsafe ? "the road is not safe" : "no way to the leader");
+		supplyLog = today;
+	}
+	// to a town of ours: the one it came from, else the nearest
+	if(hero->getVisitedTown())
+	{
+		if(supply->returning)
+			supply.reset(); // done; with troops still to deliver it waits here for a way
+		return targets;
+	}
+	const CGTownInstance * home = nullptr;
+	double homeCost = 1e9;
+	double realCost = 0;
+	for(const auto * town : perception.ownTowns())
+	{
+		if(town->getVisitingHero())
+			continue;
+		const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+		if(!node || !node->reachable() || stepToday(town->visitablePos()) < 0)
+			continue;
+		const double cost = node->cost - (town->id == supply->town ? 0.5 : 0.0);
+		if(cost < homeCost)
+		{
+			home = town;
+			homeCost = cost;
+			realCost = node->cost;
+		}
+	}
+	if(!home)
+	{
+		if(supply->returning)
+			supply.reset(); // nowhere to go: it plays as any other hero from tomorrow
+		return targets;
+	}
+	if(stepToday(home->visitablePos()) != 1)
+		return targets;
+	Target t;
+	t.tile = home->visitablePos();
+	t.object = home->id;
+	t.value = 1;
+	t.travel = realCost;
+	t.score = 1;
+	t.description = "home";
+	targets.push_back(t);
+	return targets;
+}
+
 void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero)
 {
 	const CGHeroInstance * visitor = town->getVisitingHero();
@@ -2417,7 +2649,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			if(gain < 1)
 				return 0;
 			// the main hero walks back for troops only as far as it needs them; the others bring them anyway
-			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain) * (main ? fetchFactor(hero) : 1.0);
+			// - but a courier on its supply run is met halfway: both walking, the gap closes twice as fast
+			const bool courier = supply && supply->courier == other->id && !supply->returning;
+			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain) * (main && !courier ? fetchFactor(hero) : 1.0);
 		}
 		if(!enemy || !object.visibleNow || !object.army)
 			return 0;
@@ -4076,7 +4310,7 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 		if(const auto * now = ownHero(hero->id))
 			townLeftover[town->id] = townTroops(town, now);
 	}
-	else if(ownHero(mainHero) && params.collectorsTakeGarrison)
+	else if(ownHero(mainHero) && params.collectorsTakeGarrison && !params.supplyRuns)
 	{
 		// collectors ferry the garrison to the main hero
 		if(params.couriers)
