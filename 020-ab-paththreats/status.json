@@ -1,0 +1,9 @@
+{
+ "job": "020-ab-paththreats",
+ "state": "running",
+ "commit": "508f69bc7e5b733b254bbf5e3292bc5521b02ec2",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T12:04:06",
+ "note": "threat zones along walkable land (new) vs straight-line radius (old), 2x72 paired games, day 45"
+}
