@@ -1,9 +1,12 @@
 {
  "job": "022a-ab-concentrate",
- "state": "running",
+ "state": "done",
  "commit": "fdaed664cb538bed96d5ba4ba6fa052eafe1642a",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T13:01:43",
- "note": "heroes meet to merge armies (count each other as protection, collectors may leave our territory for the main hero; idle = nothing achieved) vs old; 2x72 paired games, day 45"
+ "note": "heroes meet to merge armies (count each other as protection, collectors may leave our territory for the main hero; idle = nothing achieved) vs old; 2x72 paired games, day 45",
+ "returncode": 0,
+ "finished": "2026-11-16T13:12:48",
+ "minutes": 11.1
 }

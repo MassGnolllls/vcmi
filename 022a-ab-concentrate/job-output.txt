@@ -305,3 +305,37 @@ match   41  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [33
 match   56       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=2 [2.2s]
 match   49  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [16.3s]
 match   57  Nullkiller2 (red) vs FairAI       (blue): victory winner=blue day=25 [3.3s]
+match   58       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [6.3s]
+match   62       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [4.4s]
+match   52       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [23.1s]
+match   59  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [15.5s]
+match   53  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [22.3s]
+match   64       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [3.8s]
+match   67  Nullkiller2 (red) vs FairAI       (blue): victory winner=blue day=24 [5.7s]
+match   61  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [24.1s]
+match   63  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [17.5s]
+match   60       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [26.6s]
+match   66       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=30 [13.3s]
+match   69  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=26 [8.3s]
+match   65  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [19.9s]
+match   68       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [17.1s]
+match   71  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [20.6s]
+match   70       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [21.8s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 72 (runner errors: 0)
+- decided: 26 -> FairAI won 9, lost 17  (win rate 35%, 95% CI 19%-54%)
+- day limit reached: 46 (material lead for FairAI in 17)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 19 days
+- cheat flags raised: 0
+# A/B test (2 configs, seeds 42, 43)
+
+Paired against `base`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| base | `{}` | 144 | 10 | 47 | 0.408 ± 0.057 | - | 144 |
+| old | `{"concentrate": 0}` | 144 | 17 | 37 | 0.454 ± 0.057 | +0.046 ± 0.051 | 144 |
+
