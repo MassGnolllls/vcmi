@@ -54,8 +54,18 @@ def run(cmd, cwd=None, check=True, quiet=False):
                           stdout=subprocess.PIPE if quiet else None, stderr=subprocess.STDOUT if quiet else None)
 
 
+# git must never wait for a password on the terminal (an expired token would block the worker)
+GIT_ENV = dict(os.environ, GIT_TERMINAL_PROMPT="0", GIT_ASKPASS="true")
+
+
 def git(args, cwd, check=True):
-    return subprocess.run(["git", *args], cwd=cwd, check=check, text=True, capture_output=True)
+    try:
+        return subprocess.run(["git", *args], cwd=cwd, check=check, text=True, capture_output=True,
+                              env=GIT_ENV, stdin=subprocess.DEVNULL, timeout=300)
+    except subprocess.TimeoutExpired:
+        if check:
+            raise
+        return subprocess.CompletedProcess(["git", *args], 1, "", "timeout")
 
 
 # ----------------------------------------------------------------------------- source and build
@@ -113,22 +123,27 @@ def publish(message: str) -> None:
         return
     git(["commit", "-q", "-m", message], RESULTS)
     for _ in range(3):
-        if git(["push", "-q", "origin", f"HEAD:{RESULTS_BRANCH}"], RESULTS, check=False).returncode == 0:
+        pushed = git(["push", "-q", "origin", f"HEAD:{RESULTS_BRANCH}"], RESULTS, check=False)
+        if pushed.returncode == 0:
             return
         git(["pull", "-q", "--rebase", "origin", RESULTS_BRANCH], RESULTS, check=False)
-    log("WARNING: could not upload results (network or token?) - will retry with the next update")
+    log("WARNING: could not upload results - token expired or deleted? Run: bash ~/fairai/vcmi/arena/worker/set-token.sh")
+    log("         git said: " + (pushed.stderr or "").strip().splitlines()[-1:][0] if (pushed.stderr or "").strip() else "")
 
 
 def copy_small_files(src: Path, dst: Path) -> None:
     dst.mkdir(parents=True, exist_ok=True)
     if not src.exists():
         return
-    for path in src.rglob("*"):
-        if path.is_file() and path.suffix in KEEP_SUFFIXES and "logs_" not in str(path.relative_to(src)) \
-                and path.stat().st_size < 5_000_000:
-            target = dst / path.relative_to(src)
-            target.parent.mkdir(parents=True, exist_ok=True)
-            shutil.copy2(path, target)
+    for path in list(src.rglob("*")):
+        try:
+            if path.is_file() and path.suffix in KEEP_SUFFIXES and "logs_" not in str(path.relative_to(src)) \
+                    and path.stat().st_size < 5_000_000:
+                target = dst / path.relative_to(src)
+                target.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(path, target)
+        except OSError:
+            pass  # file written or removed while we copy: next sync
 
 
 # ----------------------------------------------------------------------------- jobs
@@ -186,10 +201,23 @@ def run_job(path: Path, commit: str) -> None:
     log(f"job {job_id}: {status['state']} after {status['minutes']} min")
 
 
+def resume_interrupted() -> None:
+    """Jobs this host left 'running' (worker stopped or PC restarted) are started again."""
+    for status_file in RESULTS.glob("*/status.json"):
+        try:
+            status = json.loads(status_file.read_text())
+        except (OSError, ValueError):
+            continue
+        if status.get("state") == "running" and status.get("host") == socket.gethostname():
+            log(f"job {status.get('job')} was interrupted - it will run again")
+            status_file.unlink()
+
+
 def main() -> int:
     ROOT.mkdir(parents=True, exist_ok=True)
     log(f"FairAI worker on {socket.gethostname()} ({os.cpu_count()} CPUs), default {DEFAULT_JOBS} parallel games")
     prepare_results()
+    resume_interrupted()
     while True:
         try:
             commit = update_source()
