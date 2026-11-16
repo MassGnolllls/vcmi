@@ -58,6 +58,8 @@ struct Params
 
 	// --- economy
 	double incomeHorizonDays = 14;     ///< days of income a mine/building is worth
+	double neutralTownValue = 12000;   ///< capturing a neutral town (income, creatures, a base)
+	double enemyTownValue = 20000;     ///< capturing an enemy town (also takes it from the enemy)
 	double dwellingHorizonWeeks = 4; ///< weeks of growth a dwelling is worth
 	double primarySkillValueMain = 700;
 	double primarySkillValueOther = 150;

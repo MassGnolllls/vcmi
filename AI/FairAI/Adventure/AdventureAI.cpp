@@ -200,6 +200,8 @@ void Params::loadOverrides(int playerIndex)
 	read("moveSpells", moveSpells);
 	read("concentrate", concentrate);
 	read("threatGrowth", threatGrowth);
+	read("neutralTownValue", neutralTownValue);
+	read("enemyTownValue", enemyTownValue);
 	read("spellSearch", spellSearch);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
@@ -1266,7 +1268,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		// without a town the game is lost after seven days: any town is worth everything
 		if(perception.ownTowns().empty())
 			return 100000;
-		return enemy ? 20000 : 12000;
+		return enemy ? params.enemyTownValue : params.neutralTownValue;
 	}
 	case Obj::HERO:
 	{
