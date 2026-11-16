@@ -179,6 +179,7 @@ void Params::loadOverrides(int playerIndex)
 	read("maxHeroes", maxHeroes);
 	read("keepGarrison", keepGarrison);
 	read("collectorsRoam", collectorsRoam);
+	read("tavernArmies", tavernArmies);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -351,6 +352,7 @@ void AdventureAI::playTurn()
 
 	hireHeroes();
 	manageTowns(true);
+	buyTavernArmies();
 	defendTowns();
 
 	heroesLastTurn.clear();
@@ -1956,6 +1958,39 @@ void AdventureAI::hireHeroes()
 				cb->swapGarrisonHero(town);
 				gateway.waitTillFree();
 			}
+		}
+	}
+}
+
+void AdventureAI::buyTavernArmies()
+{
+	// Gold that cannot buy creatures any more still buys the starting armies of tavern heroes:
+	// hire, hand the troops to the garrison, dismiss. Never used while gold is the bottleneck.
+	if(!params.tavernArmies || economy.rho < 2.0)
+		return;
+	const int64_t reserve = 4000 + GameConstants::HERO_GOLD_COST;
+	for(const auto * town : perception.ownTowns())
+	{
+		for(int bought = 0; bought < 2; ++bought)
+		{
+			gateway.checkInterruption();
+			if(cb->getResourceAmount(GameResID::GOLD) < reserve || !town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero())
+				break;
+			auto offered = cb->getAvailableHeroes(town);
+			if(offered.empty())
+				break;
+			std::set<ObjectInstanceID> before;
+			for(const auto * h : perception.ownHeroes())
+				before.insert(h->id);
+			cb->recruitHero(town, offered.front());
+			gateway.waitTillFree();
+			const CGHeroInstance * hired = town->getVisitingHero();
+			if(!hired || hired->tempOwner != me || before.count(hired->id))
+				break;
+			pickBestCreatures(town->getUpperArmy(), hired);
+			logAi->info("FairAI %s day %d: bought the army of %s in %s", me.toString(), today, hired->getNameTranslated(), town->getNameTranslated());
+			cb->dismissHero(hired);
+			gateway.waitTillFree();
 		}
 	}
 }

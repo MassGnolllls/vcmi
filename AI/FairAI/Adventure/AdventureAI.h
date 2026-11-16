@@ -123,6 +123,7 @@ private:
 	void hireHeroes();
 	void playHero(ObjectInstanceID heroId);
 	void defendTowns();
+	void buyTavernArmies();
 
 	Economy economy;
 	void updateEconomy();

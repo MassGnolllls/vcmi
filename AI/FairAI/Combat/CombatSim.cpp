@@ -157,6 +157,52 @@ double SimState::evaluate(BattleSide perspective) const
 	return sideValue(perspective) - sideValue(other);
 }
 
+double SimState::exposure(BattleSide perspective) const
+{
+	double ours = 0;
+	double theirs = 0;
+	std::array<int8_t, FIELD_SIZE> dist;
+	for(int i = 0; i < static_cast<int>(units.size()); ++i)
+	{
+		const auto & u = units[i];
+		if(!u.alive())
+			continue;
+		double best = 0;
+		if(canShoot(i))
+		{
+			for(int e = 0; e < static_cast<int>(units.size()); ++e)
+				if(units[e].alive() && units[e].side != u.side)
+					best = std::max(best, shotValue(i, e));
+		}
+		else if(u.canMove)
+		{
+			reachable(i, dist);
+			for(int e = 0; e < static_cast<int>(units.size()); ++e)
+			{
+				const auto & target = units[e];
+				if(!target.alive() || target.side == u.side)
+					continue;
+				bool inReach = false;
+				for(const auto & around : battle::Unit::getSurroundingHexes(target.pos, target.doubleWide, target.side))
+				{
+					if(around.isValid() && dist[around.toInt()] >= 0 && adjacent(i, around, e))
+					{
+						inReach = true;
+						break;
+					}
+				}
+				if(inReach)
+					best = std::max(best, meleeTradeValue(i, e));
+			}
+		}
+		if(u.side == perspective)
+			ours += best;
+		else
+			theirs += best;
+	}
+	return ours - theirs;
+}
+
 // ------------------------------------------------------------------ turn order
 
 int SimState::nextActiveUnit()

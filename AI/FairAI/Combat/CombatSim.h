@@ -146,6 +146,9 @@ public:
 	double sideValue(BattleSide side) const;
 	/// our remaining value minus enemy remaining value
 	double evaluate(BattleSide perspective) const;
+	/// Next-round potential: for every unit the best trade it could make from where it stands
+	/// (shot or reachable melee), ours minus theirs. Damps the horizon at the end of the round.
+	double exposure(BattleSide perspective) const;
 
 	/// Pick the next unit to act (engine turn order rules), starting a new round when needed. -1 if battle over.
 	int nextActiveUnit();

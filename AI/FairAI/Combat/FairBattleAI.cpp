@@ -45,6 +45,7 @@ struct SearchSettings
 	double nextRoundWeight = envInt("FAI_NEXT_PCT", 0) / 100.0; ///< blend in the outcome after one more round
 	bool robustStances = envInt("FAI_STANCES", 0) != 0;   ///< also play out against a waiting opponent
 	bool engineOutcome = envInt("FAI_OUTCOME", 1) != 0;   ///< use engine-evaluated results for attacks
+	double exposureWeight = envInt("FAI_EXPOSURE_PCT", 0) / 100.0; ///< weight of the next-round potential
 };
 
 const SearchSettings & searchSettings()
@@ -312,6 +313,8 @@ BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CSt
 				sim.apply(me, c.sim);
 			sim.playout(lastRound);
 			double value = sim.evaluate(side);
+			if(config.exposureWeight > 0 && !sim.battleOver())
+				value += config.exposureWeight * sim.exposure(side);
 			if(config.nextRoundWeight > 0 && !sim.battleOver())
 			{
 				sim.playout(lastRound + 1);
