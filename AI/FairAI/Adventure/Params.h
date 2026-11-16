@@ -63,6 +63,7 @@ struct Params
 	double retreatValue = 0.6;         ///< share of hero + army value saved by leaving a threatened tile
 	double collectorRadius = 12;       ///< collectors stay within this many tiles of an own town
 	int maxHeroes = 8;                 ///< never hire beyond this
+	double garrisonShare = 0.0;        ///< share of hero + garrison value left in a town while enemies are about
 	int tavernArmies = 1;              ///< spend surplus gold on tavern heroes' starting armies
 	int collectorsRoam = 1;            ///< how many secondary heroes roam; the others guard towns from the garrison
 	int keepGarrison = 1;              ///< heroes leave the weakest stack in a town they take troops from

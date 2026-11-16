@@ -176,6 +176,8 @@ private:
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Upgrades the hero's creatures in the town it visits
 	void upgradeArmy(const CGHeroInstance * hero);
+	/// Leaves the weakest stacks in the town while enemy heroes are about
+	void leaveGarrison(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Moves the strongest stacks from `source` to `destination` (keeps one unit on a source hero)
 	void pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source);
 	double transferableValue(const CGHeroInstance * from) const;

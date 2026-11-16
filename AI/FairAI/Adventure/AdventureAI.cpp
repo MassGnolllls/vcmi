@@ -180,6 +180,7 @@ void Params::loadOverrides(int playerIndex)
 	read("keepGarrison", keepGarrison);
 	read("collectorsRoam", collectorsRoam);
 	read("tavernArmies", tavernArmies);
+	read("garrisonShare", garrisonShare);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -1524,6 +1525,52 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 	}
 }
 
+void AdventureAI::leaveGarrison(const CGHeroInstance * hero, const CGTownInstance * town)
+{
+	// Raiders take empty towns for free. While enemy heroes are about, leave the weakest stacks
+	// behind until the garrison is worth a share of the hero's army.
+	if(params.garrisonShare <= 0 || town->getGarrisonHero())
+		return;
+	bool enemiesAbout = false;
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type == Obj::HERO && object.owner.isValidPlayer() && object.owner != me && today - object.lastSeenDay <= 7)
+			enemiesAbout = true;
+	}
+	if(!enemiesAbout)
+		return;
+	const double heroArmy = static_cast<double>(hero->getArmyStrength());
+	for(int guard = 0; guard < GameConstants::ARMY_SIZE; ++guard)
+	{
+		double garrison = 0;
+		for(const auto & slot : town->Slots())
+			garrison += stackValue(slot.second.get());
+		if(garrison >= params.garrisonShare * (heroArmy + garrison) || hero->stacksCount() <= 1)
+			return;
+		SlotID weakest;
+		double weakestValue = std::numeric_limits<double>::max();
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			double v = stackValue(stack.get());
+			if(v < weakestValue)
+			{
+				weakestValue = v;
+				weakest = slot;
+			}
+		}
+		const CStackInstance * stack = hero->getStackPtr(weakest);
+		if(!stack)
+			return;
+		SlotID target = town->getSlotFor(stack->getCreatureID());
+		if(!target.validSlot())
+			return;
+		if(town->hasStackAtSlot(target))
+			cb->mergeStacks(hero, town, weakest, target);
+		else
+			cb->mergeOrSwapStacks(hero, town, weakest, target);
+	}
+}
+
 void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town)
 {
 	if(!hero || !town || town->tempOwner != me)
@@ -1536,6 +1583,7 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 		const CGHeroInstance * garrisoned = town->getGarrisonHero();
 		if(garrisoned && garrisoned != hero && garrisoned->tempOwner == me)
 			pickBestCreatures(hero, garrisoned);
+		leaveGarrison(hero, town);
 		if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1)
 			&& cb->getResourceAmount(GameResID::GOLD) >= GameConstants::SPELLBOOK_GOLD_COST + 500)
 		{
