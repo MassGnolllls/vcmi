@@ -288,3 +288,11 @@ Paired against `base`: mean score difference over the games both played (95% CI)
 
 == l-teams-6p
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/d5d4448388/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2-matrix-baseline/l-teams-6p/base-s42 --pool mix1-l-teams-6p --max-days 75 --timeout 1800 --stall-seconds 180 --base-port 7900
+playing 12 matches on 6 maps with 6 parallel job(s)
+match    3 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.31 [492.1s]
+match    5 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.07 [589.4s]
+match    4 FairAI as red,tan,orange of 6: victory winner=blue day=74 score=0.00 [596.6s]
+match    2 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.00 [626.4s]
+match    1 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.14 [643.1s]
+match    0 FairAI as red,tan,orange of 6: victory winner=blue day=72 score=0.00 [786.6s]
+match    8 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.27 [295.7s]
