@@ -9,4 +9,4 @@ Paired against `base`: mean difference over the games both played (95% CI). scor
 | s | `{"supplyRuns": 1}` | 23 | 0 | 4 | 0.593 ± 0.133 | +0.081 ± 0.158 | 0.364 ± 0.090 | +0.023 ± 0.123 | 23 |
 | se | `{"fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12}` | 24 | 1 | 4 | 0.572 ± 0.127 | +0.047 ± 0.154 | 0.423 ± 0.109 | +0.071 ± 0.113 | 24 |
 | ses | `{"fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "supplyRuns": 1}` | 23 | 0 | 3 | 0.616 ± 0.130 | +0.096 ± 0.170 | 0.454 ± 0.098 | +0.100 ± 0.127 | 23 |
-| sesx | `{"fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "supplyRuns": 1, "exploreRegion": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| sesx | `{"fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "supplyRuns": 1, "exploreRegion": 1}` | 22 | 2 | 8 | 0.403 ± 0.168 | -0.096 ± 0.162 | 0.344 ± 0.158 | +0.013 ± 0.140 | 22 |

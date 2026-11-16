@@ -1,9 +1,12 @@
 {
  "job": "022zz2d4-long-expand",
- "state": "running",
+ "state": "done",
  "commit": "ba1bed4dd6f3583fb7156d20add7050597346cec",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T21:41:29",
- "note": "long games on medium land maps (150 days, 24 games per config), code of 21:35 with the hand-over fix (heroes that walk up to each other really meet; before, troops reached the main hero only by chance and the army stayed split). Nullkiller2 ends with five of seven towns in nearly every game: what makes FairAI expand? g = secondary heroes leave garrison troops in the towns; s = supply runs (a hero standing in a town brings what has grown there to the main hero; implies g); se = troops fetched by share + main hero looks 12 days ahead + guards at region borders count; ses = se + s; sesx = ses + a whole unexplored region counts when exploring"
+ "note": "long games on medium land maps (150 days, 24 games per config), code of 21:35 with the hand-over fix (heroes that walk up to each other really meet; before, troops reached the main hero only by chance and the army stayed split). Nullkiller2 ends with five of seven towns in nearly every game: what makes FairAI expand? g = secondary heroes leave garrison troops in the towns; s = supply runs (a hero standing in a town brings what has grown there to the main hero; implies g); se = troops fetched by share + main hero looks 12 days ahead + guards at region borders count; ses = se + s; sesx = ses + a whole unexplored region counts when exploring",
+ "returncode": 0,
+ "finished": "2026-11-16T23:27:38",
+ "minutes": 106.1
 }
