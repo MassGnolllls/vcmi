@@ -1,0 +1,18 @@
+{
+ "note": "baseline over the map matrix: FairAI (boats, team mates, no ping-pong) vs Nullkiller2 in every category",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_dev.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "42"
+ ],
+ "jobs": 6
+}

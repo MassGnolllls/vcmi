@@ -1,0 +1,12 @@
+{
+ "note": "generate the development map matrix (12 categories: S-XL, land/water/islands, 2-8 players, free for all and teams)",
+ "script": "matrix.py",
+ "args": [
+  "gen",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_dev.json"
+ ],
+ "jobs": 1
+}
