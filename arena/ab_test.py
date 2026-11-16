@@ -52,6 +52,30 @@ def game_scores(results_file: Path) -> dict:
     return scores
 
 
+def town_scores(results_file: Path) -> dict:
+    """match id -> share of the towns held by the AI under test at the end (1 = won, 0 = lost).
+    The army share alone flatters a side that wins its battles but holds one town against six."""
+    shares = {}
+    if not results_file.exists():
+        return shares
+    for line in open(results_file):
+        record = json.loads(line)
+        result = record.get("result") or {}
+        players = result.get("players") or {}
+        if not players or result.get("outcome") == "stalled":
+            continue
+        mine = record.get("mine") or (["blue"] if record.get("match", 0) % 2 else ["red"])
+        others = [c for c in players if c not in mine]
+        winner = result.get("winner") or ""
+        if result.get("outcome") == "victory" and winner:
+            shares[record["match"]] = 1.0 if winner in mine else 0.0
+            continue
+        my = sum(players[c].get("towns", 0) for c in mine if c in players) / max(1, len(mine))
+        their = sum(players[c].get("towns", 0) for c in others) / max(1, len(others))
+        shares[record["match"]] = my / (my + their) if my + their > 0 else 0.5
+    return shares
+
+
 def mean_ci(values):
     if not values:
         return float("nan"), float("nan")
@@ -63,32 +87,43 @@ def mean_ci(values):
 def summarise(out: Path, configs: dict, seeds: list) -> str:
     names = list(configs)
     per_config = {}
+    per_config_towns = {}
     for name in names:
         games = {}
+        towns = {}
         for seed in seeds:
             for match, score in game_scores(out / f"{name}-s{seed}" / "results.jsonl").items():
                 games[(seed, match)] = score
+            for match, share in town_scores(out / f"{name}-s{seed}" / "results.jsonl").items():
+                towns[(seed, match)] = share
         per_config[name] = games
+        per_config_towns[name] = towns
     base = names[0]
     lines = [f"# A/B test ({len(names)} configs, seeds {', '.join(map(str, seeds))})", "",
-             f"Paired against `{base}`: mean score difference over the games both played (95% CI).", "",
-             "| config | params | games | won | lost | score | diff vs base | pairs |",
-             "|---|---|---|---|---|---|---|---|"]
+             f"Paired against `{base}`: mean difference over the games both played (95% CI). score = army share "
+             "at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.", "",
+             "| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |",
+             "|---|---|---|---|---|---|---|---|---|---|"]
     for name in names:
         games = per_config[name]
+        towns = per_config_towns[name]
         scores = list(games.values())
         m, ci = mean_ci(scores)
+        tm, tci = mean_ci(list(towns.values()))
         won = sum(1 for s in scores if s == 1.0)
         lost = sum(1 for s in scores if s == 0.0)
         if name == base:
-            diff, pairs = "-", len(scores)
+            diff, tdiff, pairs = "-", "-", len(scores)
         else:
             common = sorted(set(games) & set(per_config[base]))
             d, dci = mean_ci([games[k] - per_config[base][k] for k in common])
             diff = f"{d:+.3f} ± {dci:.3f}" if common else "-"
+            tcommon = sorted(set(towns) & set(per_config_towns[base]))
+            td, tdci = mean_ci([towns[k] - per_config_towns[base][k] for k in tcommon])
+            tdiff = f"{td:+.3f} ± {tdci:.3f}" if tcommon else "-"
             pairs = len(common)
         lines.append(f"| {name} | `{json.dumps(configs[name])}` | {len(scores)} | {won} | {lost} | "
-                     f"{m:.3f} ± {ci:.3f} | {diff} | {pairs} |")
+                     f"{m:.3f} ± {ci:.3f} | {diff} | {tm:.3f} ± {tci:.3f} | {tdiff} | {pairs} |")
     return "\n".join(lines) + "\n"
 
 

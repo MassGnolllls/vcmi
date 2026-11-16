@@ -190,6 +190,8 @@ private:
 	double threatAt(const int3 & tile, ObjectInstanceID ignoreHero = ObjectInstanceID(), bool cautious = false) const;
 	/// Tiles a collector may work on: close to one of our towns
 	bool inTerritory(const int3 & tile) const;
+	std::vector<uint16_t> fogDistances(const int3 & from) const;
+	bool inPass(const int3 & tile, const CPathsInfo & paths, const int3 * alsoOpen = nullptr) const;
 	void dumpKnowledge() const;
 	int lastHeroLossDay = -100;
 	int idleDays = 0; ///< consecutive days the main hero achieved nothing (no visit, fight or exploration)

@@ -257,6 +257,7 @@ void Params::loadOverrides(int playerIndex)
 	read("earlyGoldContact", earlyGoldContact);
 	read("regionValue", regionValue);
 	read("mainHorizon", mainHorizon);
+	read("seekTowns", seekTowns);
 	read("minSafetyRatio", minSafetyRatio);
 	read("exploreMaxTurns", exploreMaxTurns);
 	read("huntFactor", huntFactor);
@@ -324,8 +325,8 @@ void AdventureAI::chooseMainHero()
 		return;
 	}
 	// The army leader keeps its role (and its experience): couriers bring it the troops. Only an army
-	// far bigger than what is left of the leader's takes over (leaderFocus; else at 1.5 times).
-	const double takeover = params.leaderFocus && params.couriers ? 3.0 : 1.5;
+	// far bigger than what is left of the leader's takes over (couriers; else at 1.5 times).
+	const double takeover = params.couriers ? 3.0 : 1.5;
 	if(!current || strongest->getTotalStrength() > takeover * current->getTotalStrength())
 		mainHero = strongest->id;
 }
@@ -361,7 +362,7 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 	// corner of the map may stand a week's march from where the hero happens to be
 	if(isMain(hero) && params.mainHorizon > params.maxTravelTurns)
 		return params.mainHorizon;
-	return params.leaderFocus && params.couriers && !isMain(hero) ? std::max(params.maxTravelTurns, 8) : params.maxTravelTurns;
+	return params.couriers && !isMain(hero) ? std::max(params.maxTravelTurns, 8) : params.maxTravelTurns;
 }
 
 bool AdventureAI::campaign(const CGHeroInstance * hero) const
@@ -476,7 +477,10 @@ void AdventureAI::playTurn()
 				cb->swapGarrisonHero(town);
 				gateway.waitTillFree();
 			}
-			if(town && !courier)
+			// A second hero in the gate guards nothing (it would fight outside the walls) and locks
+			// everybody else out of the town: it goes out and collects instead.
+			const bool gateOnly = town && !hero->isGarrisoned() && town->getGarrisonHero() && town->getGarrisonHero() != hero;
+			if(town && !courier && !gateOnly)
 				continue;
 		}
 		playHero(id);
@@ -611,6 +615,64 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 				targets.push_back(t);
 			}
 		}
+		if(targets.empty() && !isMain(hero) && !hero->getVisitedTown())
+		{
+			// An idle hero does not stay out in the open: a hero cannot walk through another, so one
+			// standing in a pass locks our own heroes in (a whole game was lost with the main hero
+			// shut in its corner by a scout parked in the only way out). It goes to the nearest own
+			// town with a free gate; failing that it at least leaves the pass.
+			const CGTownInstance * home = nullptr;
+			double homeCost = 1e9;
+			for(const auto * town : perception.ownTowns())
+			{
+				if(town->getVisitingHero())
+					continue;
+				const CGPathNode * node = paths->getPathInfo(town->visitablePos());
+				const bool safe = threatAt(town->visitablePos(), ObjectInstanceID(), true) <= tolerance(hero) * defenceAt(hero, town->visitablePos());
+				if(safe && node && node->reachable() && node->cost < homeCost && !failedToday.count({heroId.getNum(), town->visitablePos()}))
+				{
+					home = town;
+					homeCost = node->cost;
+				}
+			}
+			Target t;
+			t.value = 1;
+			t.score = 1;
+			if(home)
+			{
+				t.tile = home->visitablePos();
+				t.object = home->id;
+				t.travel = homeCost;
+				t.description = "home";
+				targets.push_back(t);
+			}
+			else if(inPass(hero->visitablePos(), *paths))
+			{
+				const int3 size = cb->getMapSize();
+				const int3 here = hero->visitablePos();
+				float bestCost = std::numeric_limits<float>::max();
+				for(int x = std::max(0, here.x - 12); x < std::min(size.x, here.x + 13); ++x)
+				{
+					for(int y = std::max(0, here.y - 12); y < std::min(size.y, here.y + 13); ++y)
+					{
+						const int3 tile(x, y, here.z);
+						const CGPathNode * node = paths->getPathInfo(tile);
+						if(!node || !node->reachable() || node->turns > 0 || node->action != EPathNodeAction::NORMAL
+							|| node->accessible != EPathAccessibility::ACCESSIBLE || node->cost >= bestCost
+							|| tile == here || failedToday.count({heroId.getNum(), tile}) || inPass(tile, *paths, &here))
+							continue;
+						bestCost = node->cost;
+						t.tile = tile;
+					}
+				}
+				if(bestCost < std::numeric_limits<float>::max())
+				{
+					t.travel = bestCost;
+					t.description = "aside";
+					targets.push_back(t);
+				}
+			}
+		}
 		if(targets.empty())
 			return;
 
@@ -625,7 +687,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		logAi->debug("FairAI %s: %s -> %s %s value %.0f loss %.0f travel %.2f score %.0f", me.toString(), hero->getNameTranslated(),
 			best.description, best.tile.toString(), best.value, best.loss, best.travel, best.score);
 
-		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home";
+		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside";
 		if(params.antiOscillation)
 		{
 			// giving up an unreached goal: do not come back to it today (A-B-A wastes the day's movement)
@@ -735,6 +797,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		{
 			// Visited, and the object offers the same as before (an emptied lean-to, a hut that teaches
 			// what the hero cannot learn, a school we cannot pay): nothing to come back for this week.
+			perception.refresh();
 			auto now = perception.knownObjects();
 			auto after = now.find(best.object);
 			auto before = objectBefore.find(best.object);
@@ -1420,7 +1483,12 @@ double AdventureAI::fetchFactor(const CGHeroInstance * hero) const
 {
 	// On campaign the main hero is strong enough: what grows at home stays there and holds the towns;
 	// walking back for it pays only when nothing else is left to do (any positive value wins then).
-	return campaign(hero) ? 0.2 : 1.0;
+	if(campaign(hero))
+		return 0.2;
+	// With couriers the troops come to the hero: its own days are for fighting, not for the road home
+	if(params.couriers && perception.ownHeroes().size() > 1)
+		return 0.35;
+	return 1.0;
 }
 
 double AdventureAI::superiority(const CGHeroInstance * hero) const
@@ -1541,6 +1609,101 @@ void AdventureAI::rememberStaticObjects()
 				teleportChannels[id] = teleport->channel;
 		}
 	}
+}
+
+bool AdventureAI::inPass(const int3 & tile, const CPathsInfo & paths, const int3 * alsoOpen) const
+{
+	// A tile whose open neighbours fall into two or more groups that do not touch each other: a
+	// hero standing there cuts the way for everybody else. (Moving diagonally past a corner is
+	// allowed, so neighbours that touch at a corner count as connected.)
+	static const int ring[8][2] = {{0, -1}, {1, -1}, {1, 0}, {1, 1}, {0, 1}, {-1, 1}, {-1, 0}, {-1, -1}};
+	bool open[8];
+	int count = 0;
+	for(int i = 0; i < 8; ++i)
+	{
+		const int3 n(tile.x + ring[i][0], tile.y + ring[i][1], tile.z);
+		open[i] = false;
+		if(!cb->isInTheMap(n))
+			continue;
+		if(alsoOpen && n == *alsoOpen)
+			open[i] = true; // the tile the hero is leaving
+		else if(const CGPathNode * node = paths.getPathInfo(n))
+			open[i] = node->accessible == EPathAccessibility::ACCESSIBLE || node->accessible == EPathAccessibility::GUARDED;
+		count += open[i] ? 1 : 0;
+	}
+	if(count < 2)
+		return count == 1 ? false : true; // a dead end blocks nobody; a tile with no way on is no place to stand
+	int group[8] = {-1, -1, -1, -1, -1, -1, -1, -1};
+	int groups = 0;
+	for(int i = 0; i < 8; ++i)
+	{
+		if(!open[i] || group[i] >= 0)
+			continue;
+		group[i] = groups;
+		int stack[8];
+		int top = 0;
+		stack[top++] = i;
+		while(top > 0)
+		{
+			const int a = stack[--top];
+			for(int b = 0; b < 8; ++b)
+			{
+				if(!open[b] || group[b] >= 0)
+					continue;
+				if(std::abs(ring[a][0] - ring[b][0]) <= 1 && std::abs(ring[a][1] - ring[b][1]) <= 1)
+				{
+					group[b] = groups;
+					stack[top++] = b;
+				}
+			}
+		}
+		++groups;
+	}
+	return groups >= 2;
+}
+
+std::vector<uint16_t> AdventureAI::fogDistances(const int3 & from) const
+{
+	// Steps from `from` to every tile of its level through land we know to be open and land we have
+	// not seen (taken for open): how a player guesses the way to a town that shows beyond the fog.
+	const int3 size = cb->getMapSize();
+	const size_t width = size.x;
+	std::vector<uint16_t> dist(width * size.y, UINT16_MAX);
+	if(!cb->isInTheMap(from))
+		return dist;
+	std::vector<uint8_t> blocked(dist.size(), 0);
+	for(int y = 0; y < size.y; ++y)
+		for(int x = 0; x < size.x; ++x)
+		{
+			const TerrainTile * t = cb->getTile(int3(x, y, from.z), false);
+			if(t && (!t->getTerrain()->isPassable() || t->isWater() || (t->blocked() && !t->visitable())))
+				blocked[y * width + x] = 1;
+		}
+	std::vector<uint32_t> queue;
+	queue.reserve(dist.size());
+	const size_t start = from.y * width + from.x;
+	dist[start] = 0;
+	queue.push_back(static_cast<uint32_t>(start));
+	for(size_t head = 0; head < queue.size(); ++head)
+	{
+		const uint32_t i = queue[head];
+		const int x = static_cast<int>(i % width);
+		const int y = static_cast<int>(i / width);
+		for(int dx = -1; dx <= 1; ++dx)
+			for(int dy = -1; dy <= 1; ++dy)
+			{
+				const int nx = x + dx;
+				const int ny = y + dy;
+				if((!dx && !dy) || nx < 0 || ny < 0 || nx >= size.x || ny >= size.y)
+					continue;
+				const size_t n = ny * width + nx;
+				if(blocked[n] || dist[n] != UINT16_MAX)
+					continue;
+				dist[n] = static_cast<uint16_t>(dist[i] + 1);
+				queue.push_back(static_cast<uint32_t>(n));
+			}
+	}
+	return dist;
 }
 
 void AdventureAI::computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles, bool validation) const
@@ -1810,9 +1973,9 @@ double AdventureAI::siegeOverhead(const CGHeroInstance * hero, int fortLevel) co
 void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero)
 {
 	const CGHeroInstance * visitor = town->getVisitingHero();
-	if(!visitor || visitor == mainHero || visitor->tempOwner != me || town->getGarrisonHero())
+	if(!visitor || visitor == mainHero || visitor->tempOwner != me)
 		return;
-	if(visitor->canBeMergedWith(*town))
+	if(!town->getGarrisonHero() && visitor->canBeMergedWith(*town))
 	{
 		logAi->debug("FairAI %s: %s steps into the garrison of %s to let %s in", me.toString(), visitor->getNameTranslated(),
 			town->getNameTranslated(), mainHero->getNameTranslated());
@@ -1820,8 +1983,10 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 		gateway.waitTillFree();
 		return;
 	}
-	// The garrison's troops and the visitor's do not fit into one army: the visitor leaves the gate
-	// by the nearest free tile instead - once the main hero is about to arrive.
+	// The garrison is taken by another hero of ours, or its troops and the visitor's do not fit into
+	// one army: the visitor leaves the gate by the nearest free tile instead - once the main hero is
+	// about to arrive. (With both places taken the main hero could never enter: it kept walking up
+	// to the gate for the troops inside, day after day.)
 	const int3 gate = town->visitablePos();
 	if(mainHero->visitablePos().z != gate.z || mainHero->visitablePos().dist2d(gate) > 10)
 		return;
@@ -2336,7 +2501,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		// collectors are weak: they work close to home (scouts roam, but still avoid known enemies);
 		// bringing troops to the main hero is worth the trip
 		const bool toMain = (partner && partner->id == mainHero)
-			|| (params.leaderFocus && params.couriers && object.hasValue() && object == mainHero);
+			|| (params.couriers && object.hasValue() && object == mainHero);
 		if(cautious && !scout && !toMain && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
 			return true;
 		if(threats.empty())
@@ -2394,7 +2559,22 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		int3 town;
 		double value = 0;
 	};
-	std::vector<Approach> approach; ///< enemy towns we know of but cannot find a way to (campaign)
+	std::vector<Approach> approach; ///< enemy towns we know of but cannot find a way to (campaign, seekTowns)
+	// Outside a campaign too, a main hero that need not fear the enemy's heroes looks for the way to
+	// a town it knows of: the land around a Cover of Darkness is hidden again every day, and without
+	// this the hero turned round a day's march from the town to fetch a few troops at home.
+	const bool seeking = params.seekTowns && isMain(hero) && !campaign(hero) && today >= 14
+		&& (oppositionHeroes <= 0 || fieldStrength(hero) >= params.heroEdge * oppositionHeroes);
+	// (seekTowns) Any town not ours that we know of but cannot find a way to - the land between is
+	// unseen, or hidden again: the way there is guessed through the fog, and what stands on that
+	// guess (a stretch to explore, a guard) is credited with the town.
+	struct Seek
+	{
+		int z = 0;
+		double value = 0;
+		std::vector<uint16_t> steps;
+	};
+	std::vector<Seek> seek;
 	std::map<std::string, int> rejected; // diagnostics
 
 	// ---- objects other than monsters
@@ -2529,6 +2709,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					strategicUnlock[g.guard] += value * unlockShare(g, free);
 			}
 		}
+		else if(params.seekTowns && object.type == Obj::TOWN && object.owner != me && !isAlly(object.owner)
+			&& (isMain(hero) || scoutsToday.count(hero->id)) && (!isEnemy(object.owner) || seeking || campaign(hero) || !isMain(hero)))
+		{
+			seek.push_back({object.visitablePos.z, value, fogDistances(object.visitablePos)});
+		}
 		else if(campaign(hero) && object.type == Obj::TOWN && isEnemy(object.owner) && object.visitablePos.z == heroPos.z)
 		{
 			// an enemy town we know of but cannot find a way to (the land around it is hidden, or the
@@ -2539,7 +2724,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 	// ---- exploration
 	// on campaign land that was hidden again counts like land never seen: that is where a town with a Cover of Darkness lies
-	RevealGrid revealGrid(*cb, perception.staleTiles(), campaign(hero) ? 1.0 : params.staleTileWeight);
+	RevealGrid revealGrid(*cb, perception.staleTiles(), campaign(hero) || !seek.empty() ? 1.0 : params.staleTileWeight);
 	double tileValue = params.explorationTileValue;
 	{
 		RevealGrid & grid = revealGrid;
@@ -2591,6 +2776,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					{
 						if(tile.z == a.town.z)
 							value *= 1.0 + 4.0 * std::max(0.0, 1.0 - tile.dist2d(a.town) / 24.0);
+					}
+					for(const auto & s : seek)
+					{
+						// the town's worth, less for every day's march still to go beyond this tile
+						const uint16_t steps = z == s.z ? s.steps[static_cast<size_t>(y) * size.x + x] : UINT16_MAX;
+						if(steps != UINT16_MAX)
+							value += s.value / (1.0 + steps / 15.0);
 					}
 					if(normal)
 					{

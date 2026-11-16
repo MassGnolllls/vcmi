@@ -70,6 +70,7 @@ struct Params
 	double explorationTileValue = 36;  ///< gold per newly revealed tile (decays over the game)
 	double staleTileWeight = 0.3;      ///< tiles hidden again (Cover of Darkness) vs never seen
 	int maxTravelTurns = 4;            ///< targets further away are ignored
+	int seekTowns = 0;                 ///< 1: towns we know of but have no way to (land between unseen, or hidden again by a Cover of Darkness) draw the main hero and scouts: the way is guessed through the fog, and the stretch to explore or the guard on that guess is credited with the town. Enemy towns only for a main hero stronger than the enemy heroes it has seen (or on campaign). Off until a test shows a gain
 	int mainHorizon = 0;               ///< main hero: targets and unexplored land up to this many days away count (0: maxTravelTurns / exploreMaxTurns). Off until a test shows a gain
 	int exploreMaxTurns = 4;           ///< exploration targets at most this many days away
 	int collectorsTakeGarrison = 1;    ///< collectors pick up garrison troops to ferry them
@@ -97,7 +98,7 @@ struct Params
 	int moveSpells = 1;                ///< paths may use Fly / Water Walk when the hero can cast them (cast on the way)
 	int boats = 1;                     ///< heroes board boats, buy one when they run out of land (town shipyard, or a shipyard they stand at) and sail
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
-	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero; a big reinforcement counts more than its size (it makes fights possible). Off until a test shows a gain
+	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero (trips of up to 8 days, also beyond our territory); the main hero keeps its role unless another army is three times as strong, and walks home for troops only at 35 % of their worth. Off until a test shows a gain
 	double earlyGoldDays = 21;         ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full, fading out over the two weeks after. 0: off. On by default: +0.05 and +0.12 score in two tests on medium maps (town hall and city hall in week one)
 	int earlyGoldContact = 0;          ///< 1: "gold first" ends when the first enemy hero or town comes into view (then troops count, fading within a week) - on small maps that is early, on large ones late. Off until a test shows a gain
 	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)
