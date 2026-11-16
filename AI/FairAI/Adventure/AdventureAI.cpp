@@ -281,6 +281,8 @@ void Params::loadOverrides(int playerIndex)
 	read("mainHorizon", mainHorizon);
 	read("refillShare", refillShare);
 	read("supplyRuns", supplyRuns);
+	read("armyFirst", armyFirst);
+	read("townAmbush", townAmbush);
 	read("exploreRegion", exploreRegion);
 	read("fetchRoundTrip", fetchRoundTrip);
 	read("supplyShare", supplyShare);
@@ -1312,10 +1314,19 @@ void AdventureAI::updateThreats()
 		if(today - seen.day <= 21)
 			oppositionHeroes = std::max(oppositionHeroes, seen.strength * (1.0 + 0.03 * (today - seen.day)));
 	}
+	hiddenMain = 0;
+	for(const auto & [type, seen] : enemySightings)
+	{
+		if(seen.day != today && today - seen.day <= 21)
+			hiddenMain = std::max(hiddenMain, seen.strength * (1.0 + 0.03 * (today - seen.day)));
+	}
+	ambushTowns.clear();
 	oppositionGuards = 0;
 	std::map<PlayerColor, int> townsKnown;
 	for(const auto & [id, object] : known)
 	{
+		if(object.type == Obj::TOWN && isEnemy(object.owner))
+			ambushTowns.push_back(object.visitablePos);
 		if(object.type == Obj::MONSTER && object.army)
 			oppositionGuards = std::max(oppositionGuards, observedDanger(object));
 		if(object.type == Obj::TOWN && object.owner.isValidPlayer())
@@ -1632,6 +1643,21 @@ double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, boo
 		double radius = cautious ? params.threatRadius + 8.0 * t.age : t.radius;
 		if(enemyDistance(t.hero, t.pos, t.strength, tile, radius) <= radius)
 			worst = t.strength;
+	}
+	// (townAmbush) An enemy hero we have seen lately but cannot see now may well sit in one of its
+	// towns - a hero inside a town does not show on the map. Within a day's march of an enemy town
+	// that army has to be reckoned with. (A main hero went collecting mines beside the enemy's town
+	// with 29k; the enemy's main army came out of the gate.)
+	if(params.townAmbush && hiddenMain > worst)
+	{
+		for(const auto & pos : ambushTowns)
+		{
+			if(pos.z == tile.z && pos.dist2d(tile) <= params.threatRadius)
+			{
+				worst = hiddenMain;
+				break;
+			}
+		}
 	}
 	return worst;
 }
@@ -4808,11 +4834,43 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 				keep[res] += (res == GameResID::WOOD || res == GameResID::ORE) ? 10 : 4;
 	}
 
+	// (armyFirst) Troops that wait in our dwellings compete with the next building for the same
+	// gold. What they are worth per gold piece, in the measure of the building scores:
+	double troopGold = 0;
+	double troopScore = 0;
+	if(params.armyFirst)
+	{
+		double troopValue = 0;
+		for(const auto * t : perception.ownTowns())
+		{
+			for(const auto & entry : t->creatures)
+			{
+				if(entry.first == 0 || entry.second.empty())
+					continue;
+				const CCreature * type = entry.second.back().toCreature();
+				troopGold += static_cast<double>(entry.first) * type->getRecruitCost(GameResID::GOLD);
+				troopValue += static_cast<double>(entry.first) * type->getAIValue();
+			}
+		}
+		if(troopGold > 0)
+			troopScore = troopValue * params.goldPerArmyValue * std::sqrt(economy.armyPremium) / (troopGold * goldWeight);
+	}
+
 	int attempts = 0;
 	for(const auto & option : ranked)
 	{
 		if(option.score < 0.25 || attempts >= 4)
 			return;
+		// a building that would leave troops unbought has to be worth more per gold than they are
+		if(params.armyFirst && option.score < troopScore
+			&& static_cast<double>(spendable()[GameResID::GOLD]) - info->buildings.at(option.build)->resources[GameResID::GOLD] < troopGold)
+		{
+			if(armyFirstLog != today)
+				logAi->debug("FairAI %s day %d: %s in %s waits (score %.2f) - troops for %.0f gold come first (worth %.2f per gold)", me.toString(), today,
+					info->buildings.at(option.build)->getNameTranslated(), town->getNameTranslated(), option.score, troopGold, troopScore);
+			armyFirstLog = today;
+			return;
+		}
 		if(option.state == EBuildingState::NO_RESOURCES && !buyResourcesFor(town, info->buildings.at(option.build)->resources, false, &keep))
 			continue;
 		if(!spendable().canAfford(info->buildings.at(option.build)->resources))

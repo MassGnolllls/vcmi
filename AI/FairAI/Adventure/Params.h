@@ -74,6 +74,8 @@ struct Params
 	int seekTowns = 0;                 ///< 1: towns we know of but have no way to (land between unseen, or hidden again by a Cover of Darkness) draw the main hero and scouts: the way is guessed through the fog, and the stretch to explore or the guard on that guess is credited with the town. Enemy towns only for a main hero stronger than the enemy heroes it has seen (or on campaign). Off until a test shows a gain
 	int exploreRegion = 0;             ///< 1 (with regionValue): a place to explore from which a whole unexplored region shows (not a pocket of fog) is worth regionValue more, for the main hero. Off until a test shows a gain
 	int fetchRoundTrip = 0;            ///< 1: the main hero counts the way home for troops twice (it has to come back to where its work is). Off until a test shows a gain
+	int armyFirst = 0;                 ///< 1: a building that would leave troops unbought in our dwellings is built only if it is worth more per gold piece than those troops (until now buildings always came first, and the main hero led a few thousand in weeks two and three). Off until a test shows a gain
+	int townAmbush = 0;                ///< 1: within a day's march of an enemy town, the strongest enemy hero seen in the last three weeks but not visible today counts as a threat (it may sit in the town). Off until a test shows a gain
 	int mainHorizon = 0;               ///< main hero: targets and unexplored land up to this many days away count (0: maxTravelTurns / exploreMaxTurns). Off until a test shows a gain
 	int exploreMaxTurns = 4;           ///< exploration targets at most this many days away
 	int collectorsTakeGarrison = 1;    ///< collectors pick up garrison troops to ferry them

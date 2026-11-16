@@ -224,6 +224,7 @@ private:
 	};
 	std::optional<SupplyRun> supply;
 	int supplyLog = -1;
+	int armyFirstLog = -1;
 	bool supplyPossible = false; ///< some town of ours has a hero that could carry (the main hero need not walk home)
 	void planSupplyRun();
 	double supplyRoadThreat(const CGPathNode * node) const;
@@ -277,6 +278,8 @@ private:
 	};
 	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
 	double oppositionHeroes = 0; ///< strongest enemy hero seen in the last three weeks (0: none)
+	double hiddenMain = 0;        ///< strongest of those we cannot see today: it may sit in a town (parameter townAmbush)
+	std::vector<int3> ambushTowns; ///< enemy towns we know of
 	double oppositionGuards = 0; ///< strongest guard we know of on the map
 	int guildDay = -1;           ///< day we last looked into the thieves' guild
 	int contactDay = -1;         ///< day we first saw an enemy hero or town (-1: not yet)

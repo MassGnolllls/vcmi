@@ -223,6 +223,29 @@ void Perception::refresh()
 		updates.push_back(std::move(observed));
 	}
 
+	// What we own we know without looking (the kingdom overview lists it). A town or mine that our
+	// memory still calls ours but that is no longer on that list was taken while hidden from us -
+	// under a Cover of Darkness, say. Taken by the enemy, if there is only one; else by somebody.
+	std::set<ObjectInstanceID> mine;
+	for(const CGObjectInstance * obj : cb->getMyObjects())
+		mine.insert(obj->id);
+	PlayerColor taker = PlayerColor::NEUTRAL;
+	{
+		int enemies = 0;
+		for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
+		{
+			const PlayerColor color(c);
+			if(color != me && cb->getPlayerStatus(color, false) == EPlayerStatus::INGAME
+				&& cb->getPlayerRelations(me, color) == PlayerRelations::ENEMIES)
+			{
+				++enemies;
+				taker = color;
+			}
+		}
+		if(enemies != 1)
+			taker = PlayerColor::NEUTRAL;
+	}
+
 	std::unique_lock lock(mx);
 	for(auto it = objects.begin(); it != objects.end();)
 	{
@@ -231,6 +254,8 @@ void Perception::refresh()
 			++it;
 			continue;
 		}
+		if(it->second.owner == me && !mine.count(it->first) && it->second.type != Obj::HERO)
+			it->second.owner = taker;
 		// We look at the tile and the object is gone: forget it. If the tile is hidden, keep the
 		// (possibly outdated) memory, exactly like a human player would.
 		if(cb->isVisible(it->second.visitablePos))
