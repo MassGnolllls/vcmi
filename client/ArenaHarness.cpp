@@ -85,6 +85,14 @@ JsonNode playerStats(const CGameState & gs, const PlayerState & ps)
 	JsonNode node;
 	node["ai"].String() = installedAI.count(ps.color) ? installedAI.at(ps.color) : std::string("?");
 	node["status"].String() = ps.status == EPlayerStatus::WINNER ? "winner" : (ps.status == EPlayerStatus::LOSER ? "loser" : "ingame");
+	node["team"].Integer() = ps.team.getNum();
+	{
+		// the faction chosen (or rolled) for this seat at game start
+		const auto & infos = gs.getStartInfo()->playerInfos;
+		auto info = infos.find(ps.color);
+		const bool known = info != infos.end() && info->second.castle.hasValue() && info->second.castle.getNum() >= 0;
+		node["faction"].String() = known ? info->second.castle.toEntity(LIBRARY)->getJsonKey() : std::string("?");
+	}
 	node["cheated"].Bool() = ps.cheated;
 	node["towns"].Integer() = e.numberTowns;
 	node["heroes"].Integer() = e.numberHeroes;
@@ -347,8 +355,19 @@ int generateMap(const po::variables_map & vm)
 	const int players = vm.count("arena-players") ? vm["arena-players"].as<int>() : 2;
 
 	static const std::map<std::string, int> sizes = {
-		{"s", CMapHeader::MAP_SIZE_SMALL}, {"m", CMapHeader::MAP_SIZE_MIDDLE}, {"l", CMapHeader::MAP_SIZE_LARGE}, {"xl", CMapHeader::MAP_SIZE_XLARGE}
+		{"s", CMapHeader::MAP_SIZE_SMALL}, {"m", CMapHeader::MAP_SIZE_MIDDLE}, {"l", CMapHeader::MAP_SIZE_LARGE}, {"xl", CMapHeader::MAP_SIZE_XLARGE},
+		{"h", CMapHeader::MAP_SIZE_HUGE}, {"xh", CMapHeader::MAP_SIZE_XHUGE}, {"g", CMapHeader::MAP_SIZE_GIANT}
 	};
+	// optional per-player lists (red, blue, ...): "0,0,1,1" teams, "castle,hota.cove:cove" starting towns
+	auto splitList = [](const std::string & text)
+	{
+		std::vector<std::string> parts;
+		if(!text.empty())
+			boost::split(parts, text, boost::is_any_of(","));
+		return parts;
+	};
+	const auto teams = splitList(vm.count("arena-teams") ? vm["arena-teams"].as<std::string>() : std::string());
+	const auto towns = splitList(vm.count("arena-towns") ? vm["arena-towns"].as<std::string>() : std::string());
 	static const std::map<std::string, EWaterContent::EWaterContent> waters = {
 		{"random", EWaterContent::RANDOM}, {"none", EWaterContent::NONE}, {"normal", EWaterContent::NORMAL}, {"islands", EWaterContent::ISLANDS}
 	};
@@ -381,6 +400,25 @@ int generateMap(const po::variables_map & vm)
 		options.setMonsterStrength(strengths.at(monsters));
 		for(int i = 0; i < players; ++i)
 			options.setPlayerTypeForStandardPlayer(PlayerColor(i), EPlayerType::HUMAN); // human or AI may take the seat
+		for(int i = 0; i < players && i < static_cast<int>(teams.size()); ++i)
+			if(!teams[i].empty())
+				options.setPlayerTeam(PlayerColor(i), TeamID(std::stoi(teams[i])));
+		for(int i = 0; i < players && i < static_cast<int>(towns.size()); ++i)
+		{
+			if(towns[i].empty() || towns[i] == "random")
+				continue;
+			std::string scope = ModScope::scopeGame();
+			std::string id = towns[i];
+			if(auto colon = id.find(':'); colon != std::string::npos)
+			{
+				scope = id.substr(0, colon);
+				id = id.substr(colon + 1);
+			}
+			auto faction = LIBRARY->identifiers()->getIdentifier(scope, "faction", id, true);
+			if(!faction)
+				throw std::runtime_error("unknown faction: " + towns[i]);
+			options.setStartingTownForPlayer(PlayerColor(i), FactionID(*faction));
+		}
 
 		EditorCallback callback(nullptr);
 		CMapGenerator generator(options, &callback, seed);

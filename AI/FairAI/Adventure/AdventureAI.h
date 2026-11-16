@@ -171,6 +171,9 @@ private:
 	double townNeed(const CGTownInstance * town, const CGHeroInstance * mainHero) const;
 	/// Our other hero stands in the gate the main hero wants to enter: move it into the garrison
 	void clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero);
+	/// Relations to the owner of an object: a valid player we are at war with / a team mate (never ourselves)
+	bool isEnemy(PlayerColor owner) const;
+	bool isAlly(PlayerColor owner) const;
 	/// Multiplier for defenders behind the walls of our own town
 	double defenceWalls(const CGTownInstance * town) const;
 	/// Threat this hero accepts relative to its defence (main hero / others)

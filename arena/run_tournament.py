@@ -56,15 +56,99 @@ ARENA_MOD_SETTINGS = {
 }
 
 
+COLORS = ["red", "blue", "tan", "green", "orange", "purple", "teal", "pink"]
+
+
+def make_config_home(mods="", ai_log=None) -> Path:
+    """Private settings directory for one client run (parallel clients would race on a shared one)."""
+    config_home = Path(tempfile.mkdtemp(prefix="vcmi-arena-cfg-"))
+    (config_home / "vcmi").mkdir(parents=True, exist_ok=True)
+    settings = json.loads(json.dumps(ARENA_SETTINGS))
+    if ai_log:
+        settings["logging"]["loggers"].append({"domain": "ai", "level": ai_log})
+    mod_settings = json.loads(json.dumps(ARENA_MOD_SETTINGS))
+    for mod in filter(None, (mods or "").split(",")):
+        if mod not in mod_settings["presets"]["default"]["mods"]:
+            mod_settings["presets"]["default"]["mods"].append(mod)
+    (config_home / "vcmi" / "settings.json").write_text(json.dumps(settings, indent=1))
+    (config_home / "vcmi" / "modSettings.json").write_text(json.dumps(mod_settings, indent=1))
+    return config_home
+
+
+def client_env(config_home: Path) -> dict:
+    env = dict(os.environ)
+    env["XDG_CONFIG_HOME"] = str(config_home)
+    env["XDG_CACHE_HOME"] = str(config_home / "cache")
+    return env
+
+
+def map_file(map_name: str):
+    """'MAPS/ARENA/NAME' -> path of the map file (any extension), or None"""
+    folder, _, stem = map_name.rpartition("/")
+    sub = folder.split("/", 1)[1] if "/" in folder else ARENA_MAP_SUBDIR
+    for directory in (vcmi_data_dir() / "Maps").glob("*"):
+        if directory.is_dir() and directory.name.upper() == sub.upper():
+            for path in directory.glob("*"):
+                if path.stem.upper() == stem.upper():
+                    return path
+    return None
+
+
+def map_seat_groups(map_name: str):
+    """Teams of a map as lists of colours, in colour order (free for all: one colour per group).
+    Read from the header of .vmap files; other formats are treated as two players, red and blue."""
+    import re
+    import zipfile
+    path = map_file(map_name)
+    try:
+        with zipfile.ZipFile(path) as z:
+            text = z.read("header.json").decode("utf-8", errors="replace")
+        header = json.loads(re.sub(r"(?m)^\s*//[^\n]*", "", text))
+    except Exception:
+        return [["red"], ["blue"]]
+    colours = [c for c in COLORS if c in (header.get("players") or {})]
+    groups = []
+    seen = set()
+    for team in header.get("teams") or []:
+        members = [c for c in COLORS if c in team and c in colours]
+        if members:
+            groups.append(members)
+            seen.update(members)
+    groups += [[c] for c in colours if c not in seen]
+    groups.sort(key=lambda g: COLORS.index(g[0]))
+    return groups or [["red"], ["blue"]]
+
+
+def game_score(record: dict):
+    """Score of the AI under test in one game: 1 = won, 0 = lost, otherwise its army share at the day
+    limit, per seat (so 0.5 means parity however many seats each AI holds). None if the game failed."""
+    result = record.get("result") or {}
+    players = result.get("players") or {}
+    if not players or result.get("outcome") == "stalled":
+        return None
+    mine = record.get("mine") or (["blue"] if record.get("match", 0) % 2 else ["red"])
+    others = [c for c in players if c not in mine]
+    winner = result.get("winner") or ""
+    if result.get("outcome") == "victory" and winner:
+        return 1.0 if winner in mine else 0.0
+    my = sum(players[c].get("armyStrength", 0) for c in mine if c in players) / max(1, len(mine))
+    their = sum(players[c].get("armyStrength", 0) for c in others) / max(1, len(others))
+    return my / (my + their) if my + their > 0 else 0.5
+
+
 # ----------------------------------------------------------------------------- maps
 
 def cmd_genmaps(args) -> int:
-    maps_dir = vcmi_data_dir() / "Maps" / ARENA_MAP_SUBDIR
+    maps_dir = vcmi_data_dir() / "Maps" / (args.pool or ARENA_MAP_SUBDIR)
     maps_dir.mkdir(parents=True, exist_ok=True)
     ok = 0
     for i in range(args.count):
         seed = args.seed + i
-        name = f"{args.template}_{args.size}_l{args.levels}_{args.water}_{seed}.vmap".replace(" ", "")
+        tag = ""
+        if args.players != 2 or args.teams or args.towns or args.tag:
+            tag = f"_p{args.players}" + ("t" if args.teams else "") + (f"_{args.tag}" if args.tag else "")
+        name = f"{args.template}_{args.size}_l{args.levels}_{args.water}{tag}_{seed}.vmap"
+        name = "".join(ch for ch in name if ch.isalnum() or ch in "_.-")  # no spaces or brackets in file names
         out = maps_dir / name
         if out.exists() and not args.force:
             print(f"exists: {out}")
@@ -72,8 +156,16 @@ def cmd_genmaps(args) -> int:
             continue
         cmd = [args.client, "--headless", "--arena-genmap", str(out), "--arena-template", args.template,
                "--arena-size", args.size, "--arena-levels", str(args.levels), "--arena-seed", str(seed),
-               "--arena-water", args.water, "--arena-monsters", args.monsters]
-        res = subprocess.run(cmd, capture_output=True, text=True, timeout=600)
+               "--arena-water", args.water, "--arena-monsters", args.monsters, "--arena-players", str(args.players)]
+        if args.teams:
+            cmd += ["--arena-teams", args.teams]
+        if args.towns:
+            cmd += ["--arena-towns", args.towns]
+        config_home = make_config_home(args.mods)
+        try:
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=client_env(config_home))
+        finally:
+            shutil.rmtree(config_home, ignore_errors=True)
         if res.returncode == 0 and out.exists():
             print(f"generated: {out}")
             ok += 1
@@ -83,16 +175,24 @@ def cmd_genmaps(args) -> int:
     return 0 if ok == args.count else 1
 
 
-def list_arena_maps(pattern: str):
-    maps_dir = vcmi_data_dir() / "Maps" / ARENA_MAP_SUBDIR
+def list_arena_maps(pattern: str, pool: str = ""):
+    pool = pool or ARENA_MAP_SUBDIR
+    maps_dir = vcmi_data_dir() / "Maps" / pool
     maps = sorted(p for p in maps_dir.glob("*.vmap") if pattern in p.name)
-    return [f"MAPS/{ARENA_MAP_SUBDIR.upper()}/{p.stem.upper()}" for p in maps]
+    return [f"MAPS/{pool.upper()}/{p.stem.upper()}" for p in maps]
 
 
 # ----------------------------------------------------------------------------- matches
 
-def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, seed: int, out_dir: Path,
+def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: int, out_dir: Path,
                battle_mode: bool = False) -> dict:
+    """ai_red/ai_blue: labels of the two seats, or (ai_red = dict colour -> label, ai_blue = list of the
+    colours played by the AI under test) for maps with more players."""
+    seats = None
+    mine = None
+    if isinstance(ai_red, dict):
+        seats, mine = ai_red, list(ai_blue)
+        ai_red, ai_blue = seats.get("red", ""), seats.get("blue", "")
     result_file = out_dir / f"match_{match_id:04d}.json"
     log_dir = out_dir / f"logs_{match_id:04d}"
     log_dir.mkdir(parents=True, exist_ok=True)
@@ -101,16 +201,9 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
     config_home = None
     if os.name != "nt":
         # isolate settings.json per match: parallel clients would otherwise race on it
-        config_home = Path(tempfile.mkdtemp(prefix="vcmi-arena-cfg-"))
-        env["XDG_CONFIG_HOME"] = str(config_home)
-        env["XDG_CACHE_HOME"] = str(config_home / "cache")
-        (config_home / "vcmi").mkdir(parents=True, exist_ok=True)
-        settings = json.loads(json.dumps(ARENA_SETTINGS))
-        ai_log = os.environ.get("ARENA_AI_LOG")  # e.g. "debug": detailed AI decisions in the match log
-        if ai_log:
-            settings["logging"]["loggers"].append({"domain": "ai", "level": ai_log})
-        (config_home / "vcmi" / "settings.json").write_text(json.dumps(settings, indent=1))
-        (config_home / "vcmi" / "modSettings.json").write_text(json.dumps(ARENA_MOD_SETTINGS, indent=1))
+        # ARENA_AI_LOG, e.g. "debug": detailed AI decisions in the match log
+        config_home = make_config_home(getattr(args, "mods", ""), os.environ.get("ARENA_AI_LOG"))
+        env = client_env(config_home)
 
     port = args.base_port + match_id % 1000
     if battle_mode:
@@ -118,11 +211,17 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
         ai_args = ["--ai", "FairAI", "--ai", "FairAI", "--arena-battle-ai", ai_red, "--arena-battle-ai", ai_blue]
     else:
         # "Adventure+Combat" labels, e.g. "Nullkiller2+FairAI", select both AIs of a seat
-        red_adv, _, red_combat = ai_red.partition("+")
-        blue_adv, _, blue_combat = ai_blue.partition("+")
-        ai_args = ["--ai", red_adv, "--ai", blue_adv]
-        if red_combat or blue_combat:
-            ai_args += ["--arena-battle-ai", red_combat or "BattleAI", "--arena-battle-ai", blue_combat or "BattleAI"]
+        if seats is None:
+            seats = {"red": ai_red, "blue": ai_blue}
+            mine = ["blue"] if match_id % 2 else ["red"]
+        last = max(COLORS.index(c) for c in seats)
+        labels = [seats.get(COLORS[i]) or ai_blue or ai_red for i in range(last + 1)]
+        ai_args = []
+        for label in labels:
+            ai_args += ["--ai", label.partition("+")[0]]
+        if any("+" in label for label in labels):
+            for label in labels:
+                ai_args += ["--arena-battle-ai", label.partition("+")[2] or "BattleAI"]
     cmd = [args.client, "--headless", "--testmap", map_name, *ai_args,
            "--arena-result", str(result_file),
            "--arena-max-days", str(getattr(args, "max_days", 120)),
@@ -137,11 +236,14 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
     ai_params = getattr(args, "ai_params", "") or ""
     opp_params = getattr(args, "opponent_params", "") or ""
     if not battle_mode and (ai_params or opp_params):
-        red_params, blue_params = (opp_params, ai_params) if match_id % 2 else (ai_params, opp_params)
-        cmd += ["--arena-fairai-params", red_params or "{}", "--arena-fairai-params", blue_params or "{}"]
+        for i in range(last + 1):
+            cmd += ["--arena-fairai-params", (ai_params if COLORS[i] in mine else opp_params) or "{}"]
 
     started = time.time()
     record = {"match": match_id, "map": map_name, "red": ai_red, "blue": ai_blue, "seed": seed}
+    if not battle_mode:
+        record["seats"] = seats
+        record["mine"] = mine
     try:
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=args.timeout)
         record["returncode"] = proc.returncode
@@ -158,6 +260,8 @@ def play_match(args, match_id: int, map_name: str, ai_red: str, ai_blue: str, se
         if config_home:
             shutil.rmtree(config_home, ignore_errors=True)
     record["wallSec"] = round(time.time() - started, 1)
+    if not battle_mode:
+        record["score"] = game_score(record)
     if not args.keep_logs and "error" not in record:
         shutil.rmtree(log_dir, ignore_errors=True)
     return record
@@ -167,7 +271,8 @@ def winner_ai(record: dict):
     res = record.get("result")
     if not res or res.get("outcome") != "victory" or not res.get("winner"):
         return None
-    return record["red"] if res["winner"] == "red" else record["blue"]
+    seats = record.get("seats") or {"red": record["red"], "blue": record["blue"]}
+    return seats.get(res["winner"])
 
 
 def material(record: dict, color: str) -> float:
@@ -213,9 +318,11 @@ def summarize(records, ai: str, opponent: str) -> str:
             days.append(res["day"])
         else:
             timeouts += 1
-            my_color = "red" if r["red"] == ai else "blue"
-            other = "blue" if my_color == "red" else "red"
-            if material(r, my_color) > material(r, other):
+            seats = r.get("seats") or {"red": r["red"], "blue": r["blue"]}
+            mine = r.get("mine") or [c for c, label in seats.items() if label == ai]
+            others = [c for c in res.get("players", {}) if c not in mine]
+            mine = [c for c in mine if c in res.get("players", {})]
+            if mine and others and sum(material(r, c) for c in mine) / len(mine) > sum(material(r, c) for c in others) / len(others):
                 adj_wins += 1
     decided = wins + losses
     lo, hi = wilson(wins, decided)
@@ -235,7 +342,7 @@ def summarize(records, ai: str, opponent: str) -> str:
 
 
 def cmd_play(args) -> int:
-    maps = list_arena_maps(args.map_filter)
+    maps = list_arena_maps(args.map_filter, getattr(args, "pool", ""))
     if args.max_maps:
         maps = maps[: args.max_maps]
     if not maps:
@@ -250,9 +357,17 @@ def cmd_play(args) -> int:
     rng = random.Random(args.seed)
     for map_name in maps:
         seed = rng.randint(1, 2**31 - 1)
-        for swap in (False, True):
-            red, blue = (args.opponent, args.ai) if swap else (args.ai, args.opponent)
-            jobs.append((match_id, map_name, red, blue, seed))
+        groups = map_seat_groups(map_name)  # teams (or single players) take turns between the two AIs
+        for swap in (0, 1):
+            seats = {}
+            mine = []
+            for index, group in enumerate(groups):
+                ours = (index + swap) % 2 == 0
+                for colour in group:
+                    seats[colour] = args.ai if ours else args.opponent
+                    if ours:
+                        mine.append(colour)
+            jobs.append((match_id, map_name, seats, mine, seed))
             match_id += 1
 
     print(f"playing {len(jobs)} matches on {len(maps)} maps with {args.jobs} parallel job(s)")
@@ -265,9 +380,10 @@ def cmd_play(args) -> int:
             sink.write(json.dumps(rec) + "\n")
             sink.flush()
             res = rec.get("result", {})
-            print(f"match {rec['match']:4d} {rec['red']:>12} (red) vs {rec['blue']:<12} (blue): "
+            score = rec.get("score")
+            print(f"match {rec['match']:4d} {args.ai} as {','.join(rec.get('mine') or [])} of {len(rec.get('seats') or {})}: "
                   f"{res.get('outcome', rec.get('error'))} winner={res.get('winner', '-')} day={res.get('day', '-')} "
-                  f"[{rec['wallSec']}s]", flush=True)
+                  f"score={'-' if score is None else format(score, '.2f')} [{rec['wallSec']}s]", flush=True)
 
     summary = summarize(sorted(records, key=lambda r: r["match"]), args.ai, args.opponent)
     (out_dir / "summary.md").write_text(summary + "\n")
@@ -393,9 +509,17 @@ def cmd_battles(args) -> int:
     match_id = 0
     for map_name in maps:
         seed = rng.randint(1, 2**31 - 1)
-        for swap in (False, True):
-            red, blue = (args.opponent, args.ai) if swap else (args.ai, args.opponent)
-            jobs.append((match_id, map_name, red, blue, seed))
+        groups = map_seat_groups(map_name)  # teams (or single players) take turns between the two AIs
+        for swap in (0, 1):
+            seats = {}
+            mine = []
+            for index, group in enumerate(groups):
+                ours = (index + swap) % 2 == 0
+                for colour in group:
+                    seats[colour] = args.ai if ours else args.opponent
+                    if ours:
+                        mine.append(colour)
+            jobs.append((match_id, map_name, seats, mine, seed))
             match_id += 1
     print(f"playing {len(jobs)} battles on {len(maps)} scenarios with {args.jobs} parallel job(s)")
     records = []
@@ -426,7 +550,13 @@ def main() -> int:
     g.add_argument("--client", required=True)
     g.add_argument("--count", type=int, default=10)
     g.add_argument("--template", default="2SM4d")
-    g.add_argument("--size", default="s", choices=["s", "m", "l", "xl"])
+    g.add_argument("--size", default="s", choices=["s", "m", "l", "xl", "h", "xh", "g"])
+    g.add_argument("--players", type=int, default=2)
+    g.add_argument("--teams", default="", help="team per player, e.g. 0,0,1,1 (default: free for all)")
+    g.add_argument("--towns", default="", help="starting town per player, e.g. castle,hota.cove:cove (default: random)")
+    g.add_argument("--tag", default="", help="extra text for the map file names")
+    g.add_argument("--pool", default="", help="map pool = sub-folder of Maps/ (default: arena)")
+    g.add_argument("--mods", default="", help="extra mods to enable, comma-separated (e.g. hota)")
     g.add_argument("--levels", type=int, default=1)
     g.add_argument("--water", default="none", choices=["none", "normal", "islands", "random"])
     g.add_argument("--monsters", default="normal", choices=["weak", "normal", "strong", "random"])
@@ -438,6 +568,8 @@ def main() -> int:
     p.add_argument("--ai", required=True, help="AI under test, e.g. FairAI or Nullkiller2+FairAI (adventure+combat)")
     p.add_argument("--opponent", required=True, help="reference AI, e.g. Nullkiller2 or Nullkiller2+BattleAI")
     p.add_argument("--map-filter", default="", help="only maps whose file name contains this text")
+    p.add_argument("--mods", default="", help="extra mods to enable, comma-separated (e.g. hota)")
+    p.add_argument("--pool", default="", help="map pool = sub-folder of Maps/ (default: arena)")
     p.add_argument("--max-maps", type=int, default=0)
     p.add_argument("--max-days", type=int, default=120)
     p.add_argument("--difficulty", type=int, default=4, help="0-4; both AIs get the same 'ai' start resources")

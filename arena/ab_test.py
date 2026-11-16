@@ -30,6 +30,10 @@ def game_scores(results_file: Path) -> dict:
         return scores
     for line in open(results_file):
         record = json.loads(line)
+        if "score" in record:  # written by the runner (any number of players)
+            if record["score"] is not None:
+                scores[record["match"]] = record["score"]
+            continue
         result = record.get("result") or {}
         players = result.get("players") or {}
         if len(players) != 2:

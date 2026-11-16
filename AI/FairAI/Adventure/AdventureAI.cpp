@@ -230,6 +230,16 @@ AdventureAI::AdventureAI(FairAIGateway & gateway, std::shared_ptr<CCallback> cb,
 
 AdventureAI::~AdventureAI() = default;
 
+bool AdventureAI::isEnemy(PlayerColor owner) const
+{
+	return owner.isValidPlayer() && owner != me && cb->getPlayerRelations(me, owner) == PlayerRelations::ENEMIES;
+}
+
+bool AdventureAI::isAlly(PlayerColor owner) const
+{
+	return owner.isValidPlayer() && owner != me && cb->getPlayerRelations(me, owner) != PlayerRelations::ENEMIES;
+}
+
 const CGHeroInstance * AdventureAI::ownHero(ObjectInstanceID id) const
 {
 	if(!id.hasValue())
@@ -729,9 +739,7 @@ void AdventureAI::updateThreats()
 	threats.clear();
 	for(const auto & [id, object] : perception.knownObjects())
 	{
-		if(object.type != Obj::HERO || !object.owner.isValidPlayer() || object.owner == me || !object.army)
-			continue;
-		if(cb->getPlayerRelations(me, object.owner) != PlayerRelations::ENEMIES)
+		if(object.type != Obj::HERO || !isEnemy(object.owner) || !object.army)
 			continue;
 		const int age = today - object.lastSeenDay;
 		if(age > 3)
@@ -1165,7 +1173,10 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 {
 	const bool main = isMain(hero);
 	const bool own = object.owner == me;
-	const bool enemy = object.owner.isValidPlayer() && !own;
+	const bool enemy = isEnemy(object.owner);
+	// towns, heroes, mines and dwellings of team mates are neither targets nor ours to take
+	if(isAlly(object.owner))
+		return 0;
 	auto visitedByHero = [&]() { return instance && instance->wasVisited(hero); };
 	auto visitedByUs = [&]() { return instance && instance->wasVisited(me); };
 	const double primary = main ? params.primarySkillValueMain : params.primarySkillValueOther;
@@ -1453,7 +1464,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
-			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && it->second.owner != me;
+			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner);
 			// the threat itself may be attacked, but only today: walking off towards it leaves the town open
 			if(!enemyHero || (params.antiOscillation && travel > roundTripBudget))
 				return;
@@ -1499,7 +1510,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			double danger = guardDanger(object.visitablePos);
 			ObjectInstanceID siegedTown; // attacking this tile means a siege (a hero in a town gate, too)
 			double defenders = 0; // nobody at home: the town is simply taken, no battle
-			if((object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner != me)
+			if((object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner != me && !isAlly(object.owner))
 			{
 				// everything defending this tile: heroes (with their skills) and a town behind walls
 				bool town = false;
@@ -1519,7 +1530,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				danger += town ? defenders * params.wallsFactor : defenders;
 			}
 			const bool desperate = object.type == Obj::TOWN && perception.ownTowns().empty();
-			const bool versusHero = (object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner.isValidPlayer() && object.owner != me;
+			const bool versusHero = (object.type == Obj::HERO || object.type == Obj::TOWN) && isEnemy(object.owner);
 			double loss = expectedLoss(hero, danger, desperate, versusHero);
 			if(loss < 0)
 			{
@@ -2035,7 +2046,7 @@ void AdventureAI::leaveGarrison(const CGHeroInstance * hero, const CGTownInstanc
 	bool enemiesAbout = false;
 	for(const auto & [id, object] : perception.knownObjects())
 	{
-		if(object.type == Obj::HERO && object.owner.isValidPlayer() && object.owner != me && today - object.lastSeenDay <= 7)
+		if(object.type == Obj::HERO && isEnemy(object.owner) && today - object.lastSeenDay <= 7)
 			enemiesAbout = true;
 	}
 	if(!enemiesAbout)
@@ -2668,7 +2679,7 @@ void AdventureAI::defendTowns()
 		bool threatened = false;
 		for(const auto & [id, object] : known)
 		{
-			if(object.type == Obj::HERO && object.visibleNow && object.owner.isValidPlayer() && object.owner != me
+			if(object.type == Obj::HERO && object.visibleNow && isEnemy(object.owner)
 				&& enemyDistance(id, object.visitablePos, observedDanger(object) * params.enemyHeroFactor, town->visitablePos(), 14) < 14)
 			{
 				threatened = true;
