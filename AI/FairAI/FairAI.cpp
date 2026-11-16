@@ -9,6 +9,7 @@
  */
 #include "StdInc.h"
 #include "FairAI.h"
+#include "../../lib/mapObjects/CGTownInstance.h"
 
 #include "Perception/Perception.h"
 #include "Adventure/AdventureAI.h"
@@ -363,6 +364,11 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 		}
 	}
 	CAdventureAI::battleStart(battleID, army1, army2, tile, hero1, hero2, side, replayAllowed);
+	if(auto battle = cb->getBattle(battleID))
+	{
+		if(const auto * town = battle->battleGetDefendedTown(); town && town->fortLevel() > CGTownInstance::NONE)
+			logAi->info("FairAI %s battle is a siege of %s (fort level %d)", playerID.toString(), town->getNameTranslated(), static_cast<int>(town->fortLevel()));
+	}
 }
 
 void FairAIGateway::actionStarted(const BattleID & battleID, const BattleAction & action)

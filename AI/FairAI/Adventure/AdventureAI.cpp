@@ -181,6 +181,10 @@ void Params::loadOverrides(int playerIndex)
 	read("threatRadius", threatRadius);
 	read("enemyHeroFactor", enemyHeroFactor);
 	read("threatTolerance", threatTolerance);
+	read("threatToleranceSecondary", threatToleranceSecondary);
+	read("defenceWallsFort", defenceWallsFort);
+	read("defenceWallsCitadel", defenceWallsCitadel);
+	read("fleeGain", fleeGain);
 	read("townDefenceValue", townDefenceValue);
 	read("retreatValue", retreatValue);
 	read("collectorRadius", collectorRadius);
@@ -412,9 +416,10 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		{
 			const auto * hero = ai.ownHero(id);
 			if(hero)
-				logAi->info("FairAI %s: %s%s ends at %s, strength %d, known threat %.0f (cautious %.0f)", ai.me.toString(), hero->getNameTranslated(),
+				logAi->info("FairAI %s: %s%s ends at %s, strength %d, known threat %.0f (cautious %.0f), defence %.0f, mp %d%s", ai.me.toString(), hero->getNameTranslated(),
 					ai.isMain(hero) ? " (main)" : "", hero->visitablePos().toString(), static_cast<int>(hero->getTotalStrength()),
-					ai.threatAt(hero->visitablePos()), ai.threatAt(hero->visitablePos(), ObjectInstanceID(), true));
+					ai.threatAt(hero->visitablePos()), ai.threatAt(hero->visitablePos(), ObjectInstanceID(), true),
+					ai.defenceAt(hero, hero->visitablePos()), hero->movementPointsRemaining(), hero->getVisitedTown() ? ", in town" : "");
 		}
 	} endOfDayLog{*this, heroId};
 	for(int step = 0; step < MAX_STEPS_PER_HERO; ++step)
@@ -460,7 +465,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			for(const auto * town : perception.ownTowns())
 			{
 				const CGPathNode * node = paths->getPathInfo(town->visitablePos());
-				if(node && node->reachable() && node->cost < homeCost && !failedToday.count({heroId.getNum(), town->visitablePos()}))
+				const bool safe = threatAt(town->visitablePos()) <= tolerance(hero) * defenceAt(hero, town->visitablePos());
+				if(safe && node && node->reachable() && node->cost < homeCost && !failedToday.count({heroId.getNum(), town->visitablePos()}))
 				{
 					home = town;
 					homeCost = node->cost;
@@ -997,6 +1003,18 @@ void AdventureAI::dumpKnowledge() const
 		me.toString(), today, out);
 }
 
+double AdventureAI::defenceWalls(const CGTownInstance * town) const
+{
+	if(town->fortLevel() >= CGTownInstance::CITADEL)
+		return params.defenceWallsCitadel;
+	return town->fortLevel() >= CGTownInstance::FORT ? params.defenceWallsFort : 1.0;
+}
+
+double AdventureAI::tolerance(const CGHeroInstance * hero) const
+{
+	return isMain(hero) ? params.threatTolerance : params.threatToleranceSecondary;
+}
+
 double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) const
 {
 	double strength = static_cast<double>(hero->getTotalStrength());
@@ -1009,8 +1027,7 @@ double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) co
 			garrison += stackValue(slot.second.get());
 		if(const auto * guard = town->getGarrisonHero(); guard && guard != hero)
 			garrison += static_cast<double>(guard->getArmyStrength());
-		double walls = town->fortLevel() >= CGTownInstance::CITADEL ? 1.5 : (town->fortLevel() >= CGTownInstance::FORT ? 1.3 : 1.0);
-		strength = (strength + garrison) * walls;
+		strength = (strength + garrison) * defenceWalls(town);
 	}
 	return strength;
 }
@@ -1029,8 +1046,7 @@ double AdventureAI::townNeed(const CGTownInstance * town, const CGHeroInstance *
 		local += static_cast<double>(visitor->getArmyStrength());
 	// troops still for sale are bought when the enemy shows up (defendTowns)
 	local += static_cast<double>(recruitableValue(town, cb->getResourceAmount(GameResID::GOLD)));
-	const double walls = town->fortLevel() >= CGTownInstance::CITADEL ? 1.5 : (town->fortLevel() >= CGTownInstance::FORT ? 1.3 : 1.0);
-	local *= walls;
+	local *= defenceWalls(town);
 	if(threat <= local)
 		return 0;
 	return std::min(1.0, (threat - local) / threat);
@@ -1369,9 +1385,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			return false;
 		// attacking the threat itself is judged by the battle estimate
 		const double together = partner ? static_cast<double>(partner->getTotalStrength()) : 0.0;
-		if(threatAt(tile, partner ? ObjectInstanceID() : object, cautious) > params.threatTolerance * (defenceAt(hero, tile) + together))
+		if(threatAt(tile, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * (defenceAt(hero, tile) + together))
 			return true;
-		return stop.isValid() && stop != tile && threatAt(stop, partner ? ObjectInstanceID() : object, cautious) > params.threatTolerance * defenceAt(hero, stop);
+		return stop.isValid() && stop != tile && threatAt(stop, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * defenceAt(hero, stop);
 	};
 
 	// standing in a town that cannot hold on its own: only trips that end back home today,
@@ -1425,10 +1441,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			double danger = guardDanger(object.visitablePos);
 			ObjectInstanceID siegedTown; // attacking this tile means a siege (a hero in a town gate, too)
+			double defenders = 0; // nobody at home: the town is simply taken, no battle
 			if((object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner != me)
 			{
 				// everything defending this tile: heroes (with their skills) and a town behind walls
-				double defenders = 0;
 				bool town = false;
 				for(const auto & [otherId, other] : known)
 				{
@@ -1453,7 +1469,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				++rejected["too strong"];
 				continue;
 			}
-			if(siegedTown.hasValue() && !desperate)
+			if(siegedTown.hasValue() && !desperate && defenders > 0)
 			{
 				// moat and arrow towers take their share before the walls fall
 				auto fort = townFortLevel.find(siegedTown);
@@ -1609,12 +1625,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		std::string reasons;
 		for(const auto & [why, count] : rejected)
 			reasons += " " + why + "=" + std::to_string(count);
-		logAi->debug("FairAI %s: %s (strength %.0f) has no target; weakest guard in reach %.0f; rejected:%s", me.toString(),
-			hero->getNameTranslated(), ownStrength, weakestRejected, reasons);
+		int reachableTiles = 0, freeTiles = 0;
+		const int3 size = cb->getMapSize();
+		for(int z = 0; z < size.z; ++z)
+			for(int x = 0; x < size.x; ++x)
+				for(int y = 0; y < size.y; ++y)
+				{
+					if(reachable(paths, int3(x, y, z)))
+						++reachableTiles;
+					if(reachable(freePaths, int3(x, y, z)))
+						++freeTiles;
+				}
+		logAi->debug("FairAI %s: %s (strength %.0f) has no target; weakest guard in reach %.0f; reachable tiles %d (ignoring guards %d); rejected:%s", me.toString(),
+			hero->getNameTranslated(), ownStrength, weakestRejected, reachableTiles, freeTiles, reasons);
 	}
 
 	// ---- standing where a stronger enemy hero can reach us: get away (own towns preferred)
-	if(threatAt(heroPos, ObjectInstanceID(), cautious) > params.threatTolerance * defenceAt(hero, heroPos))
+	if(threatAt(heroPos, ObjectInstanceID(), cautious) > tolerance(hero) * defenceAt(hero, heroPos))
 	{
 		const int3 size = cb->getMapSize();
 		Target bestRetreat;
@@ -1632,7 +1659,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 						ownTown = ownTown || town->visitablePos() == tile;
 					if(node->action != EPathNodeAction::NORMAL && !ownTown)
 						continue;
-					double margin = defenceAt(hero, tile) * params.threatTolerance - threatAt(tile, ObjectInstanceID(), cautious);
+					double margin = defenceAt(hero, tile) * tolerance(hero) - threatAt(tile, ObjectInstanceID(), cautious);
 					if(margin <= 0)
 						continue;
 					double value = heroWorth * params.retreatValue * (ownTown ? 1.2 : 1.0);
@@ -1655,14 +1682,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				double nearest = 1e9;
 				for(const auto & t : threats)
 				{
-					if((!cautious ? t.age <= 2 : true) && t.strength > params.threatTolerance * ownStrength)
+					if((!cautious ? t.age <= 2 : true) && t.strength > tolerance(hero) * ownStrength)
 						nearest = std::min(nearest, enemyDistance(t.hero, t.pos, t.strength, tile, 60));
 				}
 				return nearest;
 			};
 			const double here = threatDistance(heroPos);
 			Target flee;
-			double bestDistance = here + 4;
+			double bestDistance = here + params.fleeGain;
 			for(int z = 0; z < size.z; ++z)
 				for(int x = 0; x < size.x; ++x)
 					for(int y = 0; y < size.y; ++y)
@@ -1679,8 +1706,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 							flee.travel = node->cost;
 						}
 					}
-			if(bestDistance > here + 4)
+			if(bestDistance > here + params.fleeGain)
 				addTarget(flee.tile, ObjectInstanceID(), heroWorth * params.retreatValue * 0.5, 0, flee.travel, "flee");
+			logAi->debug("FairAI %s: %s threatened (%.0f vs defence %.0f) and no safe tile today; threat distance here %.1f, best reachable %.1f",
+				me.toString(), hero->getNameTranslated(), threatAt(heroPos, ObjectInstanceID(), cautious), defenceAt(hero, heroPos), here,
+				bestDistance > here + params.fleeGain ? bestDistance : here);
 		}
 	}
 

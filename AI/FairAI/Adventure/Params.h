@@ -40,7 +40,11 @@ struct Params
 	int pathThreats = 1;               ///< threat zones follow the walkable land we know (0: straight-line radius)
 	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
 	double threatGrowth = 0.15;        ///< an enemy hero we have not seen for a day has probably picked up this much more army (per day)
-	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength
+	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength (main hero)
+	double threatToleranceSecondary = 1.4; ///< same for the other heroes
+	double defenceWallsFort = 1.3;     ///< our own town with a fort: defenders count this much more
+	double defenceWallsCitadel = 1.5;  ///< same with a citadel or castle
+	double fleeGain = 4;               ///< trapped (no safe tile today): flee only if the threats' path distance grows by this much
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
 	int townGuard = 1;                 ///< 1: town defence weighs the town's own means, the main hero only makes round trips from a town that needs it and clears the gate of our other heroes (0: old rules)
 	double wallsFactor = 1.5;          ///< sieges: defenders behind town walls count this much more

@@ -161,6 +161,10 @@ private:
 	double townNeed(const CGTownInstance * town, const CGHeroInstance * mainHero) const;
 	/// Our other hero stands in the gate the main hero wants to enter: move it into the garrison
 	void clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero);
+	/// Multiplier for defenders behind the walls of our own town
+	double defenceWalls(const CGTownInstance * town) const;
+	/// Threat this hero accepts relative to its defence (main hero / others)
+	double tolerance(const CGHeroInstance * hero) const;
 	/// Strength the hero would defend with on this tile (own town: garrison and walls help)
 	double defenceAt(const CGHeroInstance * hero, const int3 & tile) const;
 	/// Walking distance (tiles of normal terrain) an enemy hero at `from` needs to reach `tile`, judged
