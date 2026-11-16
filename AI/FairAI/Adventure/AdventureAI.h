@@ -192,6 +192,7 @@ private:
 	bool inTerritory(const int3 & tile) const;
 	std::vector<uint16_t> fogDistances(const int3 & from) const;
 	bool inPass(const int3 & tile, const CPathsInfo & paths, const int3 * alsoOpen = nullptr) const;
+	mutable std::set<int> courierLog; ///< diagnostics: day and hero already reported
 	void dumpKnowledge() const;
 	int lastHeroLossDay = -100;
 	int idleDays = 0; ///< consecutive days the main hero achieved nothing (no visit, fight or exploration)
@@ -268,6 +269,7 @@ private:
 	std::map<PlayerColor, int> guildBestHero;  ///< thieves' guild: each player's best hero (hero type)
 	bool huntWanted = false;     ///< some enemy still has towns we have not found (updateThreats)
 	bool campaignMode = false;   ///< the main hero is clearly the strongest force we know of (updateThreats; parameter leaderFocus)
+	bool refillMode = false; ///< campaign interrupted: the main hero fetches the troops that wait in our towns
 	/// this hero is the main hero on campaign: long marches, the enemy's towns first, no errands
 	bool campaign(const CGHeroInstance * hero) const;
 	/// attack, defence, spell power and knowledge of an enemy hero: as shown to us, else as its class and the day suggest

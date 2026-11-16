@@ -257,6 +257,7 @@ void Params::loadOverrides(int playerIndex)
 	read("earlyGoldContact", earlyGoldContact);
 	read("regionValue", regionValue);
 	read("mainHorizon", mainHorizon);
+	read("refillShare", refillShare);
 	read("seekTowns", seekTowns);
 	read("minSafetyRatio", minSafetyRatio);
 	read("exploreMaxTurns", exploreMaxTurns);
@@ -326,7 +327,10 @@ void AdventureAI::chooseMainHero()
 	}
 	// The army leader keeps its role (and its experience): couriers bring it the troops. Only an army
 	// far bigger than what is left of the leader's takes over (couriers; else at 1.5 times).
-	const double takeover = params.couriers ? 3.0 : 1.5;
+	// - as far as the leader is the more experienced hero: between beginners the bigger army leads.
+	double takeover = 1.5;
+	if(params.couriers && current)
+		takeover = std::clamp(1.5 + 0.25 * (static_cast<double>(current->level) - static_cast<double>(strongest->level)), 1.5, 3.0);
 	if(!current || strongest->getTotalStrength() > takeover * current->getTotalStrength())
 		mainHero = strongest->id;
 }
@@ -367,7 +371,7 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 
 bool AdventureAI::campaign(const CGHeroInstance * hero) const
 {
-	return campaignMode && hero && isMain(hero);
+	return campaignMode && !refillMode && hero && isMain(hero);
 }
 
 // ======================================================================= turn
@@ -1259,6 +1263,26 @@ void AdventureAI::updateThreats()
 		if(before != campaignMode)
 			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f, their best heroes seen: %s)", me.toString(), today,
 				campaignMode ? "on" : "off", fieldStrength(leader), oppositionHeroes, mainsSeen ? "yes" : "no");
+		// On campaign the hero does not walk home for a trickle. But what has grown at home to a good
+		// part of its own army is what decides the war (a campaign fought with half of our troops,
+		// the other half waiting in the towns, was how games were lost): fetch it, then march again.
+		const bool refillBefore = refillMode;
+		if(campaignMode && leader && params.refillShare > 0)
+		{
+			double stock = 0;
+			for(const auto * town : perception.ownTowns())
+				stock += townTroops(town, leader);
+			const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+			if(stock >= params.refillShare * army)
+				refillMode = true;
+			else if(stock < 0.4 * params.refillShare * army)
+				refillMode = false;
+			if(refillBefore != refillMode)
+				logAi->info("FairAI %s day %d: campaign %s (troops waiting in our towns %.0f, main hero's army %.0f)", me.toString(), today,
+					refillMode ? "interrupted to fetch troops" : "resumed", stock, army);
+		}
+		else
+			refillMode = false;
 	}
 	// Does an enemy still have towns we have not found? Every enemy in the game has at least one
 	// (or is about to drop out); the thieves' guild ranks the players by their number of towns.
@@ -2588,6 +2612,19 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			continue;
 		const CGObjectInstance * instance = perception.visibleObject(id);
 		double value = objectValue(hero, object, instance);
+		if(params.couriers && id == mainHero && !isMain(hero) && logAi->isDebugEnabled() && courierLog.insert(today * 1000 + heroNum % 1000).second)
+		{
+			// once a day per hero: why a hero does or does not bring its troops to the leader (diagnostics)
+			const CGHeroInstance * leader = ownHero(mainHero);
+			const CGPathNode * way = reachable(paths, object.visitablePos);
+			const CGPathNode * freeWay = way ? way : reachable(freePaths, object.visitablePos);
+			logAi->debug("FairAI %s: %s (army %llu) to the leader %s (army %llu): gain %.0f, value %.0f%s, way %s%s", me.toString(),
+				hero->getNameTranslated(), static_cast<unsigned long long>(hero->getArmyStrength()),
+				leader ? leader->getNameTranslated() : "?", static_cast<unsigned long long>(leader ? leader->getArmyStrength() : 0),
+				leader ? transferGain(leader, hero) : 0.0, value, reservedByOther(id) ? " (another hero is on its way)" : "",
+				way ? (boost::format("%.2f days") % way->cost).str() : (freeWay ? "behind a guard" : "none"),
+				way && unsafe(way, id) ? ", unsafe" : "");
+		}
 		if(value <= 0 || reservedByOther(id))
 			continue;
 
@@ -2821,6 +2858,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		// map of zones it is a new region with its mines, treasures and perhaps a town.
 		if(params.regionValue > 0 && isMain(hero))
 		{
+			// A guard seen only from afar has no known tile behind it to stand on: count what shows
+			// from the guard's own place once it is gone. (Without this the guards on the way out
+			// of our corner opened "nothing", and the hero stayed in two regions for four weeks.)
+			for(const auto & [id, object] : known)
+			{
+				if(object.type == Obj::MONSTER && reachable(paths, object.visitablePos))
+					fogBehind[id] = std::max(fogBehind[id], grid.count(object.visitablePos, radius));
+			}
 			for(const auto & [guard, tiles] : fogBehind)
 			{
 				if(tiles >= 30)

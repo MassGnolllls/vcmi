@@ -49,6 +49,7 @@ struct Params
 	int heroForecast = 0;              ///< 1: attacking an enemy hero in the open field is judged by simulating the battle with the hero's estimated attack and defence (as for guards), not by army values alone. Off until a test shows a gain
 	int leaderFocus = 0;               ///< 1: campaign mode - once the main hero is campaignEdge times as strong as any enemy hero seen in three weeks it plans up to 30 days ahead, looks for the enemy's towns and takes them, and leaves the growth at home as garrison. Off until a test shows a gain
 	double campaignEdge = 2.0;         ///< see leaderFocus
+	double refillShare = 0.4;          ///< campaign: troops waiting in our towns worth this share of the main hero's army interrupt the campaign - the hero fetches them first (0: never)
 	int fetchByShare = 0;              ///< 1: troops waiting for the main hero (in towns, with our other heroes) count by how much they would add to its army - full value from fetchShare of the army on, a tenth for a trickle. Off until a test shows a gain
 	double fetchShare = 0.5;           ///< see fetchByShare
 	int noChase = 0;                   ///< 1: enemy heroes are targets only when they can be reached today (or stand in a town): no running after heroes that move on. Off until a test shows a gain
