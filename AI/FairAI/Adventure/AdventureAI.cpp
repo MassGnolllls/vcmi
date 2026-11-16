@@ -181,6 +181,8 @@ void Params::loadOverrides(int playerIndex)
 	read("collectorsRoam", collectorsRoam);
 	read("tavernArmies", tavernArmies);
 	read("garrisonShare", garrisonShare);
+	read("mageGuildValue", mageGuildValue);
+	read("buyWarMachines", buyWarMachines);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -1590,6 +1592,18 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 			cb->buyArtifact(hero, ArtifactID::SPELLBOOK);
 		}
 		upgradeArmy(hero);
+		if(params.buyWarMachines)
+		{
+			// a ballista, tent or ammo cart from the blacksmith helps in every battle
+			const ArtifactID machine = town->getWarMachineInBuilding(BuildingID::BLACKSMITH);
+			if(machine.hasValue() && !hero->hasArt(machine))
+			{
+				const int price = static_cast<int>(machine.toArtifact()->getPrice());
+				const int64_t reserve = economy.rho > 1.5 ? 500 : 3000;
+				if(cb->getResourceAmount(GameResID::GOLD) >= price + reserve)
+					cb->buyArtifact(hero, machine);
+			}
+		}
 	}
 	else if(ownHero(mainHero) && params.collectorsTakeGarrison)
 	{
@@ -1752,9 +1766,11 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 		}
 	}
 	else if(id == BuildingID::MAGES_GUILD_1)
-		value += 700;
-	else if(id == BuildingID::MAGES_GUILD_2 || id == BuildingID::MAGES_GUILD_3)
-		value += 400;
+		value += params.mageGuildValue;
+	else if(id == BuildingID::MAGES_GUILD_2)
+		value += 0.6 * params.mageGuildValue;
+	else if(id == BuildingID::MAGES_GUILD_3)
+		value += 0.4 * params.mageGuildValue;
 	else if(id == BuildingID::MARKETPLACE)
 	{
 		// trading unblocks buildings we cannot afford for lack of a resource
