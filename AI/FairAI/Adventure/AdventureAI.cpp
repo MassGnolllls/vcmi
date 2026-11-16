@@ -244,6 +244,8 @@ void Params::loadOverrides(int playerIndex)
 	read("guardFogFactor", guardFogFactor);
 	read("unlockDirect", unlockDirect);
 	read("heroModel", heroModel);
+	read("heroEdge", heroEdge);
+	read("heroTolerance", heroTolerance);
 	read("leaderFocus", leaderFocus);
 	read("campaignEdge", campaignEdge);
 	read("noChase", noChase);
@@ -251,6 +253,7 @@ void Params::loadOverrides(int playerIndex)
 	read("fetchShare", fetchShare);
 	read("heroForecast", heroForecast);
 	read("surrender", surrender);
+	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
 	read("regionValue", regionValue);
 	read("minSafetyRatio", minSafetyRatio);
@@ -947,8 +950,11 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 {
 	if(danger <= 0)
 		return 0;
-	const double strength = static_cast<double>(hero->getTotalStrength());
-	double ratio = isMain(hero) ? (versusHero ? params.safetyRatioHero : params.safetyRatio) : params.safetyRatioSecondary;
+	// Against heroes (heroModel): both sides count as army times what attack and defence add - the
+	// measure that told winner from loser in the logged battles; `danger` is given in the same measure.
+	const bool model = params.heroModel && versusHero;
+	const double strength = model ? fieldStrength(hero) : static_cast<double>(hero->getTotalStrength());
+	double ratio = isMain(hero) ? (versusHero ? (model ? params.heroEdge : params.safetyRatioHero) : params.safetyRatio) : params.safetyRatioSecondary;
 	// a main hero that has been stuck for days accepts riskier fights against guards
 	if(isMain(hero) && !versusHero)
 		ratio = std::max(params.minSafetyRatio, ratio - params.patienceStep * idleDays);
@@ -958,7 +964,26 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 		return -1;
 	// Lanchester square law: survivors = sqrt(S^2 - D^2)
 	const double loss = strength - std::sqrt(std::max(0.0, strength * strength - danger * danger));
+	if(model)
+	{
+		// in this measure the square law needs no correction (losses in 144 won battles: 0.45 / ratio^2); back to army value
+		const double army = static_cast<double>(hero->getArmyStrength());
+		return loss / std::max(1.0, strength) * army * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+	}
 	return loss * params.lossFactor * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+}
+
+double AdventureAI::fieldStrength(const CGHeroInstance * hero) const
+{
+	if(!hero)
+		return 0;
+	if(!params.heroModel)
+		return static_cast<double>(hero->getTotalStrength());
+	// spell power and knowledge are left out on both sides (see heroFactor); offence and armourer
+	// count as they do for the enemy's hero
+	const double melee = hero->valOfBonuses(Selector::typeSubtype(BonusType::PERCENTAGE_DAMAGE_BOOST, BonusSubtypeID(BonusCustomSubtype::damageTypeMelee))) / 100.0;
+	const double armour = std::clamp(hero->valOfBonuses(BonusType::GENERAL_DAMAGE_REDUCTION) / 100.0, 0.0, 0.7);
+	return static_cast<double>(hero->getArmyStrength()) * hero->getFightingStrength() * std::sqrt((1.0 + std::max(0.0, melee)) / (1.0 - armour));
 }
 
 AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const
@@ -1091,6 +1116,9 @@ void AdventureAI::updateThreats()
 				noteHeroSkills(shown.hero, *shown.skills);
 		}
 		guildTownPlace = guild.townPlace;
+		guildBestHero.clear();
+		for(const auto & [color, shown] : guild.bestHero)
+			guildBestHero[color] = shown.hero.getNum();
 	}
 	for(const auto & [id, object] : known)
 	{
@@ -1130,25 +1158,39 @@ void AdventureAI::updateThreats()
 	}
 	// Campaign: our main hero is clearly the strongest force we know of - time to end the game. On at
 	// campaignEdge times the strongest enemy hero seen in the last three weeks, off again well below
-	// that; with no enemy hero in sight for three weeks after day 42 they are not coming, so we go.
+	// that. "Know of" must include each enemy's best hero (the thieves' guild shows who that is):
+	// while we have not seen it for four weeks we do not know their main army, and marching out
+	// against scouts only is how a main hero gets caught in the open.
 	{
 		const CGHeroInstance * leader = ownHero(mainHero);
 		const bool before = campaignMode;
-		if(!params.leaderFocus || !leader || today < 21)
-			campaignMode = false;
-		else if(oppositionHeroes > 0)
+		bool mainsSeen = oppositionHeroes > 0;
+		bool guildKnown = false;
+		for(const auto & [color, type] : guildBestHero)
 		{
-			const double edge = static_cast<double>(leader->getTotalStrength()) / oppositionHeroes;
-			if(edge >= params.campaignEdge)
+			if(color == me || !isEnemy(color) || cb->getPlayerStatus(color, false) != EPlayerStatus::INGAME)
+				continue;
+			guildKnown = true;
+			auto seen = enemySightings.find(type);
+			if(seen == enemySightings.end() || today - seen->second.day > 28)
+				mainsSeen = false;
+		}
+		// no tavern, no guild: at least something of weight must have shown itself
+		if(!guildKnown && leader && oppositionHeroes < 0.25 * fieldStrength(leader))
+			mainsSeen = false;
+		if(!params.leaderFocus || !leader || today < 21 || oppositionHeroes <= 0)
+			campaignMode = false;
+		else
+		{
+			const double edge = fieldStrength(leader) / oppositionHeroes;
+			if(edge >= params.campaignEdge && mainsSeen)
 				campaignMode = true;
 			else if(edge < 0.65 * params.campaignEdge)
 				campaignMode = false;
 		}
-		else
-			campaignMode = today > 42;
 		if(before != campaignMode)
-			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f)", me.toString(), today,
-				campaignMode ? "on" : "off", leader ? static_cast<double>(leader->getTotalStrength()) : 0.0, oppositionHeroes);
+			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f, their best heroes seen: %s)", me.toString(), today,
+				campaignMode ? "on" : "off", fieldStrength(leader), oppositionHeroes, mainsSeen ? "yes" : "no");
 	}
 	// Does an enemy still have towns we have not found? Every enemy in the game has at least one
 	// (or is about to drop out); the thieves' guild ranks the players by their number of towns.
@@ -1210,7 +1252,7 @@ std::array<double, 4> AdventureAI::heroSkillsEstimate(const ObservedObject & her
 				const double low = std::clamp(10.0 - fromLevel, 0.0, levels); // levels gained below level 10
 				perLevel = levels > 0 ? (low * heroClass->primarySkillLowLevel[i] + (levels - low) * heroClass->primarySkillHighLevel[i]) / (100.0 * levels) : 0.0;
 			}
-			skills[i] += levels * (perLevel + 0.35 * weight);
+			skills[i] += levels * (perLevel + 0.2 * weight);
 		}
 	};
 
@@ -1228,15 +1270,15 @@ std::array<double, 4> AdventureAI::heroSkillsEstimate(const ObservedObject & her
 		{
 			// shown to us before: it has grown since (main heroes gain a level every four to five days)
 			skills = intel->second.skills;
-			const double level = 1.0 + weight * intel->second.day / 4.5;
-			grow(skills, level, weight * std::max(0, today - intel->second.day) / 4.5);
+			const double level = 1.0 + weight * intel->second.day / 5.5;
+			grow(skills, level, weight * std::max(0, today - intel->second.day) / 5.5);
 			return skills;
 		}
 	}
 	if(heroClass && heroClass->primarySkillInitial.size() >= 4)
 		for(size_t i = 0; i < 4; ++i)
 			skills[i] = heroClass->primarySkillInitial[i];
-	grow(skills, 1.0, std::min(25.0, weight * today / 4.5));
+	grow(skills, 1.0, std::min(25.0, weight * today / 5.5));
 	return skills;
 }
 
@@ -1244,10 +1286,51 @@ double AdventureAI::heroFactor(const ObservedObject & hero) const
 {
 	if(!params.heroModel)
 		return params.enemyHeroFactor;
+	// Attack and defence only. In 266 logged open-field battles against Nullkiller2 the ratio
+	// own army / (enemy army x this factor of the enemy hero) told the outcome: from 1.3 on every
+	// battle was won, around 1.0 it was a coin flip; spell power and knowledge added nothing to that.
 	const auto skills = heroSkillsEstimate(hero);
-	const double fight = std::sqrt((1.0 + 0.05 * skills[0]) * (1.0 + 0.05 * skills[1]));
-	const double magic = std::sqrt((1.0 + 0.05 * skills[2]) * (1.0 + 0.05 * skills[3]));
-	return fight * magic;
+	double factor = std::sqrt((1.0 + 0.05 * skills[0]) * (1.0 + 0.05 * skills[1]));
+
+	// What every player knows of a hero by its face: the skills it starts with and its specialty.
+	// A hero keeps raising the skills it starts with; an offence or armourer specialist (Crag Hack,
+	// Tazar ...) gains a twentieth of the skill's effect with every level - the outliers of the log.
+	const HeroTypeID type(hero.subtype.getNum());
+	const CHero * heroType = type.hasValue() ? type.toHeroType() : nullptr;
+	if(heroType)
+	{
+		double initial = 0;
+		if(heroType->heroClass && heroType->heroClass->primarySkillInitial.size() >= 4)
+			for(int v : heroType->heroClass->primarySkillInitial)
+				initial += v;
+		// level: every level-up gives one skill point; about a fifth more comes from the map
+		const double level = std::clamp(1.0 + (skills[0] + skills[1] + skills[2] + skills[3] - initial) / 1.2, 1.0, 40.0);
+		double melee = 0;
+		double armour = 0;
+		for(const auto & [skill, mastery] : heroType->secSkillsInit)
+		{
+			const CSkill * info = skill.toSkill();
+			if(!info)
+				continue;
+			const int reached = level >= 6 ? 3 : std::clamp<int>(mastery, 1, 3);
+			for(const auto & effect : info->at(reached).effects)
+			{
+				if(effect->type == BonusType::PERCENTAGE_DAMAGE_BOOST && effect->subtype == BonusSubtypeID(BonusCustomSubtype::damageTypeMelee))
+					melee += effect->val / 100.0;
+				else if(effect->type == BonusType::GENERAL_DAMAGE_REDUCTION)
+					armour += effect->val / 100.0;
+			}
+		}
+		for(const auto & bonus : heroType->specialty)
+		{
+			if(bonus->type == BonusType::PERCENTAGE_DAMAGE_BOOST && bonus->subtype == BonusSubtypeID(BonusCustomSubtype::damageTypeMelee))
+				melee *= 1.0 + bonus->val / 100.0 * level;
+			else if(bonus->type == BonusType::GENERAL_DAMAGE_REDUCTION)
+				armour *= 1.0 + bonus->val / 100.0 * level;
+		}
+		factor *= std::sqrt((1.0 + melee) / std::max(0.3, 1.0 - armour));
+	}
+	return factor;
 }
 
 double AdventureAI::heroFightLoss(const CGHeroInstance * hero, const ObservedObject & enemy) const
@@ -1339,7 +1422,7 @@ double AdventureAI::superiority(const CGHeroInstance * hero) const
 {
 	if(!hero || oppositionHeroes <= 0)
 		return 0;
-	return static_cast<double>(hero->getTotalStrength()) / oppositionHeroes;
+	return fieldStrength(hero) / oppositionHeroes;
 }
 
 double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, bool cautious) const
@@ -1647,12 +1730,15 @@ double AdventureAI::defenceWalls(const CGTownInstance * town) const
 
 double AdventureAI::tolerance(const CGHeroInstance * hero) const
 {
+	// with the hero model strengths are comparable: an enemy as strong as we are is one to avoid
+	if(params.heroModel)
+		return isMain(hero) ? params.heroTolerance : 0.9 * params.heroTolerance;
 	return isMain(hero) ? params.threatTolerance : params.threatToleranceSecondary;
 }
 
 double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) const
 {
-	double strength = static_cast<double>(hero->getTotalStrength());
+	double strength = fieldStrength(hero);
 	for(const auto * town : perception.ownTowns())
 	{
 		if(town->visitablePos() != tile)
@@ -2220,7 +2306,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		return false;
 	};
 
-	const double ownStrength = static_cast<double>(hero->getTotalStrength());
+	const double ownStrength = fieldStrength(hero);
 	const double heroWorth = 2000 + ownStrength * params.goldPerArmyValue;
 
 	// where the hero ends the day when heading for `node`
@@ -2251,7 +2337,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(threats.empty())
 			return false;
 		// attacking the threat itself is judged by the battle estimate
-		const double together = partner ? static_cast<double>(partner->getTotalStrength()) : 0.0;
+		const double together = partner ? fieldStrength(partner) : 0.0;
 		if(threatAt(tile, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * (defenceAt(hero, tile) + together))
 			return true;
 		return stop.isValid() && stop != tile && threatAt(stop, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * defenceAt(hero, stop);
@@ -2297,6 +2383,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 	// value hidden behind guards, credited to the guard that blocks it
 	std::map<ObjectInstanceID, double> unlockValue;
+	std::map<ObjectInstanceID, double> strategicUnlock; ///< the part of it that a campaign is about: foreign towns, land not yet seen
 	struct Approach
 	{
 		int3 town;
@@ -2402,8 +2489,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				const double overhead = fort != townFortLevel.end() ? siegeOverhead(hero, fort->second) : 0;
 				if(overhead > 0)
 				{
-					const double left = static_cast<double>(hero->getTotalStrength()) - overhead;
-					if(overhead > 0.5 * static_cast<double>(hero->getTotalStrength()) || left < danger * params.safetyRatioHero)
+					const double left = fieldStrength(hero) - overhead;
+					if(overhead > 0.5 * fieldStrength(hero) || left < danger * (params.heroModel ? params.heroEdge : params.safetyRatioHero))
 					{
 						++rejected["walls"];
 						continue;
@@ -2434,7 +2521,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			++rejected["behind guard"];
 			const GuardOnPath g = firstGuard(free);
 			if(g.guard.hasValue())
+			{
 				unlockValue[g.guard] += value * unlockShare(g, free);
+				if(object.type == Obj::TOWN && object.owner != me)
+					strategicUnlock[g.guard] += value * unlockShare(g, free);
+			}
 		}
 		else if(campaign(hero) && object.type == Obj::TOWN && isEnemy(object.owner) && object.visitablePos.z == heroPos.z)
 		{
@@ -2541,7 +2632,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				addTarget(a.tile, ObjectInstanceID(), 0.5 * a.value, 0, a.cost + a.left / 15.0, "approach");
 		}
 		for(const auto & [guard, value] : behindGuard)
+		{
 			unlockValue[guard] += value;
+			strategicUnlock[guard] += value;
+		}
 		// Land we have not seen behind a guard is more than the strip the first step reveals: on a
 		// map of zones it is a new region with its mines, treasures and perhaps a town.
 		if(params.regionValue > 0 && isMain(hero))
@@ -2549,7 +2643,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			for(const auto & [guard, tiles] : fogBehind)
 			{
 				if(tiles >= 30)
+				{
 					unlockValue[guard] += params.regionValue * decay * std::min(1.0, tiles / 60.0);
+					strategicUnlock[guard] += params.regionValue * decay * std::min(1.0, tiles / 60.0);
+				}
 			}
 		}
 	}
@@ -2610,16 +2707,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			value += params.guardKillValue * danger * params.goldPerArmyValue;
 		// a guard next to unexplored land probably blocks a way into it
 		value += params.guardFogFactor * tileValue * revealGrid.count(object.visitablePos, hero->getSightRadius());
-		auto unlock = unlockValue.find(id);
-		if(unlock != unlockValue.end())
-			value += params.unlockFactor * unlock->second;
+		// on campaign a guard is worth a detour only for what the campaign is about: towns and the way on
+		const auto & opened = campaign(hero) && node->cost > 0.5 ? strategicUnlock : unlockValue;
+		const auto unlock = opened.find(id);
+		const double opens = unlock != opened.end() ? params.unlockFactor * unlock->second : 0.0;
+		value += opens;
 		if(guardLog && object.army->units.size() == 1 && object.army->units.front().creature.hasValue())
 		{
 			// once a day: how the main hero judges every guard in reach (diagnostics)
 			const ObservedStack & seen = object.army->units.front();
 			guardLines += boost::str(boost::format(" [%s %d-%d at %s, %.1f days: danger %.0f, loss %.0f, experience %.0f, opens %.0f -> %s]")
 				% seen.creature.toCreature()->getJsonKey() % seen.minCount % seen.maxCount % object.visitablePos.toString() % node->cost
-				% danger % loss % (hp * expValue(hero)) % (unlock != unlockValue.end() ? params.unlockFactor * unlock->second : 0.0)
+				% danger % loss % (hp * expValue(hero)) % opens
 				% (value <= loss ? "not worth it" : "target"));
 		}
 		if(value <= loss)
@@ -4276,38 +4375,45 @@ void AdventureAI::hireHeroes()
 
 	for(const auto * town : perception.ownTowns())
 	{
-		if(!rehire && static_cast<int>(perception.ownHeroes().size()) >= wanted)
-			return;
-		if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + (rehire ? 0 : reserve))
-			return;
 		if(!town->hasBuilt(BuildingID::TAVERN))
 			continue;
+		const int heroes = static_cast<int>(perception.ownHeroes().size());
 
+		// Who is on offer? Our hero that surrendered (with its army) comes first, then a veteran - a
+		// hero of ours that fled, or anybody's fallen hero, with its levels and skills (parameter
+		// veterans) -, else the one with the best starting army.
 		const CGHeroInstance * best = nullptr;
+		bool special = false;
 		for(const auto * candidate : cb->getAvailableHeroes(town))
 		{
 			if(rehire && candidate->getHeroTypeID().getNum() == waiting)
 			{
 				best = candidate;
+				special = true;
 				break;
 			}
-			if(!best || candidate->getTotalStrength() > best->getTotalStrength())
+			if(params.veterans && candidate->level >= 6)
+			{
+				if(!special || candidate->level > best->level)
+					best = candidate;
+				special = true;
+			}
+			else if(!special && (!best || candidate->getTotalStrength() > best->getTotalStrength()))
 				best = candidate;
 		}
 		if(!best)
 			continue;
-		if(rehire && best->getHeroTypeID().getNum() != waiting)
-		{
-			if(static_cast<int>(perception.ownHeroes().size()) >= wanted)
-				continue; // not in this tavern's offer (it should be): no other hero instead
-		}
+		if(special ? heroes >= params.maxHeroes : heroes >= wanted)
+			return;
+		if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + (special ? 0 : reserve))
+			return;
 
 		// our hero stands in the gate: park him in the garrison while hiring, then swap back
 		const CGHeroInstance * visitor = town->getVisitingHero();
 		bool parked = false;
 		if(visitor)
 		{
-			if(visitor->tempOwner != me || town->getGarrisonHero() || (today > 3 && !rehire) || !visitor->canBeMergedWith(*town))
+			if(visitor->tempOwner != me || town->getGarrisonHero() || (today > 3 && !special) || !visitor->canBeMergedWith(*town))
 				continue;
 			cb->swapGarrisonHero(town);
 			gateway.waitTillFree();
@@ -4316,8 +4422,8 @@ void AdventureAI::hireHeroes()
 			parked = true;
 		}
 
-		logAi->info("FairAI %s day %d: hiring %s in %s%s", me.toString(), today, best->getNameTranslated(), town->getNameTranslated(),
-			rehire && best->getHeroTypeID().getNum() == waiting ? " (back from its surrender, with its army)" : "");
+		logAi->info("FairAI %s day %d: hiring %s (level %d) in %s%s", me.toString(), today, best->getNameTranslated(), static_cast<int>(best->level), town->getNameTranslated(),
+			rehire && best->getHeroTypeID().getNum() == waiting ? " (back from its surrender, with its army)" : (special ? " (a veteran)" : ""));
 		if(rehire && best->getHeroTypeID().getNum() == waiting)
 			rehireHero = -1;
 		cb->recruitHero(town, best);
@@ -4353,13 +4459,22 @@ void AdventureAI::buyTavernArmies()
 			gateway.checkInterruption();
 			if(spendable()[GameResID::GOLD] < reserve || !town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero())
 				break;
-			auto offered = cb->getAvailableHeroes(town);
-			if(offered.empty())
+			// never a veteran: a hero of ours that fled or surrendered waits in the tavern to be hired back, not to be dismissed
+			const CGHeroInstance * pick = nullptr;
+			for(const auto * candidate : cb->getAvailableHeroes(town))
+			{
+				if(candidate->level <= 3 && candidate->getHeroTypeID().getNum() != rehireHero.load())
+				{
+					pick = candidate;
+					break;
+				}
+			}
+			if(!pick)
 				break;
 			std::set<ObjectInstanceID> before;
 			for(const auto * h : perception.ownHeroes())
 				before.insert(h->id);
-			cb->recruitHero(town, offered.front());
+			cb->recruitHero(town, pick);
 			gateway.waitTillFree();
 			const CGHeroInstance * hired = town->getVisitingHero();
 			if(!hired || hired->tempOwner != me || before.count(hired->id))

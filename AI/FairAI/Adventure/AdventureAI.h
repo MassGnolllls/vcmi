@@ -263,6 +263,7 @@ private:
 	std::atomic<int> rehireHero{-1}; ///< hero type that surrendered and waits in our tavern with its army
 	std::atomic<int> rehireDay{-100};
 	std::map<PlayerColor, int> guildTownPlace; ///< thieves' guild: place of each player by number of towns (0 = most)
+	std::map<PlayerColor, int> guildBestHero;  ///< thieves' guild: each player's best hero (hero type)
 	bool huntWanted = false;     ///< some enemy still has towns we have not found (updateThreats)
 	bool campaignMode = false;   ///< the main hero is clearly the strongest force we know of (updateThreats; parameter leaderFocus)
 	/// this hero is the main hero on campaign: long marches, the enemy's towns first, no errands
@@ -272,6 +273,9 @@ private:
 	/// expected loss (gold) of attacking an enemy hero in the open field, by simulating the battle with
 	/// the hero's estimated attack and defence on its troops; -1: leave it alone (parameter heroForecast)
 	double heroFightLoss(const CGHeroInstance * hero, const ObservedObject & enemy) const;
+	/// our hero's strength as it counts against another hero: army times what its attack and defence
+	/// add (parameter heroModel; else the game's total strength, which also counts spell power and knowledge)
+	double fieldStrength(const CGHeroInstance * hero) const;
 	/// What an enemy hero adds to its army (multiplier): attack and defence, spell power and knowledge,
 	/// as shown to us or as its class and the day suggest (parameter heroModel; else a flat factor)
 	double heroFactor(const ObservedObject & hero) const;

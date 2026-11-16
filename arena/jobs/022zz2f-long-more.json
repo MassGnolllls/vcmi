@@ -1,5 +1,5 @@
 {
- "note": "long games on medium land maps (150 days, 24 paired games per config): further switches one by one - surr = surrender lost battles when gold is plentiful, hero = enemy heroes judged by their skills (battle memory, thieves' guild, class) and attacks on them by simulated battle, ff = fights against guards judged by simulated battle, sc2 = two scouts",
+ "note": "long games on medium land maps (150 days, 24 paired games per config): further switches one by one - surr = surrender lost battles when gold is plentiful and hire veterans back, ff = fights against guards judged by simulated battle, sc2 = two scouts, know = secondary skills by role, artifact care, resource plan",
  "script": "matrix.py",
  "args": [
   "play",
@@ -16,7 +16,7 @@
   "--only",
   "m-land-2p",
   "--configs",
-  "{\"base\": {}, \"surr\": {\"surrender\": 1}, \"hero\": {\"heroModel\": 1, \"heroForecast\": 1}, \"ff\": {\"fightForecast\": 1}, \"sc2\": {\"scouts\": 2}}"
+  "{\"base\": {}, \"surr\": {\"surrender\": 1, \"veterans\": 1}, \"ff\": {\"fightForecast\": 1}, \"sc2\": {\"scouts\": 2}, \"know\": {\"skillChoice\": 1, \"artifactCare\": 1, \"resourcePlan\": 1}}"
  ],
  "jobs": 6
 }

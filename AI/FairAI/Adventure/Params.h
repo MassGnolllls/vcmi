@@ -41,8 +41,11 @@ struct Params
 	double threatRadius = 16;          ///< tiles an enemy hero may cover until our next turn
 	int pathThreats = 1;               ///< threat zones follow the walkable land we know (0: straight-line radius)
 	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
-	int heroModel = 0;                 ///< 1: an enemy hero's army counts by what the hero adds - skills the game showed us (battles, thieves' guild) or what its class and the day suggest - instead of the flat enemyHeroFactor. Off until a test shows a gain
+	int heroModel = 0;                 ///< 1: hero against hero is judged in one measure - army times what the hero's attack and defence add. Ours as it is; the enemy's as the game showed it to us (battles, thieves' guild) or as its class and the day suggest. Attack from heroEdge on, keep away from heroTolerance on. Replaces the flat enemyHeroFactor and the game's total strength (which counts our own spell power in full). Off until a test shows a gain
+	double heroEdge = 1.3;             ///< with heroModel: attack an enemy hero in the open from this ratio on (logged battles: all won from 1.3, coin flip at 1.0)
+	double heroTolerance = 1.0;        ///< with heroModel: tiles an enemy hero of this many times our strength can reach are unsafe
 	int surrender = 0;                 ///< 1: in a battle our simulator sees as lost the hero buys its army free (surrender) when we have the gold and the army is worth more to us than the gold; hired back from the tavern at once. Off until a test shows a gain
+	int veterans = 0;                  ///< 1: an experienced hero in the tavern (level 6 or more: ours that fled, or anybody's fallen hero) is hired at once, beyond the usual number of heroes. Off until a test shows a gain
 	int heroForecast = 0;              ///< 1: attacking an enemy hero in the open field is judged by simulating the battle with the hero's estimated attack and defence (as for guards), not by army values alone. Off until a test shows a gain
 	int leaderFocus = 0;               ///< 1: campaign mode - once the main hero is campaignEdge times as strong as any enemy hero seen in three weeks it plans up to 30 days ahead, looks for the enemy's towns and takes them, and leaves the growth at home as garrison. Off until a test shows a gain
 	double campaignEdge = 2.0;         ///< see leaderFocus
