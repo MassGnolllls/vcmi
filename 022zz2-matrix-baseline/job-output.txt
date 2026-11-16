@@ -226,3 +226,40 @@ Paired against `base`: mean score difference over the games both played (95% CI)
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/d5d4448388/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2-matrix-baseline/l-land-2p/base-s42 --pool mix1-l-land-2p --max-days 75 --timeout 1800 --stall-seconds 180 --base-port 7700
 playing 12 matches on 6 maps with 6 parallel job(s)
 match    5 FairAI as blue of 2: timeout winner= day=76 score=0.28 [97.6s]
+match    3 FairAI as blue of 2: timeout winner= day=76 score=0.35 [124.1s]
+match    2 FairAI as red of 2: timeout winner= day=76 score=0.35 [156.3s]
+match    4 FairAI as red of 2: timeout winner= day=76 score=0.43 [162.7s]
+match    0 FairAI as red of 2: timeout winner= day=76 score=0.35 [166.1s]
+match    1 FairAI as blue of 2: timeout winner= day=76 score=0.42 [185.7s]
+match    6 FairAI as red of 2: timeout winner= day=76 score=0.38 [165.2s]
+match    9 FairAI as blue of 2: timeout winner= day=76 score=0.00 [100.5s]
+match    7 FairAI as blue of 2: timeout winner= day=76 score=0.39 [150.4s]
+match    8 FairAI as red of 2: timeout winner= day=76 score=0.30 [129.7s]
+match   10 FairAI as red of 2: timeout winner= day=76 score=0.41 [127.1s]
+match   11 FairAI as blue of 2: timeout winner= day=76 score=0.24 [133.9s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 12 (runner errors: 0)
+- decided: 0 -> FairAI won 0, lost 0
+- day limit reached: 12 (material lead for FairAI in 0)
+- stalled games (AI stopped responding), by AI on turn: none
+- no decided games
+- cheat flags raised: 0
+# A/B test (1 configs, seeds 42)
+
+Paired against `base`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| base | `{}` | 12 | 0 | 1 | 0.325 ± 0.067 | - | 12 |
+
+== l-ffa-6p-u
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/d5d4448388/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2-matrix-baseline/l-ffa-6p-u/base-s42 --pool mix1-l-ffa-6p-u --max-days 75 --timeout 1800 --stall-seconds 180 --base-port 7800
+playing 12 matches on 6 maps with 6 parallel job(s)
+match    3 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.00 [291.6s]
+match    0 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.18 [301.8s]
+match    5 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.12 [304.1s]
+match    2 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.08 [307.2s]
+match    4 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.20 [316.6s]
+match    1 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.15 [327.6s]
