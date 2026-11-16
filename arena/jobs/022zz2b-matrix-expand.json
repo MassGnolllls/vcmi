@@ -1,0 +1,22 @@
+{
+ "note": "expansion switches over six map categories (new build: troop hand-overs fixed, so 'base' against the earlier baseline 022zz2 shows the fix): early gold, more heroes, couriers, forecast-based fights, all together",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_dev.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "42",
+  "--only",
+  "s-land-2p,m-land-2p,m-ffa-4p,m-teams-4p,m-islands-2p,l-land-2p",
+  "--configs",
+  "{\"base\": {}, \"econ\": {\"incomeHorizonDays\": 28, \"earlyGoldDays\": 21}, \"h3\": {\"heroesWeek1\": 3, \"heroesWeek3\": 4, \"heroesLater\": 6, \"collectorsRoam\": 2}, \"ffv\": {\"fightForecast\": 1, \"guardKillValue\": 0.3}, \"combo\": {\"incomeHorizonDays\": 28, \"earlyGoldDays\": 21, \"heroesWeek1\": 3, \"heroesWeek3\": 4, \"heroesLater\": 6, \"collectorsRoam\": 2, \"couriers\": 1, \"sellSurplus\": 1}}"
+ ],
+ "jobs": 6
+}
