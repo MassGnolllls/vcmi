@@ -1,0 +1,9 @@
+{
+ "job": "024-ab-aggression",
+ "state": "running",
+ "commit": "24edb9c863fcb9a761efbb56d3aa7e98e37b8300",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T15:34:23",
+ "note": "guard fights at lower safety ratios (FairAI won 97% of its guard fights: too careful?); 2x72 paired games each, day 45"
+}
