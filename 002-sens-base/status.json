@@ -1,9 +1,12 @@
 {
  "job": "002-sens-base",
- "state": "running",
+ "state": "done",
  "commit": "176eb30444b0e2e74e691aa5d668b12f8ad894f2",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T11:53:37",
- "note": "sensitivity at day 45, 72 games: {}"
+ "note": "sensitivity at day 45, 72 games: {}",
+ "returncode": 0,
+ "finished": "2026-11-16T12:03:41",
+ "minutes": 10.0
 }
