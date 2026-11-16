@@ -1017,6 +1017,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 	// value hidden behind guards, credited to the guard that blocks it
 	std::map<ObjectInstanceID, double> unlockValue;
+	std::map<std::string, int> rejected; // diagnostics
 
 	// ---- objects other than monsters
 	for(const auto & [id, object] : known)
@@ -1055,8 +1056,16 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const bool desperate = object.type == Obj::TOWN && perception.ownTowns().empty();
 			const bool versusHero = (object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner.isValidPlayer() && object.owner != me;
 			double loss = expectedLoss(hero, danger, desperate, versusHero);
-			if(loss < 0 || (!desperate && unsafe(node, object.type == Obj::HERO ? id : ObjectInstanceID())))
+			if(loss < 0)
+			{
+				++rejected["too strong"];
 				continue;
+			}
+			if(!desperate && unsafe(node, object.type == Obj::HERO ? id : ObjectInstanceID()))
+			{
+				++rejected["unsafe"];
+				continue;
+			}
 			// a threatened own town needs its defender
 			if(object.type == Obj::TOWN && object.owner == me && isMain(hero))
 			{
@@ -1072,6 +1081,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		else if(const CGPathNode * free = reachable(freePaths, object.visitablePos))
 		{
+			++rejected["behind guard"];
 			ObjectInstanceID guard = firstGuard(free);
 			if(guard.hasValue())
 				unlockValue[guard] += value / (1.0 + free->cost);
@@ -1159,8 +1169,16 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		double loss = expectedLoss(hero, danger);
 		if(loss < 0 && (weakestRejected == 0 || danger < weakestRejected))
 			weakestRejected = danger;
-		if(loss < 0 || unsafe(node, ObjectInstanceID()))
+		if(loss < 0)
+		{
+			++rejected["monster too strong"];
 			continue;
+		}
+		if(unsafe(node, ObjectInstanceID()))
+		{
+			++rejected["monster unsafe"];
+			continue;
+		}
 		double hp = 0;
 		for(const auto & unit : object.army->units)
 		{
@@ -1178,9 +1196,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		addTarget(object.visitablePos, id, value, loss, node->cost, "monster");
 	}
 
-	if(out.empty() && weakestRejected > 0)
-		logAi->debug("FairAI %s: %s (strength %.0f) has no target; weakest guard in reach %.0f", me.toString(),
-			hero->getNameTranslated(), ownStrength, weakestRejected);
+	if(out.empty())
+	{
+		std::string reasons;
+		for(const auto & [why, count] : rejected)
+			reasons += " " + why + "=" + std::to_string(count);
+		logAi->debug("FairAI %s: %s (strength %.0f) has no target; weakest guard in reach %.0f; rejected:%s", me.toString(),
+			hero->getNameTranslated(), ownStrength, weakestRejected, reasons);
+	}
 
 	// ---- standing where a stronger enemy hero can reach us: get away (own towns preferred)
 	if(threatAt(heroPos, ObjectInstanceID(), cautious) > params.threatTolerance * defenceAt(hero, heroPos))
