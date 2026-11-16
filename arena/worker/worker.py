@@ -38,6 +38,8 @@ POLL_SECONDS = 120
 SYNC_SECONDS = 600
 DEFAULT_JOBS = max(1, (os.cpu_count() or 2) // 2)
 KEEP_SUFFIXES = {".json", ".jsonl", ".md", ".txt"}
+SELF = Path(__file__).resolve()
+SELF_CODE = SELF.read_bytes()
 
 
 def log(msg: str) -> None:
@@ -149,14 +151,22 @@ def copy_small_files(src: Path, dst: Path) -> None:
 # ----------------------------------------------------------------------------- jobs
 
 def pending_jobs():
+    """Jobs without a result yet. A job this host left 'running' (worker stopped, PC restarted) runs again:
+    this worker runs one job at a time, so nothing of this host can be running while we look."""
     jobs_dir = SRC / "arena" / "jobs"
     if not jobs_dir.exists():
         return []
     result = []
     for path in sorted(jobs_dir.glob("*.json")):
-        status = RESULTS / path.stem / "status.json"
-        if status.exists():
-            continue
+        status_file = RESULTS / path.stem / "status.json"
+        if status_file.exists():
+            try:
+                status = json.loads(status_file.read_text())
+            except (OSError, ValueError):
+                continue
+            if not (status.get("state") == "running" and status.get("host") == socket.gethostname()):
+                continue
+            log(f"job {path.stem} was interrupted - running it again")
         result.append(path)
     return result
 
@@ -201,26 +211,25 @@ def run_job(path: Path, commit: str) -> None:
     log(f"job {job_id}: {status['state']} after {status['minutes']} min")
 
 
-def resume_interrupted() -> None:
-    """Jobs this host left 'running' (worker stopped or PC restarted) are started again."""
-    for status_file in RESULTS.glob("*/status.json"):
-        try:
-            status = json.loads(status_file.read_text())
-        except (OSError, ValueError):
-            continue
-        if status.get("state") == "running" and status.get("host") == socket.gethostname():
-            log(f"job {status.get('job')} was interrupted - it will run again")
-            status_file.unlink()
+def restart_if_updated() -> None:
+    """Between jobs: if the fetched code changed this script, continue with the new version."""
+    try:
+        if SELF.read_bytes() == SELF_CODE:
+            return
+    except OSError:
+        return
+    log("worker.py changed - restarting with the new version")
+    os.execv(sys.executable, [sys.executable, str(SELF), *sys.argv[1:]])
 
 
 def main() -> int:
     ROOT.mkdir(parents=True, exist_ok=True)
     log(f"FairAI worker on {socket.gethostname()} ({os.cpu_count()} CPUs), default {DEFAULT_JOBS} parallel games")
     prepare_results()
-    resume_interrupted()
     while True:
         try:
             commit = update_source()
+            restart_if_updated()
             prepare_results()
             jobs = pending_jobs()
             if jobs:

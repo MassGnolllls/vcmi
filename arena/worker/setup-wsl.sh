@@ -16,6 +16,8 @@ BUILD="$ROOT/build"
 DATA="$HOME/.local/share/vcmi/Data"
 
 ask() { local reply; read -r -p "$1" reply < /dev/tty; echo "$reply"; }
+# secrets are not shown on screen (and so never end up on a screenshot)
+ask_secret() { local reply; read -rs -p "$1" reply < /dev/tty; echo >&2; printf '%s' "$reply" | tr -d '[:space:]'; }
 
 echo
 echo "== 1/5 Programme installieren (Ubuntu fragt nach deinem Linux-Passwort)"
@@ -66,7 +68,7 @@ echo "== 5/5 Zugang zum Hochladen der Ergebnisse"
 echo "Lege auf github.com einen 'Fine-grained token' an: Settings > Developer settings >"
 echo "Personal access tokens > Fine-grained tokens > Generate new token."
 echo "Repository access: Only select repositories > MassGnolllls/vcmi; Permissions: Contents = Read and write."
-token="$(ask 'Token hier einfügen (Rechtsklick): ')"
+token="$(ask_secret 'Token hier einfügen (Rechtsklick - er bleibt unsichtbar), dann Enter: ')"
 git config --global credential.helper store
 printf 'https://MassGnolllls:%s@github.com\n' "$token" > "$HOME/.git-credentials"
 chmod 600 "$HOME/.git-credentials"
