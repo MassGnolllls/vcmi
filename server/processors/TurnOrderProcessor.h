@@ -77,6 +77,8 @@ class TurnOrderProcessor : boost::noncopyable
 	bool isPlayerAwaitsNewDay(PlayerColor which) const;
 
 public:
+	/// battle-only maps against map guards: true while the guards are being split into stacks
+	bool battleOnlySetup = false;
 	TurnOrderProcessor(CGameHandler * owner);
 
 	bool isContactAllowed(PlayerColor left, PlayerColor right) const;

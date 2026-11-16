@@ -75,10 +75,15 @@ def make_config_home(mods="", ai_log=None) -> Path:
     return config_home
 
 
-def client_env(config_home: Path) -> dict:
+def client_env(config_home: Path, client=None) -> dict:
     env = dict(os.environ)
     env["XDG_CONFIG_HOME"] = str(config_home)
     env["XDG_CACHE_HOME"] = str(config_home / "cache")
+    if client and os.name != "nt":
+        # a copied build (snapshot) must load its own libvcmi.so: the run path baked into the binary
+        # points at the build directory, where a rebuild replaces the library under running tests
+        own = str(Path(client).resolve().parent)
+        env["LD_LIBRARY_PATH"] = own + (os.pathsep + env["LD_LIBRARY_PATH"] if env.get("LD_LIBRARY_PATH") else "")
     return env
 
 
@@ -163,7 +168,7 @@ def cmd_genmaps(args) -> int:
             cmd += ["--arena-towns", args.towns]
         config_home = make_config_home(args.mods)
         try:
-            res = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=client_env(config_home))
+            res = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=client_env(config_home, args.client))
         finally:
             shutil.rmtree(config_home, ignore_errors=True)
         if res.returncode == 0 and out.exists():
@@ -203,7 +208,7 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
         # isolate settings.json per match: parallel clients would otherwise race on it
         # ARENA_AI_LOG, e.g. "debug": detailed AI decisions in the match log
         config_home = make_config_home(getattr(args, "mods", ""), os.environ.get("ARENA_AI_LOG"))
-        env = client_env(config_home)
+        env = client_env(config_home, args.client)
 
     port = args.base_port + match_id % 1000
     if battle_mode:
@@ -238,6 +243,11 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     if not battle_mode and (ai_params or opp_params):
         for i in range(last + 1):
             cmd += ["--arena-fairai-params", (ai_params if COLORS[i] in mine else opp_params) or "{}"]
+    if battle_mode and (ai_params or opp_params):
+        # battles: red's combat AI is the first label; with seats given, `mine` says who is under test
+        for colour in ("red", "blue"):
+            under_test = colour in mine if mine is not None else colour == "red"
+            cmd += ["--arena-fairai-params", (ai_params if under_test else opp_params) or "{}"]
 
     started = time.time()
     record = {"match": match_id, "map": map_name, "red": ai_red, "blue": ai_blue, "seed": seed}

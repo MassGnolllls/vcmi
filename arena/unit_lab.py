@@ -45,7 +45,7 @@ def cmd_gen(args) -> int:
     work.mkdir(parents=True, exist_ok=True)
     library = work / "library.json"
     config_home = rt.make_config_home(args.mods)
-    env = rt.client_env(config_home)
+    env = rt.client_env(config_home, args.client)
     try:
         if not library.exists() or args.force:
             subprocess.run([args.client, "--headless", "--arena-dump-library", str(library)], capture_output=True, timeout=600, env=env)
@@ -62,6 +62,12 @@ def cmd_gen(args) -> int:
         if args.only:
             wanted = [c for c in wanted if c["id"] in args.only.split(",")]
         made = failed = 0
+        def stacks(creature_id, count):
+            # up to three stacks: more actions per battle, neighbours for breath and round attacks
+            parts = min(3, count)
+            sizes = [count // parts + (1 if i < count % parts else 0) for i in range(parts)]
+            return [[creature_id, size] for size in sizes]
+
         for creature in wanted:
             count = max(1, round(args.value / creature["aiValue"]))
             total = count * creature["aiValue"]
@@ -74,8 +80,8 @@ def cmd_gen(args) -> int:
                     made += 1
                     continue
                 scenario = {"name": name, "terrain": "sand", "kind": "lab", "stage": "lab", "magic": False, "sides": [
-                    {"hero": HEROES[0], "primary": [1, 1, 1, 1], "army": [[creature["id"], count]], "spellBook": False, "spells": []},
-                    {"hero": HEROES[1], "primary": [1, 1, 1, 1], "army": [[ref_id, ref_count]], "spellBook": False, "spells": []}]}
+                    {"hero": HEROES[0], "primary": [1, 1, 1, 1], "army": stacks(creature["id"], count), "spellBook": False, "spells": []},
+                    {"hero": HEROES[1], "primary": [1, 1, 1, 1], "army": stacks(ref_id, ref_count), "spellBook": False, "spells": []}]}
                 scen_file = work / "scenarios" / f"{name}.json"
                 scen_file.parent.mkdir(parents=True, exist_ok=True)
                 scen_file.write_text(json.dumps(scenario, indent=1))
@@ -111,14 +117,17 @@ def cmd_play(args) -> int:
         if log.exists():
             for line in log.open(errors="replace"):
                 at = line.find("FairAI sim")
+                if at < 0:
+                    at = line.find("FairAI dmgcheck")
                 if at >= 0:
                     lines.append(path.stem + "|" + line[at + 7:].strip())
-        shutil.rmtree(out / f"logs_{index:04d}", ignore_errors=True)
+        if not record.get("error"):  # failed duels keep their logs
+            shutil.rmtree(out / f"logs_{index:04d}", ignore_errors=True)
         (out / f"match_{index:04d}.json").unlink(missing_ok=True)
         return path.stem, record.get("error"), lines
 
     with ThreadPoolExecutor(max_workers=args.jobs) as pool:
-        futures = [pool.submit(one, i, p) for i, p in enumerate(maps)]
+        futures = [pool.submit(one, i + round_no * len(maps), p) for round_no in range(args.rounds) for i, p in enumerate(maps)]
         for fut in as_completed(futures):
             stem, error, lines = fut.result()
             done += 1
@@ -127,52 +136,60 @@ def cmd_play(args) -> int:
             for line in lines:
                 lines_file.write(line + "\n")
             lines_file.flush()
-            if done % 50 == 0:
-                print(f"{done}/{len(maps)} duels", flush=True)
+            if done % 100 == 0:
+                print(f"{done}/{len(maps) * args.rounds} duels", flush=True)
     print(f"{done} duels played, lines in {out / 'simcheck.txt'}")
     return 0
 
 
 def cmd_report(args) -> int:
     out = Path(args.out).resolve()
-    acting = collections.defaultdict(lambda: collections.defaultdict(lambda: collections.Counter()))
-    suffering = collections.defaultdict(lambda: collections.Counter())
-    spells_given = collections.defaultdict(collections.Counter)
+    acting = collections.defaultdict(lambda: collections.defaultdict(collections.Counter))
+    suffering = collections.defaultdict(collections.Counter)
+    effects = collections.defaultdict(collections.Counter)
     idle = collections.defaultdict(list)
+    tested = set()
+    formula = collections.defaultdict(list)  # (attacker, defender, kind) -> ratios own formula / game
     for line in (out / "simcheck.txt").open():
         parts = line.rstrip("\n").split("|")
+        duel = parts[0]
+        tested.add(duel.split("__vs__")[0])
+        if len(parts) >= 7 and parts[1] == "dmgcheck":
+            game, own = float(parts[5]), float(parts[6])
+            formula[(parts[2], parts[3], parts[4])].append(own / game if game > 0 else float("inf"))
+            continue
         if len(parts) >= 6 and parts[1] == "simidle":
-            idle[parts[2]].append((int(parts[3]), int(parts[5]) - int(parts[4])))
+            idle[parts[2]].append(int(parts[5]) - int(parts[4]))
             continue
         if len(parts) < 17 or parts[1] != "simcheck":
             continue
-        (_, _, kind, actor, actor_count, target, _, t_pred, t_real, a_pred, a_real, o_pred, o_real, t_spells, a_spells, inactive, pos_ok) = parts[:17]
+        (_, _, kind, actor, _, target, _, t_pred, t_real, a_pred, a_real, o_pred, o_real, t_spells, a_spells, inactive, pos_ok) = parts[:17]
         t_pred, t_real, a_pred, a_real, o_pred, o_real = map(int, (t_pred, t_real, a_pred, a_real, o_pred, o_real))
         a = acting[actor][kind]
         a["n"] += 1
         a["tPred"] += t_pred
         a["tReal"] += t_real
-        a["aPred"] += a_pred
-        a["aRealDamage"] += max(0, a_real)
-        a["aHealed"] += max(0, -a_real)
-        a["healEvents"] += 1 if a_real < 0 else 0
+        a["aPred"] += a_pred          # own health lost (negative: gained) while acting
+        a["aReal"] += a_real
+        a["aScale"] += abs(a_pred) + abs(a_real)
         a["oPred"] += o_pred
         a["oReal"] += o_real
         a["inactive"] += int(inactive)
         a["posWrong"] += 0 if pos_ok == "1" else 1
         if t_spells != "-":
             for spell in t_spells.split(","):
-                spells_given[actor][spell] += 1
-        if a_spells != "-":
-            for spell in a_spells.split(","):
-                spells_given[actor]["self:" + spell] += 1
+                effects[actor]["on its target: " + spell] += 1
         if kind in ("attack", "shoot") and target != "-":
+            if a_spells != "-":  # what the attacker caught from the defender's answer
+                for spell in a_spells.split(","):
+                    effects[target]["on its attacker: " + spell] += 1
             s = suffering[target]
             s["n"] += 1
             s["tPred"] += t_pred
             s["tReal"] += t_real
-            s["attackerPred"] += a_pred
-            s["attackerReal"] += max(0, a_real)
+            s["backPred"] += a_pred
+            s["backReal"] += a_real
+            s["backScale"] += abs(a_pred) + abs(a_real)
 
     def ratio(real, pred):
         if pred <= 0:
@@ -182,64 +199,72 @@ def cmd_report(args) -> int:
     def fmt(r):
         return "-" if r is None else ("inf" if r == float("inf") else f"{r:.2f}")
 
+    def deviation(r):
+        return 0.0 if r is None else (9.0 if r == float("inf") else abs(r - 1))
+
+    plain = {safe(r) for r in REFERENCES}
     report = {}
     rows = []
     for creature in sorted(set(acting) | set(suffering) | set(idle)):
-        entry = {"findings": []}
+        key = safe(creature)
+        if key in plain and key not in tested:
+            continue
+        entry = {"findings": [], "samples": 0}
         worst = 0.0
         for kind in ("attack", "shoot"):
             a = acting[creature].get(kind)
-            if not a or a["n"] < args.min_samples:
+            if not a:
+                continue
+            entry["samples"] += a["n"]
+            if a["n"] < args.min_samples:
                 continue
             dealt = ratio(a["tReal"], a["tPred"])
-            taken = ratio(a["aRealDamage"], a["aPred"])
-            entry[kind] = {"n": a["n"], "dealt": dealt, "taken": taken, "healed": a["aHealed"], "othersPred": a["oPred"],
+            entry[kind] = {"n": a["n"], "dealt": dealt, "ownPred": a["aPred"], "ownReal": a["aReal"], "othersPred": a["oPred"],
                            "othersReal": a["oReal"], "inactive": a["inactive"], "posWrong": a["posWrong"]}
-            if dealt is not None and abs(dealt - 1) > args.tolerance:
-                entry["findings"].append(f"{kind}: deals {fmt(dealt)}x the predicted damage")
-                worst = max(worst, abs(dealt - 1) if dealt != float("inf") else 9)
-            if taken is not None and abs(taken - 1) > args.tolerance and (a["aPred"] + a["aRealDamage"]) > 0:
-                entry["findings"].append(f"{kind}: takes {fmt(taken)}x the predicted damage in return")
-                worst = max(worst, min(9, abs(taken - 1)) if taken != float("inf") else 9)
-            if a["healEvents"] > 0:
-                entry["findings"].append(f"{kind}: heals itself ({a['aHealed']} HP in {a['healEvents']} of {a['n']} actions)")
-                worst = max(worst, 2)
-            if a["oReal"] > 1.5 * a["oPred"] + 10:
-                entry["findings"].append(f"{kind}: hits other units too ({a['oReal']} HP, predicted {a['oPred']})")
-                worst = max(worst, 2)
+            if deviation(dealt) > args.tolerance:
+                entry["findings"].append(f"{kind}: deals {fmt(dealt)}x the predicted damage (n={a['n']})")
+                worst = max(worst, deviation(dealt))
+            own_gap = abs(a["aReal"] - a["aPred"]) / max(1, a["aScale"])
+            if a["aScale"] > 0 and own_gap > args.tolerance and abs(a["aReal"] - a["aPred"]) > 5 * a["n"]:
+                entry["findings"].append(f"{kind}: own health changes by {-a['aReal']:+d}, predicted {-a['aPred']:+d} (n={a['n']})")
+                worst = max(worst, 2 * own_gap)
+            others_gap = abs(a["oReal"] - a["oPred"])
+            if others_gap > 0.15 * max(1, a["tReal"]) and others_gap > 0.3 * max(a["oReal"], a["oPred"]):
+                entry["findings"].append(f"{kind}: other units lose {a['oReal']} health, predicted {a['oPred']} (n={a['n']})")
+                worst = max(worst, 1.5)
             if a["inactive"]:
                 entry["findings"].append(f"{kind}: put its target out of action in {a['inactive']} of {a['n']} actions")
-                worst = max(worst, 3)
+                worst = max(worst, 3 * a["inactive"] / a["n"] + 1)
             if a["posWrong"] > 0.2 * a["n"]:
                 entry["findings"].append(f"{kind}: ends somewhere else than predicted in {a['posWrong']} of {a['n']} actions")
                 worst = max(worst, 1)
         for kind in ("move", "wait", "defend"):
             a = acting[creature].get(kind)
-            if a and (a["aRealDamage"] + a["aHealed"] + a["oReal"] > 0 or a["posWrong"] > 0):
-                entry["findings"].append(f"{kind}: {a['posWrong']} position surprises, own HP change {a['aRealDamage']}/-{a['aHealed']}, others {a['oReal']} (n={a['n']})")
+            if a and key not in plain and (a["aScale"] + a["oReal"] > 0 or a["posWrong"] > 0):
+                entry["findings"].append(f"{kind}: {a['posWrong']} position surprises, own health {-a['aReal']:+d}, others lose {a['oReal']} (n={a['n']})")
                 worst = max(worst, 0.5)
-        if spells_given.get(creature):
-            entry["effects"] = dict(spells_given[creature])
-            entry["findings"].append("applies effects: " + ", ".join(f"{k} x{v}" for k, v in spells_given[creature].most_common()))
+        if effects.get(creature):
+            entry["effects"] = dict(effects[creature])
+            entry["findings"].append("applies effects " + ", ".join(f"{k} x{v}" for k, v in effects[creature].most_common()))
             worst = max(worst, 2)
         s = suffering.get(creature)
         if s and s["n"] >= args.min_samples:
             received = ratio(s["tReal"], s["tPred"])
-            returned = ratio(s["attackerReal"], s["attackerPred"])
-            entry["defending"] = {"n": s["n"], "received": received, "returned": returned}
-            if received is not None and abs(received - 1) > args.tolerance:
-                entry["findings"].append(f"when attacked: receives {fmt(received)}x the predicted damage")
-                worst = max(worst, min(9, abs(received - 1)))
-            if returned is not None and abs(returned - 1) > args.tolerance and (s["attackerPred"] + s["attackerReal"]) > 0:
-                entry["findings"].append(f"when attacked: attacker suffers {fmt(returned)}x the predicted damage")
-                worst = max(worst, min(9, abs(returned - 1)) if returned != float("inf") else 9)
+            entry["defending"] = {"n": s["n"], "received": received, "backPred": s["backPred"], "backReal": s["backReal"]}
+            if deviation(received) > args.tolerance:
+                entry["findings"].append(f"when attacked: loses {fmt(received)}x the predicted health (n={s['n']})")
+                worst = max(worst, min(9.0, deviation(received)))
+            back_gap = abs(s["backReal"] - s["backPred"]) / max(1, s["backScale"])
+            if s["backScale"] > 0 and back_gap > args.tolerance and abs(s["backReal"] - s["backPred"]) > 5 * s["n"]:
+                entry["findings"].append(f"when attacked: its attackers lose {s['backReal']} health, predicted {s['backPred']} (n={s['n']})")
+                worst = max(worst, 2 * back_gap)
         if idle.get(creature):
-            gains = [d for _, d in idle[creature] if d > 0]
-            losses = [d for _, d in idle[creature] if d < 0]
+            gains = [d for d in idle[creature] if d > 0]
+            losses = [d for d in idle[creature] if d < 0]
             if gains:
                 entry["findings"].append(f"between actions: gains health {len(gains)} times (sum {sum(gains)})")
-                worst = max(worst, 2)
-            if losses:
+                worst = max(worst, 1.5)
+            if losses and key not in plain:
                 entry["findings"].append(f"between actions: loses health {len(losses)} times (sum {sum(losses)})")
                 worst = max(worst, 1)
         entry["severity"] = round(worst, 2)
@@ -247,21 +272,33 @@ def cmd_report(args) -> int:
         rows.append((worst, creature, entry))
     (out / "unit_report.json").write_text(json.dumps(report, indent=1))
     rows.sort(key=lambda r: (-r[0], r[1]))
-    clean = [c for w, c, e in rows if not e["findings"]]
+    clean = [c for w, c, e in rows if not e["findings"] and e["samples"] >= args.min_samples]
+    thin = [c for w, c, e in rows if not e["findings"] and e["samples"] < args.min_samples]
+    flagged = [r for r in rows if r[2]["findings"]]
     lines = ["# Unit lab: simulator against the real game", "",
-             f"{len(rows)} creatures seen, {len(rows) - len(clean)} with findings, {len(clean)} match the simulator "
+             f"{len(rows)} creatures: {len(flagged)} with findings, {len(clean)} as predicted, {len(thin)} with too few actions "
              f"(tolerance {args.tolerance:.0%}, at least {args.min_samples} actions).", ""]
-    for worst, creature, entry in rows:
-        if not entry["findings"]:
-            continue
+    for worst, creature, entry in flagged:
         lines.append(f"## {creature}  (severity {entry['severity']})")
         for finding in entry["findings"]:
             lines.append(f"- {finding}")
         lines.append("")
-    lines.append("## As predicted")
-    lines.append(", ".join(clean))
+    lines += ["## As predicted", ", ".join(clean), "", "## Too few actions to judge", ", ".join(thin)]
+    if formula:
+        # FairAI's own damage formula (forecasts on the adventure map) against the game's estimate
+        by_attacker = collections.defaultdict(list)
+        for (attacker, defender, kind), ratios in formula.items():
+            by_attacker[attacker].append((kind, defender, sum(ratios) / len(ratios), len(ratios)))
+        lines += ["", "## Damage formula: pairs where FairAI's own formula differs from the game by more than 3 %", "",
+                  "| attacker | kind | against | own / game | seen |", "|---|---|---|---|---|"]
+        for attacker in sorted(by_attacker):
+            for kind, defender, ratio, n in sorted(by_attacker[attacker]):
+                lines.append(f"| {attacker} | {kind} | {defender} | {ratio:.2f} | {n} |")
+    else:
+        lines += ["", "## Damage formula", "No pair differed from the game by more than 3 % (or the run was made without the check)."]
     (out / "unit_report.md").write_text("\n".join(lines) + "\n")
-    print(f"{len(rows)} creatures, {len(rows) - len(clean)} with findings -> {out / 'unit_report.md'}")
+    print(f"{len(rows)} creatures: {len(flagged)} with findings, {len(clean)} as predicted, {len(thin)} thin "
+          f"(total severity {sum(r[0] for r in flagged):.1f}) -> {out / 'unit_report.md'}")
     return 0
 
 
@@ -282,6 +319,7 @@ def main() -> int:
     p.add_argument("--jobs", type=int, default=2)
     p.add_argument("--filter", default="")
     p.add_argument("--base-port", type=int, default=8000)
+    p.add_argument("--rounds", type=int, default=2, help="how often every duel is played (different random seeds)")
     r = sub.add_parser("report")
     r.add_argument("--out", required=True)
     r.add_argument("--tolerance", type=float, default=0.15)

@@ -40,6 +40,8 @@
 #include "../lib/mapObjectConstructors/AObjectTypeHandler.h"
 #include "../lib/mapObjectConstructors/CObjectClassesHandler.h"
 #include "../lib/mapObjects/CGHeroInstance.h"
+#include "../lib/mapObjects/CGCreature.h"
+#include "../lib/mapObjects/army/CStackInstance.h"
 #include "../lib/mapping/CMapEditManager.h"
 #include "../lib/modding/IdentifierStorage.h"
 #include "../lib/modding/ModScope.h"
@@ -60,6 +62,19 @@ namespace
 std::mutex arenaMutex;
 std::map<PlayerColor, std::string> installedAI;
 std::vector<JsonNode> endEvents;
+std::vector<JsonNode> timeline; ///< one entry per game day: key figures of every player
+struct BattleTally
+{
+	int guardFights = 0;      ///< battles against neutral armies (map guards, banks)
+	int guardFightsLost = 0;
+	int64_t guardLosses = 0;  ///< own army value lost in them
+	int64_t guardKills = 0;   ///< neutral army value destroyed
+	int playerFights = 0;     ///< battles against other players
+	int playerFightsWon = 0;
+	int64_t playerLosses = 0;
+	int64_t playerKills = 0;
+};
+std::map<PlayerColor, BattleTally> battleTally;
 bool finished = false;
 const auto startTime = std::chrono::steady_clock::now();
 
@@ -141,6 +156,20 @@ JsonNode playerStats(const CGameState & gs, const PlayerState & ps)
 	}
 	for(const auto & ev : endEvents)
 		result["endEvents"].Vector().push_back(ev);
+	for(const auto & day : timeline)
+		result["timeline"].Vector().push_back(day);
+	for(const auto & [color, tally] : battleTally)
+	{
+		JsonNode & node = result["battles"][color.toString()];
+		node["guardFights"].Integer() = tally.guardFights;
+		node["guardFightsLost"].Integer() = tally.guardFightsLost;
+		node["guardLosses"].Integer() = tally.guardLosses;
+		node["guardKills"].Integer() = tally.guardKills;
+		node["playerFights"].Integer() = tally.playerFights;
+		node["playerFightsWon"].Integer() = tally.playerFightsWon;
+		node["playerLosses"].Integer() = tally.playerLosses;
+		node["playerKills"].Integer() = tally.playerKills;
+	}
 
 	const std::string path = arenaSettings()["resultFile"].String();
 	{
@@ -298,7 +327,34 @@ void onNewTurn(CClient & client)
 	if(finished)
 		return;
 
-	if(client.gameState().getDate(Date::DAY) > maxDays)
+	const CGameState & gs = client.gameState();
+	if(!gs.getMap().battleOnly)
+	{
+		// key figures per day, compact: [army, towns, heroes, income, mines, explored %, best hero level, gold, dwellings, guard fights, guard losses]
+		JsonNode day;
+		day["day"].Integer() = gs.getDate(Date::DAY);
+		for(const auto & player : gs.players)
+		{
+			if(!player.first.isValidPlayer() || player.second.status != EPlayerStatus::INGAME)
+				continue;
+			StatisticDataSetEntry e = StatisticDataSet::createEntry(&player.second, &gs, StatisticDataSet());
+			int mines = 0;
+			for(const auto & m : e.numMines)
+				mines += m.second;
+			const BattleTally & tally = battleTally[player.first];
+			JsonNode & row = day["players"][player.first.toString()];
+			for(int64_t value : {static_cast<int64_t>(e.armyStrength), static_cast<int64_t>(e.numberTowns), static_cast<int64_t>(e.numberHeroes), static_cast<int64_t>(e.income),
+				static_cast<int64_t>(mines), static_cast<int64_t>(std::lround(e.mapExploredRatio * 100)), static_cast<int64_t>(e.maxHeroLevel),
+				static_cast<int64_t>(player.second.resources[EGameResID::GOLD]), static_cast<int64_t>(e.numberDwellings),
+				static_cast<int64_t>(tally.guardFights), tally.guardLosses})
+			{
+				row.Vector().emplace_back(value);
+			}
+		}
+		timeline.push_back(day);
+	}
+
+	if(gs.getDate(Date::DAY) > maxDays)
 	{
 		finished = true;
 		finishMatch(client, "timeout", std::nullopt);
@@ -582,6 +638,26 @@ int generateBattleMap(const po::variables_map & vm)
 		for(int sel = 0; sel < 2; ++sel)
 		{
 			const JsonNode & side = sides[sel];
+			if(!side["guard"].isNull())
+			{
+				// map guards instead of a hero: a wandering monster the first side's hero attacks; the game
+				// splits it into stacks by its own rules (hero strength, position, chance of an upgraded stack)
+				if(sel != 1)
+					throw std::runtime_error("only the second side can be a guard");
+				auto creature = requireId<CreatureID>("creature", side["guard"].Vector().at(0).String());
+				int count = static_cast<int>(side["guard"].Vector().at(1).Integer());
+				auto guardFactory = LIBRARY->objtypeh->getHandlerFor(Obj::MONSTER, creature);
+				auto guard = std::dynamic_pointer_cast<CGCreature>(guardFactory->create(&callback, guardFactory->getTemplates().front()));
+				guard->initialCharacter = CGCreature::Character::SAVAGE;
+				guard->neverFlees = true;
+				guard->notGrowingTeam = true;
+				guard->putStack(SlotID(0), std::make_unique<CStackInstance>(&callback, creature, std::max(1, count)));
+				guard->pos = int3(5, 5, 0);
+				map->getEditManager()->insertObject(guard);
+				map->players[1].canComputerPlay = false; // nobody owns the guards
+				map->players[1].canHumanPlay = false;
+				continue;
+			}
 			auto heroType = requireId<HeroTypeID>("hero", side["hero"].String());
 			auto factory = LIBRARY->objtypeh->getHandlerFor(Obj::HERO, heroType.toHeroType()->heroClass->getId());
 			auto templates = factory->getTemplates();
@@ -682,6 +758,31 @@ void onBattleResult(CClient & client, const BattleResult & result)
 	if(!gs.getMap().battleOnly)
 	{
 		logGlobal->info("ARENA_BATTLE %s", info.toCompactString());
+		std::lock_guard lock(arenaMutex);
+		for(BattleSide side : {BattleSide::ATTACKER, BattleSide::DEFENDER})
+		{
+			const BattleSide otherSide = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
+			const PlayerColor player = battle->getSidePlayer(side);
+			if(!player.isValidPlayer())
+				continue;
+			const int64_t lost = info["sides"].Vector().at(static_cast<int>(side))["lostStrength"].Integer();
+			const int64_t killed = info["sides"].Vector().at(static_cast<int>(otherSide))["lostStrength"].Integer();
+			BattleTally & tally = battleTally[player];
+			if(battle->getSidePlayer(otherSide).isValidPlayer())
+			{
+				tally.playerFights++;
+				tally.playerFightsWon += result.winner == side ? 1 : 0;
+				tally.playerLosses += lost;
+				tally.playerKills += killed;
+			}
+			else
+			{
+				tally.guardFights++;
+				tally.guardFightsLost += result.winner == side ? 0 : 1;
+				tally.guardLosses += lost;
+				tally.guardKills += killed;
+			}
+		}
 		return;
 	}
 

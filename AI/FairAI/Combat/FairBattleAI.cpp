@@ -22,6 +22,10 @@
 #include "../../../lib/CCreatureHandler.h"
 #include "../../../lib/StartInfo.h"
 #include "../../../lib/battle/BattleAction.h"
+#include "../../../lib/battle/BattleAttackInfo.h"
+#include "../../../lib/IGameSettings.h"
+#include "../../../lib/mapObjects/army/CArmedInstance.h"
+#include "../../../lib/mapObjects/army/CStackInstance.h"
 #include "../../../lib/battle/CObstacleInstance.h"
 #include "../../../lib/battle/ReachabilityInfo.h"
 #include "../../../lib/battle/CPlayerBattleCallback.h"
@@ -55,6 +59,7 @@ struct SearchSettings
 	bool robustStances = envInt("FAI_STANCES", 0) != 0;   ///< also play out against a waiting opponent
 	bool engineOutcome = envInt("FAI_OUTCOME", 1) != 0;   ///< use engine-evaluated results for attacks
 	double exposureWeight = envInt("FAI_EXPOSURE_PCT", 0) / 100.0; ///< weight of the next-round potential
+	int planRounds = envInt("FAI_PLAN_ROUNDS", 8);          ///< battle plan: rounds played ahead when comparing "hold" and "advance"
 	int spellRounds = envInt("FAI_SPELL_ROUNDS", 2);        ///< spell search: rounds after the current one
 	int manaPricePermille = envInt("FAI_MANA_PRICE", 4);   ///< spell search: price of a scarce spell point, per mille of our army
 };
@@ -212,9 +217,9 @@ void FairBattleAI::actionStarted(const BattleID & battleID, const BattleAction &
 		for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
 			units.push_back(u);
 		DamageTable table;
-		table.build(*battle, units);
+		table.build(*battle, units, simAbilities);
 		SimState state;
-		state.init(*battle, units, table);
+		state.init(*battle, units, table, simAbilities);
 		const int me = state.indexOf(actor->unitId());
 		if(me < 0)
 			return;
@@ -342,6 +347,8 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	Params params;
 	params.loadOverrides(playerID.getNum());
 	spellSearch = params.spellSearch != 0;
+	simAbilities = params.simAbilities != 0;
+	battlePlan = params.battlePlan != 0;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -354,6 +361,7 @@ void FairBattleAI::battleStart(const BattleID & battleID, const CCreatureSet * a
 {
 	side = Side;
 	quietDecisions = 0;
+	forecastLogged = false;
 	lastHealth.clear();
 	if(fallback)
 		fallback->battleStart(battleID, army1, army2, tile, hero1, hero2, Side, replayAllowed);
@@ -539,6 +547,12 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			return;
 		}
 
+		if(!forecastLogged)
+		{
+			forecastLogged = true;
+			logForecast(battleID);
+		}
+
 		if(auto retreat = considerRetreat(battleID))
 		{
 			cb->battleMakeUnitAction(battleID, *retreat);
@@ -592,11 +606,97 @@ std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battl
 	return cb->makeSurrenderRetreatDecision(battleID, bs);
 }
 
+void FairBattleAI::logForecast(const BattleID & battleID)
+{
+	// How will this battle end? Both sides played by the simulator's default policy, our side once
+	// holding and once advancing. Logged once per battle; the arena compares it with the real result
+	// (guard_bench.py): a simulator that forecasts battles well can also plan them, and the adventure
+	// AI needs exactly this number before it picks a fight.
+	auto battle = cb->getBattle(battleID);
+	std::vector<const battle::Unit *> units;
+	for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
+		units.push_back(u);
+	DamageTable table;
+	table.build(*battle, units, simAbilities);
+	SimState base;
+	base.init(*battle, units, table, simAbilities);
+	const BattleSide other = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
+	const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
+	std::string text;
+	for(Stance stance : {Stance::HOLD, Stance::CHARGE})
+	{
+		SimState sim = base;
+		sim.stance[ownSide] = stance;
+		sim.stance[1 - ownSide] = Stance::CHARGE;
+		sim.playout(base.round + 30);
+		text += boost::str(boost::format("|%.0f|%.0f|%d") % sim.sideValue(side) % sim.sideValue(other) % (sim.round - base.round));
+	}
+	// The same battle as the adventure AI would see it beforehand: armies and creature types only,
+	// FairAI's own damage formula, default starting positions.
+	try
+	{
+		std::vector<StackSpec> stacks;
+		// our own stacks with everything our hero adds ...
+		if(const CArmedInstance * army = battle->battleGetArmyObject(side))
+		{
+			for(const auto & [slot, stack] : army->Slots())
+			{
+				if(stack && stack->getCreature() && stack->getCount() > 0)
+					stacks.push_back({stack.get(), stack->getCreature(), stack->getCount(), side});
+			}
+		}
+		// ... the enemy as plain creatures: type and number, as seen on the field
+		for(const auto * unit : units)
+		{
+			const CCreature * type = unit->creatureId().toCreature();
+			if(unit->unitSide() != side && type && !unit->hasBonusOfType(BonusType::SIEGE_WEAPON))
+				stacks.push_back({type, type, unit->getCount(), unit->unitSide()});
+		}
+		const JsonNode & layout = LIBRARY->engineSettings()->getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
+		const Forecast map = forecastBattle(stacks, side, layout);
+		text += boost::str(boost::format("|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f") % map.ownBefore % map.enemyBefore % map.ownAfter[0] % map.enemyAfter[0] % map.ownAfter[1] % map.enemyAfter[1]);
+	}
+	catch(const std::exception & e)
+	{
+		logAi->debug("FairAI forecast: map-style forecast failed (%s)", e.what());
+	}
+	logAi->info("FairAI forecast|%.0f|%.0f%s", base.sideValue(side), base.sideValue(other), text);
+
+	if(simCheckEnabled())
+	{
+		// unit lab: FairAI's damage formula against the game's estimate, for every pair on the field
+		for(const auto * attacker : units)
+		{
+			for(const auto * defender : units)
+			{
+				if(attacker->unitSide() == defender->unitSide())
+					continue;
+				for(bool shooting : {false, true})
+				{
+					if(shooting && !attacker->isShooter())
+						continue;
+					BattleAttackInfo info(attacker, defender, 0, shooting);
+					const auto engine = battle->battleEstimateDamage(info).damage;
+					double game = (engine.min + engine.max) / 2.0 / std::max(1, attacker->getCount());
+					if(shooting && battle->battleHasDistancePenalty(attacker, attacker->getPosition(), defender->getPosition()))
+						game *= 2;
+					const double own = DamageTable::formula(*attacker, attacker->creatureId().toCreature(), *defender, defender->creatureId().toCreature(), shooting);
+					if(std::abs(own - game) > 0.03 * std::max(1.0, game) + 0.6 / std::max(1, attacker->getCount()))
+						logAi->info("FairAI dmgcheck|%s|%s|%s|%.2f|%.2f", creatureKey(dynamic_cast<const CStack *>(attacker)), creatureKey(dynamic_cast<const CStack *>(defender)),
+							shooting ? "ranged" : "melee", game, own);
+				}
+			}
+		}
+	}
+}
+
 BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack, bool forbidPassive)
 {
+	const auto started = std::chrono::steady_clock::now();
 	auto state = std::make_shared<HypotheticBattle>(env.get(), cb->getBattle(battleID));
 	auto choice = bestUnitAction(state, stack, -1, forbidPassive);
-	logAi->debug("FairBattleAI: %s -> %s (score %.0f)%s", stack->getDescription(), choice.description, choice.score, forbidPassive ? " [must act]" : "");
+	const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+	logAi->debug("FairBattleAI: %s -> %s (score %.0f, %.1f ms)%s", stack->getDescription(), choice.description, choice.score, ms, forbidPassive ? " [must act]" : "");
 	return choice.action;
 }
 
@@ -612,9 +712,9 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		units.push_back(u);
 
 	DamageTable table;
-	table.build(*battle, units);
+	table.build(*battle, units, simAbilities);
 	SimState base;
-	base.init(*battle, units, table);
+	base.init(*battle, units, table, simAbilities);
 
 	const int me = base.indexOf(stack->unitId());
 	if(me < 0)
@@ -713,6 +813,40 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 	if(config.robustStances)
 		enemyStances.push_back(Stance::HOLD);
 	Candidate * best = nullptr;
+	if(battlePlan && roundsAhead < 0)
+	{
+		// Battle plan: every candidate is played on for several rounds, once with our troops advancing
+		// and once with them holding their ground (shooting, hitting only what comes into reach). The
+		// better of the two counts - the plan is ours to choose. This is what tells "let them come
+		// while our shooters work" from "close in before their shooters wear us down".
+		const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
+		const int planEnd = base.round + std::max(1, config.planRounds);
+		for(auto & c : candidates)
+		{
+			double bestPlan = -std::numeric_limits<double>::max();
+			for(Stance ownStance : {Stance::HOLD, Stance::CHARGE})
+			{
+				double worst = std::numeric_limits<double>::max();
+				for(Stance enemyStance : enemyStances)
+				{
+					SimState sim = base;
+					sim.stance[ownSide] = ownStance;
+					sim.stance[enemySide] = enemyStance;
+					if(c.outcome && config.engineOutcome)
+						sim.applyOutcome(me, *c.outcome);
+					else
+						sim.apply(me, c.sim);
+					sim.playout(planEnd);
+					worst = std::min(worst, sim.evaluate(side));
+				}
+				bestPlan = std::max(bestPlan, worst);
+			}
+			c.score = bestPlan;
+			if(!best || c.score > best->score + 1e-6)
+				best = &c;
+		}
+		return {best->real, best->score, best->description};
+	}
 	for(auto & c : candidates)
 	{
 		double worst = std::numeric_limits<double>::max();

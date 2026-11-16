@@ -64,6 +64,7 @@ private:
 	std::map<uint32_t, int64_t> lastHealth; ///< unit -> health after the previous action (changes in between: regeneration, poison...)
 	bool lastActionWasSpell = false;
 	int quietDecisions = 0; ///< our decisions since anybody was hurt (the attacker must not let a battle stand still)
+	bool forecastLogged = false;
 
 	std::shared_ptr<Environment> env;
 	std::shared_ptr<CBattleCallback> cb;
@@ -72,6 +73,8 @@ private:
 	BattleSide side = BattleSide::NONE;
 	bool wasWaitingForRealize = false;
 	bool spellSearch = false; ///< from the player's FairAI parameters (or FAI_SPELL_SEARCH)
+	bool simAbilities = true; ///< from the player's FairAI parameters: the look-ahead knows special abilities
+	bool battlePlan = false;  ///< from the player's FairAI parameters: candidates are judged by playing several rounds ahead, holding or advancing
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);
@@ -80,6 +83,7 @@ private:
 	/// lost whole armies that way). nullopt: there is a way in, let BattleAI lead the assault.
 	std::optional<BattleAction> siegeWalkerAction(const BattleID & battleID, const CStack * stack) const;
 	std::optional<BattleAction> considerRetreat(const BattleID & battleID);
+	void logForecast(const BattleID & battleID);
 	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack, bool forbidPassive = false);
 
 	struct UnitChoice

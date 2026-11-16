@@ -3675,6 +3675,8 @@ void CGameHandler::checkVictoryLossConditionsForPlayer(PlayerColor player)
 
 	if(gameState().getMap().battleOnly)
 	{
+		if(turnOrder->battleOnlySetup)
+			return;
 		for(const auto & playerIt : gameState().players)
 		{
 			PlayerEndsGame peg;

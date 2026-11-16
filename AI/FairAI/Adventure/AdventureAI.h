@@ -231,6 +231,20 @@ private:
 	double guardDanger(const int3 & tile) const;
 	/// Expected losses in gold equivalents, or a negative value if the fight is too risky
 	double expectedLoss(const CGHeroInstance * hero, double danger, bool desperate = false, bool versusHero = false) const;
+	/// A fight against map guards as the battle simulator expects it to go (parameter fightForecast)
+	struct FightForecast
+	{
+		bool win = false;
+		double lossShare = 1.0; ///< of our army value
+		double lossValue = 0;
+	};
+	FightForecast forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const;
+	/// expected loss (gold) of attacking this stack of wandering monsters; -1: leave it alone
+	double monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster) const;
+	/// same for whatever guards a tile
+	double guardLoss(const CGHeroInstance * hero, const int3 & tile) const;
+	mutable std::map<std::tuple<int, uint64_t, int, int>, FightForecast> forecastCache;
+	int forecastLogDay = -1; ///< diagnostics: the forecasts of the main hero are logged once a day
 
 	/// Moves the hero one step towards `tile`. Returns false if no step could be made.
 	bool stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths);
@@ -239,7 +253,7 @@ private:
 	void buildInTown(const CGTownInstance * town);
 	double buildingValue(const CGTownInstance * town, BuildingID building) const;
 	/// Buys the resources missing for `cost` with gold at a marketplace. True if `cost` is affordable now.
-	bool buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark = false);
+	bool buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark = false, const ResourceSet * keep = nullptr);
 	void recruitInTown(const CGTownInstance * town, const CArmedInstance * destination, int64_t goldReserve);
 	int64_t recruitableValue(const CGTownInstance * town, int64_t gold) const;
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);
@@ -254,6 +268,10 @@ private:
 	/// Moves the strongest stacks from `source` to `destination` (keeps one unit on a source hero)
 	void pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source);
 	double transferableValue(const CGHeroInstance * from) const;
+	/// army value `destination` would really gain by taking troops from `source` (see pickBestCreatures)
+	double transferGain(const CArmedInstance * destination, const CArmedInstance * source) const;
+	/// > 1 when troops waiting for the main hero are big compared with its army (parameter couriers)
+	double reinforcementBoost(double troops) const;
 };
 
 }

@@ -83,9 +83,22 @@ struct Params
 	int moveSpells = 1;                ///< paths may use Fly / Water Walk when the hero can cast them (cast on the way)
 	int boats = 1;                     ///< heroes board boats, buy one when they run out of land (town shipyard, or a shipyard they stand at) and sail
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
+	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero; a big reinforcement counts more than its size (it makes fights possible). Off until a test shows a gain
+	double earlyGoldDays = 0;          ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full. 0: off
+	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)
+	int heroesWeek3 = 3;               ///< ... until day 21
+	int heroesLater = 4;               ///< ... afterwards
+	int sellSurplus = 0;               ///< resources piling up are traded for the ones our buildings lack. Off until a test shows a gain
 
 	// --- combat (read by the battle AI of the same player)
 	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)
+	int simAbilities = 1;              ///< battle look-ahead knows special abilities: life drain, regeneration, fire shield, charge bonus, strike and return, luck, morale (0: plain damage only)
+	int battlePlan = 0;                ///< battle AI judges every action by playing several rounds ahead with two plans for our side, hold or advance (0: rest of the current round only). Off until a test shows a gain
+	int fightForecast = 0;             ///< fights against map guards are judged by simulating the battle (unit against unit, FairAI's battle simulator) instead of comparing army values. Off until a test shows a gain
+	double maxLossShare = 0.35;        ///< with fightForecast: the main hero does not start a fight that is forecast to cost more than this share of its army ...
+	double maxLossShareIdle = 0.03;    ///< ... raised by this much per idle day (up to 0.6)
+	double maxLossShareSecondary = 0.15; ///< same limit for the other heroes
+	double guardKillValue = 0;         ///< beating guards is worth this share of their army value by itself (experience and room to move beyond what the map shows)
 	int keepGarrison = 1;              ///< heroes leave the weakest stack in a town they take troops from
 	int baitStacks = 0;                ///< main hero keeps this many single creatures of its cheapest troops (retaliation bait, blockers)
 

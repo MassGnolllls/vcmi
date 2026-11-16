@@ -20,6 +20,7 @@
 #include "../../lib/mapping/CMap.h"
 #include "../../lib/mapObjects/CGObjectInstance.h"
 #include "../../lib/mapObjects/CGHeroInstance.h"
+#include "../../lib/mapObjects/CGCreature.h"
 #include "../../lib/mapObjects/CGTownInstance.h"
 #include "../../lib/gameState/CGameState.h"
 #include "../../lib/pathfinder/CPathfinder.h"
@@ -378,8 +379,17 @@ void TurnOrderProcessor::onGameStarted()
 		for (auto hero : heroes)
 			if (auto cmd = hero->getCommander())
 				const_cast<CCommanderInstance*>(cmd)->setAlive(false); // TODO: support commanders in battle mode setup
+		auto monsters = gameHandler->gameState().getMap().getObjects<CGCreature>();
 		if(!towns.size() && heroes.size() == 2)
 			gameHandler->startBattle(heroes.at(0), heroes.at(1));
+		else if(!towns.size() && !monsters.empty() && !heroes.empty())
+		{
+			// arena: a hero against map guards (stacks split by the game's own rules);
+			// splitting the guards must not count as "battle over" yet
+			battleOnlySetup = true;
+			monsters.at(0)->onHeroVisit(*gameHandler, heroes.at(0));
+			battleOnlySetup = false;
+		}
 		else
 			towns.at(0)->onHeroVisit(*gameHandler, heroes.at(0));
 

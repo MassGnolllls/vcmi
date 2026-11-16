@@ -28,6 +28,9 @@
 
 VCMI_LIB_NAMESPACE_BEGIN
 class CBattleInfoCallback;
+class ACreature;
+class CCreature;
+class JsonNode;
 namespace battle
 {
 class Unit;
@@ -68,6 +71,18 @@ struct SimUnit
 	int meleeAttacks = 1;
 	int rangedAttacks = 1;
 
+	// --- special abilities, read from the unit's bonuses (so creatures of mods are covered as well)
+	int baseCount = 0;               ///< stack size at the start of the battle (limit for life drain)
+	bool living = true;              ///< neither undead nor a construct: its life can be drained
+	double lifeDrain = 0;            ///< share of melee damage dealt that comes back as health (vampire lords)
+	int regeneration = 0;            ///< health the top creature regains when its turn starts (wights, trolls)
+	double fireShield = 0;           ///< share of melee damage received that burns the attacker (efreet sultans)
+	bool fireImmune = false;
+	bool returnsAfterStrike = false; ///< flies back to where it started after a melee attack (harpies)
+	double meleeFactor = 1.0;        ///< expected multiplier of melee damage dealt: luck, death blow
+	double rangedFactor = 1.0;       ///< expected multiplier of ranged damage dealt: luck
+	double turnFactor = 1.0;         ///< expected number of own actions per turn: good morale > 1, bad morale < 1
+
 	BattleHex pos;
 
 	bool acted = false;
@@ -78,13 +93,30 @@ struct SimUnit
 	double remainingValue() const { return count > 0 ? value * (count - 1 + static_cast<double>(firstHP) / maxHP) : 0.0; }
 };
 
+/// One stack described by anything that carries creature bonuses: a unit in a battle, a stack of
+/// an army on the adventure map (hero skills included), or a plain creature type (observed armies)
+struct StackSpec
+{
+	const ACreature * bearer = nullptr;
+	const CCreature * type = nullptr;
+	int count = 0;
+	BattleSide side = BattleSide::NONE;
+};
+
 /// Expected damage per attacking creature, per unit pair
 class DamageTable
 {
 public:
-	void build(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & units);
+	/// Without a battle (forecasts on the adventure map): FairAI's own copy of the game's damage formula
+	void build(const std::vector<StackSpec> & stacks);
+	/// Expected damage of one attacking creature, without luck and other dice
+	static double formula(const ACreature & attacker, const CCreature * attackerType, const ACreature & defender, const CCreature * defenderType, bool shooting, int chargeDistance = 0);
+	/// abilities = false: plain damage only (to measure what the knowledge of special abilities is worth)
+	void build(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & units, bool abilities = true);
 
 	double melee(size_t attacker, size_t defender) const { return meleeDmg[attacker * n + defender]; }
+	/// extra melee damage per creature for every hex walked before the attack (jousting; 0 for everybody else)
+	double chargeStep(size_t attacker, size_t defender) const { return chargeDmg.empty() ? 0.0 : chargeDmg[attacker * n + defender]; }
 	double ranged(size_t attacker, size_t defender, bool far) const { return far ? rangedFar[attacker * n + defender] : rangedNear[attacker * n + defender]; }
 
 private:
@@ -92,6 +124,7 @@ private:
 	std::vector<double> meleeDmg;
 	std::vector<double> rangedNear;
 	std::vector<double> rangedFar;
+	std::vector<double> chargeDmg;
 };
 
 /// How a side behaves in play-outs. Evaluating against several behaviours keeps the search from
@@ -140,7 +173,12 @@ public:
 	std::array<Stance, 2> stance = {Stance::CHARGE, Stance::CHARGE}; ///< indexed by side
 
 	/// Build from the real battle. `units` order must match the damage table.
-	void init(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & battleUnits, const DamageTable & table);
+	void init(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & battleUnits, const DamageTable & table, bool abilities = true);
+	/// A battle that has not begun: both armies on the game's default starting hexes, no obstacles.
+	/// `stacks` order must match the damage table; `layout` is the game setting for battle layouts.
+	void initForecast(const std::vector<StackSpec> & stacks, const DamageTable & table, const JsonNode & layout);
+	/// everything about a unit that follows from its bonuses (shared by battles and forecasts)
+	static void describe(SimUnit & unit, const ACreature & bearer, const CCreature * type);
 
 	int indexOf(uint32_t unitId) const;
 	bool battleOver() const;
@@ -178,10 +216,33 @@ public:
 private:
 	void place(int unit, BattleHex at);
 	void lift(int unit);
-	void dealDamage(int target, double damage);
-	void strike(int attacker, int target, bool ranged);
+	/// returns the health actually removed
+	int64_t dealDamage(int target, double damage);
+	/// health back to a stack, fallen creatures return up to the size the stack had at the start
+	void heal(int unit, double amount);
+	/// chargeHexes: hexes walked before a melee attack; ownTurn: the unit's own action (not a retaliation)
+	void strike(int attacker, int target, bool ranged, int chargeHexes = 0, bool ownTurn = false);
 	void finishTurn(int unit, bool waited);
 	bool shotIsFar(int attacker, int target) const;
 };
+
+/// How a battle between two armies is expected to end, both sides played by the default policy:
+/// index 0 = our side holds its ground, 1 = it advances. The enemy always advances.
+struct Forecast
+{
+	double ownBefore = 0;
+	double enemyBefore = 0;
+	std::array<double, 2> ownAfter = {0, 0};
+	std::array<double, 2> enemyAfter = {0, 0};
+	std::array<int, 2> rounds = {0, 0};
+
+	/// the plan we would pick
+	int bestPlan() const;
+	bool win(int plan) const { return enemyAfter[plan] <= 0 && ownAfter[plan] > 0; }
+	/// share of our army value lost; 1 if the battle is lost (or not won in time)
+	double lossShare(int plan) const;
+};
+
+Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30);
 
 }

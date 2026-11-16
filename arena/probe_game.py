@@ -43,9 +43,7 @@ def main() -> int:
     out.mkdir(parents=True, exist_ok=True)
     result_file = out / "result.json"
     config_home = Path(tempfile.mkdtemp(prefix="vcmi-probe-cfg-"))
-    env = dict(os.environ)
-    env["XDG_CONFIG_HOME"] = str(config_home)
-    env["XDG_CACHE_HOME"] = str(config_home / "cache")
+    env = rt.client_env(config_home, args.client)
     (config_home / "vcmi").mkdir(parents=True, exist_ok=True)
     settings = json.loads(json.dumps(rt.ARENA_SETTINGS))
     ai_log = os.environ.get("ARENA_AI_LOG")

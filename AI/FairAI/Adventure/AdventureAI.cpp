@@ -7,6 +7,7 @@
  */
 #include "StdInc.h"
 #include "AdventureAI.h"
+#include "../Combat/CombatSim.h"
 
 #include "../FairAI.h"
 #include "../Perception/Perception.h"
@@ -14,6 +15,7 @@
 #include "../../../lib/CCreatureHandler.h"
 #include "../../../lib/CConfigHandler.h"
 #include "../../../lib/GameLibrary.h"
+#include "../../../lib/IGameSettings.h"
 #include "../../../lib/callback/CCallback.h"
 #include "../../../lib/entities/ResourceTypeHandler.h"
 #include "../../../lib/entities/artifact/CArtifact.h"
@@ -209,6 +211,19 @@ void Params::loadOverrides(int playerIndex)
 	read("neutralTownValue", neutralTownValue);
 	read("enemyTownValue", enemyTownValue);
 	read("spellSearch", spellSearch);
+	read("simAbilities", simAbilities);
+	read("battlePlan", battlePlan);
+	read("fightForecast", fightForecast);
+	read("maxLossShare", maxLossShare);
+	read("maxLossShareIdle", maxLossShareIdle);
+	read("maxLossShareSecondary", maxLossShareSecondary);
+	read("guardKillValue", guardKillValue);
+	read("couriers", couriers);
+	read("earlyGoldDays", earlyGoldDays);
+	read("heroesWeek1", heroesWeek1);
+	read("heroesWeek3", heroesWeek3);
+	read("heroesLater", heroesLater);
+	read("sellSurplus", sellSurplus);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -314,6 +329,7 @@ void AdventureAI::playTurn()
 	trail.clear();
 	abandonedToday.clear();
 	roundTrip.clear();
+	forecastCache.clear();
 	perception.refresh();
 	{
 		// heroes killed during the enemy's turn
@@ -400,12 +416,15 @@ void AdventureAI::playTurn()
 			// secondary heroes guard towns from the garrison instead of roaming
 			const auto * hero = ownHero(id);
 			const auto * town = hero ? hero->getVisitedTown() : nullptr;
-			if(town && !hero->isGarrisoned() && !town->getGarrisonHero())
+			const auto * leader = ownHero(mainHero);
+			const bool courier = params.couriers && hero && leader
+				&& transferGain(leader, hero) >= std::max(800.0, 0.1 * static_cast<double>(leader->getArmyStrength()));
+			if(town && !courier && !hero->isGarrisoned() && !town->getGarrisonHero())
 			{
 				cb->swapGarrisonHero(town);
 				gateway.waitTillFree();
 			}
-			if(town)
+			if(town && !courier)
 				continue;
 		}
 		playHero(id);
@@ -579,6 +598,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		const int3 posBefore = hero->visitablePos();
 		const int mpBefore = hero->movementPointsRemaining();
 		const auto objectBefore = perception.knownObjects();
+		const bool meetingOwnHero = best.object.hasValue() && ownHero(best.object) != nullptr;
+		const uint64_t ownArmyBefore = hero->getArmyStrength();
 		activeHero = heroId.getNum();
 		bool sent = stepTowards(hero, best.tile, *paths);
 		if(sent)
@@ -626,6 +647,11 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			if(++failures >= MAX_FAILURES_PER_HERO)
 				return;
 			continue;
+		}
+		if(meetingOwnHero && hero->visitablePos().dist2d(best.tile) < 1.5 && hero->getArmyStrength() == ownArmyBefore)
+		{
+			// met our other hero and nothing changed hands: once is enough for today
+			failedToday.insert({heroId.getNum(), best.tile});
 		}
 		failures = 0;
 		if(isMain(hero) && (best.object.hasValue() || best.description == "explore") && best.description != "home")
@@ -848,6 +874,120 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 	// Lanchester square law: survivors = sqrt(S^2 - D^2)
 	const double loss = strength - std::sqrt(std::max(0.0, strength * strength - danger * danger));
 	return loss * params.lossFactor * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+}
+
+AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const
+{
+	FightForecast result;
+	const CCreature * type = creature.toCreature();
+	if(!hero || !type || count <= 0 || hero->stacksCount() == 0)
+		return result;
+
+	// same question, same answer: the hero's army and the guards do not change between planning steps
+	uint64_t signature = 1469598103934665603ULL;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		signature = (signature ^ static_cast<uint64_t>(stack->getCreatureID().getNum() * 100003 + slot.getNum())) * 1099511628211ULL;
+		signature = (signature ^ static_cast<uint64_t>(stack->getCount())) * 1099511628211ULL;
+	}
+	const auto key = std::make_tuple(hero->id.getNum(), signature, creature.getNum(), count);
+	if(auto cached = forecastCache.find(key); cached != forecastCache.end())
+		return cached->second;
+
+	std::vector<Combat::StackSpec> stacks;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(stack && stack->getCreature() && stack->getCount() > 0)
+			stacks.push_back({stack.get(), stack->getCreature(), stack->getCount(), BattleSide::ATTACKER});
+	}
+	// The game splits guards by how strong the visitor is (public rule; the last step depends on the
+	// guards' position, which we do not use). One of the stacks may be upgraded: assume it is.
+	const double ratio = static_cast<double>(hero->getArmyStrength()) / std::max<double>(1.0, static_cast<double>(count) * type->getAIValue());
+	int split = ratio < 0.5 ? 7 : (ratio < 0.67 ? 6 : (ratio < 1.0 ? 5 : (ratio < 1.5 ? 4 : (ratio < 2.0 ? 3 : 2))));
+	split = std::clamp(split, 1, std::min(7, count));
+	const int each = count / split;
+	const int larger = count - each * split; // this many stacks get one creature more
+	const CCreature * upgraded = type;
+	if(split > 1 && !type->upgrades.empty())
+		upgraded = type->upgrades.begin()->toCreature();
+	for(int i = 0; i < split; ++i)
+	{
+		const CCreature * stackType = i == split / 2 && upgraded ? upgraded : type;
+		stacks.push_back({stackType, stackType, each + (i < larger ? 1 : 0), BattleSide::DEFENDER});
+	}
+
+	try
+	{
+		const JsonNode & layout = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
+		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout);
+		const int plan = forecast.bestPlan();
+		result.win = forecast.win(plan);
+		result.lossShare = forecast.lossShare(plan);
+		result.lossValue = result.lossShare * forecast.ownBefore;
+	}
+	catch(const std::exception & e)
+	{
+		logAi->warn("FairAI %s: battle forecast failed (%s)", me.toString(), e.what());
+	}
+	forecastCache[key] = result;
+	return result;
+}
+
+double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster) const
+{
+	if(!monster.army)
+		return 0;
+	if(!params.fightForecast || monster.army->units.size() != 1 || !monster.army->units.front().creature.hasValue())
+		return expectedLoss(hero, observedDanger(monster));
+
+	// the map shows a range ("a pack": 10-19): judge the likely size, and survive the largest
+	const ObservedStack & seen = monster.army->units.front();
+	const double middle = 0.5 * (seen.minCount + seen.maxCount);
+	const int likelyCount = std::max(1, static_cast<int>(std::lround((1 - params.dangerUpperWeight) * middle + params.dangerUpperWeight * seen.maxCount)));
+	const FightForecast likely = forecastMonsterFight(hero, seen.creature, likelyCount);
+	if(!likely.win)
+		return -1;
+	double share = likely.lossShare;
+	if(seen.maxCount > likelyCount)
+	{
+		const FightForecast worst = forecastMonsterFight(hero, seen.creature, seen.maxCount);
+		if(!worst.win)
+			return -1;
+		share = 0.7 * likely.lossShare + 0.3 * worst.lossShare;
+	}
+	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : params.maxLossShareSecondary;
+	if(share > limit)
+		return -1;
+	return share * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+}
+
+double AdventureAI::guardLoss(const CGHeroInstance * hero, const int3 & tile) const
+{
+	if(!cb->isVisible(tile))
+		return 0;
+	double total = 0;
+	auto known = perception.knownObjects();
+	for(const CGObjectInstance * guard : cb->getGuardingCreatures(tile))
+	{
+		double loss = 0;
+		auto it = known.find(guard->id);
+		if(it != known.end())
+			loss = monsterLoss(hero, it->second);
+		else if(const auto * armed = dynamic_cast<const CArmedInstance *>(guard))
+		{
+			ObservedObject seen;
+			seen.id = guard->id;
+			seen.type = guard->ID;
+			seen.army = perception.observeArmy(armed);
+			loss = monsterLoss(hero, seen);
+		}
+		if(loss < 0)
+			return -1;
+		total += loss;
+	}
+	return total;
 }
 
 void AdventureAI::updateThreats()
@@ -1260,12 +1400,14 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 
 double AdventureAI::townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const
 {
+	// what the hero's army can really take (free slots, same kinds, clearly better stacks)
 	double troops = 0;
-	for(const auto & slot : town->Slots())
-		troops += stackValue(slot.second.get());
+	const auto * guard = town->getGarrisonHero();
+	if(!guard || guard == hero)
+		troops += hero ? transferGain(hero, town) : 0.0;
 	// troops recruited while a hero guards the garrison sit in that hero's army
-	if(const auto * guard = town->getGarrisonHero(); guard && guard != hero && guard->tempOwner == me)
-		troops += transferableValue(guard);
+	if(guard && guard != hero && guard->tempOwner == me)
+		troops += hero ? transferGain(hero, guard) : transferableValue(guard);
 	troops += recruitableValue(town, spendable()[GameResID::GOLD]);
 	return troops;
 }
@@ -1284,6 +1426,101 @@ double AdventureAI::transferableValue(const CGHeroInstance * from) const
 	if(weakest == std::numeric_limits<double>::max())
 		return 0;
 	return std::max(0.0, total - weakest);
+}
+
+double AdventureAI::transferGain(const CArmedInstance * destination, const CArmedInstance * source) const
+{
+	// What pickBestCreatures(destination, source) would really move, in army value: stacks that join
+	// one of the same kind, fill a free slot, or are clearly better than the destination's weakest
+	// stack. Troops that cannot be taken are no reason to walk anywhere - valuing them kept two
+	// heroes bumping into each other for weeks.
+	struct Stack
+	{
+		CreatureID type;
+		double value;
+		int count;
+		double unit;
+	};
+	auto list = [](const CArmedInstance * army)
+	{
+		std::vector<Stack> stacks;
+		for(const auto & [slot, stack] : army->Slots())
+		{
+			if(stack && stack->getCreature() && stack->getCount() > 0)
+				stacks.push_back({stack->getCreatureID(), stackValue(stack.get()), static_cast<int>(stack->getCount()), static_cast<double>(stack->getCreature()->getAIValue())});
+		}
+		return stacks;
+	};
+	if(!destination || !source || destination == source)
+		return 0;
+	std::vector<Stack> dest = list(destination);
+	std::vector<Stack> src = list(source);
+	const bool sourceIsHero = source->ID == Obj::HERO;
+	if(!sourceIsHero && params.keepGarrison && destination->ID == Obj::HERO && !src.empty())
+	{
+		// a token guard stays in the town: a third of a single stack, else the weakest stack
+		if(src.size() == 1)
+		{
+			const int keep = std::max(1, src.front().count / 3);
+			const int move = src.front().count - keep;
+			const bool fits = dest.size() < GameConstants::ARMY_SIZE
+				|| std::any_of(dest.begin(), dest.end(), [&](const Stack & d) { return d.type == src.front().type; });
+			return fits ? move * src.front().unit : 0.0;
+		}
+		src.erase(std::min_element(src.begin(), src.end(), [](const Stack & a, const Stack & b) { return a.value < b.value; }));
+	}
+
+	double gained = 0;
+	for(int guard = 0; guard < 32 && !src.empty(); ++guard)
+	{
+		const bool lastOfHero = sourceIsHero && src.size() == 1; // a hero keeps one creature
+		// 1. join a stack of the same kind
+		bool joined = false;
+		for(size_t i = 0; i < src.size(); ++i)
+		{
+			auto same = std::find_if(dest.begin(), dest.end(), [&](const Stack & d) { return d.type == src[i].type; });
+			if(same == dest.end())
+				continue;
+			if(lastOfHero)
+				return gained + std::max(0, src[i].count - 1) * src[i].unit;
+			same->value += src[i].value;
+			gained += src[i].value;
+			src.erase(src.begin() + i);
+			joined = true;
+			break;
+		}
+		if(joined)
+			continue;
+		// 2. the strongest remaining stack into a free slot
+		auto best = std::max_element(src.begin(), src.end(), [](const Stack & a, const Stack & b) { return a.value < b.value; });
+		if(dest.size() < GameConstants::ARMY_SIZE)
+		{
+			if(lastOfHero)
+				return gained + std::max(0, best->count - 1) * best->unit;
+			gained += best->value;
+			dest.push_back(*best);
+			src.erase(best);
+			continue;
+		}
+		// 3. full: swap with the weakest stack if clearly better
+		auto weak = std::min_element(dest.begin(), dest.end(), [](const Stack & a, const Stack & b) { return a.value < b.value; });
+		if(lastOfHero || best->value < 1.1 * weak->value)
+			return gained;
+		gained += best->value - weak->value;
+		std::swap(*best, *weak);
+	}
+	return gained;
+}
+
+double AdventureAI::reinforcementBoost(double troops) const
+{
+	// Troops in a garrison win nothing. For the main hero a reinforcement that is big compared with
+	// its army is worth more than its size: guards it had to leave alone come into reach.
+	const CGHeroInstance * leader = ownHero(mainHero);
+	if(!params.couriers || !leader)
+		return 1.0;
+	const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+	return 1.0 + std::min(2.0, troops / army);
 }
 
 double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const
@@ -1445,13 +1682,35 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		if(own)
 		{
 			const auto * town = dynamic_cast<const CGTownInstance *>(instance);
-			if(!town || !main)
+			if(!town)
 				return 0;
+			if(!main)
+			{
+				// couriers: troops waiting in a town are worth bringing to the main hero
+				const CGHeroInstance * leader = ownHero(mainHero);
+				if(!params.couriers || !leader || leader->getVisitedTown() == town)
+					return 0;
+				double waiting = 0;
+				double weakest = std::numeric_limits<double>::max();
+				for(const auto & slot : town->Slots())
+				{
+					const double v = stackValue(slot.second.get());
+					waiting += v;
+					weakest = std::min(weakest, v);
+				}
+				if(params.keepGarrison && weakest < std::numeric_limits<double>::max())
+					waiting -= weakest; // stays behind as a token guard
+				waiting += static_cast<double>(recruitableValue(town, spendable()[GameResID::GOLD]));
+				const double leaderArmy = static_cast<double>(leader->getArmyStrength());
+				if(waiting < std::max(800.0, 0.1 * leaderArmy))
+					return 0;
+				return waiting * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(waiting);
+			}
 			double troops = townTroops(town, hero);
 			// what the hero left behind on its last visit (no free slot, garrison share) is no reason to return
 			if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
 				troops = std::max(0.0, troops - left->second);
-			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor;
+			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor * reinforcementBoost(troops);
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
 				value += 300;
 			auto trip = roundTrip.find(hero->id);
@@ -1477,12 +1736,11 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			const CGHeroInstance * other = ownHero(object.id);
 			if(!other || other == hero)
 				return 0;
-			// meeting the main hero hands over troops
-			if(main)
-				return transferableValue(other) * params.goldPerArmyValue * params.ferryFactor * armyFactor;
-			if(other->id == mainHero)
-				return transferableValue(hero) * params.goldPerArmyValue * params.ferryFactor * armyFactor;
-			return 0;
+			// meeting the main hero hands over troops - as far as its army can take them
+			const double gain = main ? transferGain(hero, other) : (other->id == mainHero ? transferGain(other, hero) : 0.0);
+			if(gain < 1)
+				return 0;
+			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain);
 		}
 		if(!enemy || !object.visibleNow || !object.army)
 			return 0;
@@ -1654,7 +1912,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			}
 			const bool desperate = object.type == Obj::TOWN && perception.ownTowns().empty();
 			const bool versusHero = (object.type == Obj::HERO || object.type == Obj::TOWN) && isEnemy(object.owner);
-			double loss = expectedLoss(hero, danger, desperate, versusHero);
+			// guards only: the simulated battle decides; heroes and towns: army values (their skills and spells are unknown)
+			double loss = params.fightForecast && !versusHero && defenders <= 0 && !desperate
+				? guardLoss(hero, object.visitablePos)
+				: expectedLoss(hero, danger, desperate, versusHero);
 			if(loss < 0)
 			{
 				++rejected["too strong"];
@@ -1778,6 +2039,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 
 	// ---- monsters: experience plus whatever they block
 	double weakestRejected = 0;
+	std::string forecastLines;
 	for(const auto & [id, object] : known)
 	{
 		if(object.type != Obj::MONSTER || !object.army || failedToday.count({heroNum, object.visitablePos}))
@@ -1786,7 +2048,20 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(!node)
 			continue;
 		double danger = observedDanger(object);
-		double loss = expectedLoss(hero, danger);
+		double loss = monsterLoss(hero, object);
+		if(params.fightForecast && isMain(hero) && forecastLogDay != today * 100 + heroNum % 100 && logAi->isDebugEnabled() && object.army->units.size() == 1)
+		{
+			// once a day: how the main hero judges every guard in reach (diagnostics)
+			const ObservedStack & seen = object.army->units.front();
+			const double middle = 0.5 * (seen.minCount + seen.maxCount);
+			const int likelyCount = std::max(1, static_cast<int>(std::lround((1 - params.dangerUpperWeight) * middle + params.dangerUpperWeight * seen.maxCount)));
+			const FightForecast likely = forecastMonsterFight(hero, seen.creature, likelyCount);
+			const FightForecast worst = forecastMonsterFight(hero, seen.creature, seen.maxCount);
+			forecastLines += boost::str(boost::format(" [%s %d-%d: %s %.2f, at most %s %.2f, old rule %s, loss %.0f]")
+				% (seen.creature.hasValue() ? seen.creature.toCreature()->getJsonKey() : std::string("?")) % seen.minCount % seen.maxCount
+				% (likely.win ? "win" : "LOSE") % likely.lossShare % (worst.win ? "win" : "LOSE") % worst.lossShare
+				% (expectedLoss(hero, danger) < 0 ? "no" : "yes") % loss);
+		}
 		if(loss < 0 && (weakestRejected == 0 || danger < weakestRejected))
 			weakestRejected = danger;
 		if(loss < 0)
@@ -1806,6 +2081,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hp += unit.creature.toCreature()->getMaxHealth() * 0.5 * (unit.minCount + unit.maxCount);
 		}
 		double value = hp * expValue(hero);
+		if(isMain(hero))
+			value += params.guardKillValue * danger * params.goldPerArmyValue;
 		// a guard next to unexplored land probably blocks a way into it
 		value += params.guardFogFactor * tileValue * revealGrid.count(object.visitablePos, hero->getSightRadius());
 		auto unlock = unlockValue.find(id);
@@ -1816,6 +2093,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		addTarget(object.visitablePos, id, value, loss, node->cost, "monster");
 	}
 
+	if(!forecastLines.empty())
+	{
+		logAi->debug("FairAI %s day %d: %s (army %d) forecasts:%s", me.toString(), today, hero->getNameTranslated(), static_cast<int>(hero->getArmyStrength()), forecastLines);
+		forecastLogDay = today * 100 + heroNum % 100;
+	}
 	if(out.empty())
 	{
 		std::string reasons;
@@ -2320,6 +2602,8 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 	else if(ownHero(mainHero) && params.collectorsTakeGarrison)
 	{
 		// collectors ferry the garrison to the main hero
+		if(params.couriers)
+			recruitInTown(town, hero, economy.rho > 1.5 ? 0 : 1000);
 		pickBestCreatures(hero, town);
 	}
 }
@@ -2422,7 +2706,13 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 		if(base != info->buildings.end())
 			produce -= base->second->produce;
 	}
-	value += std::max(0.0, worth(produce)) * params.incomeHorizonDays * goldWeight;
+	{
+		// while buildings are waiting gold is scarce whatever today's stock says
+		double incomeWeight = goldWeight;
+		if(params.earlyGoldDays > 0)
+			incomeWeight = std::max(goldWeight, std::clamp(1.0 - (today - params.earlyGoldDays) / 14.0, 0.0, 1.0));
+		value += std::max(0.0, worth(produce)) * params.incomeHorizonDays * incomeWeight;
+	}
 
 	auto creatureAt = [info](int level, int upgrade) -> const CCreature *
 	{
@@ -2624,12 +2914,30 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 		}
 	}
 
+	// what the three most wanted buildings cost, plus a little: resources beyond that may be traded away
+	ResourceSet keep;
+	{
+		int counted = 0;
+		for(const auto & option : ranked)
+		{
+			if(counted++ >= 3)
+				break;
+			const ResourceSet & cost = info->buildings.at(option.build)->resources;
+			for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+				if(res != GameResID::GOLD)
+					keep[res] += cost[res];
+		}
+		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			if(res != GameResID::GOLD)
+				keep[res] += (res == GameResID::WOOD || res == GameResID::ORE) ? 10 : 4;
+	}
+
 	int attempts = 0;
 	for(const auto & option : ranked)
 	{
 		if(option.score < 0.25 || attempts >= 4)
 			return;
-		if(option.state == EBuildingState::NO_RESOURCES && !buyResourcesFor(town, info->buildings.at(option.build)->resources))
+		if(option.state == EBuildingState::NO_RESOURCES && !buyResourcesFor(town, info->buildings.at(option.build)->resources, false, &keep))
 			continue;
 		if(!spendable().canAfford(info->buildings.at(option.build)->resources))
 			continue; // the rest is put aside (see earmark)
@@ -2643,7 +2951,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 	}
 }
 
-bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark)
+bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark, const ResourceSet * keep)
 {
 	// any own town with a marketplace will do
 	const IMarket * market = nullptr;
@@ -2660,6 +2968,39 @@ bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet
 		return false;
 
 	ResourceSet have = forEarmark ? cb->getResourceAmount() : spendable();
+	if(params.sellSurplus && keep)
+	{
+		// resources piling up beyond what our next buildings need pay for the ones that are missing
+		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+		{
+			if(res == GameResID::GOLD)
+				continue;
+			int missing = cost[res] - have[res];
+			for(GameResID source : LIBRARY->resourceTypeHandler->getAllObjects())
+			{
+				if(missing <= 0)
+					break;
+				if(source == GameResID::GOLD || source == res)
+					continue;
+				const int surplus = have[source] - (*keep)[source] - cost[source];
+				int give = 0;
+				int get = 0;
+				if(surplus <= 0 || !market->getOffer(source, res, give, get, EMarketMode::RESOURCE_RESOURCE) || give <= 0 || get <= 0)
+					continue;
+				const int lots = std::min((missing + get - 1) / get, surplus / give);
+				if(lots <= 0)
+					continue;
+				logAi->info("FairAI %s day %d: trading %d %s for %d %s", me.toString(), today, lots * give, source.toResource()->getJsonKey(),
+					lots * get, res.toResource()->getJsonKey());
+				cb->trade(market->getObjInstanceID(), EMarketMode::RESOURCE_RESOURCE, source, res, lots * give);
+				gateway.waitTillFree();
+				missing -= lots * get;
+			}
+		}
+		have = forEarmark ? cb->getResourceAmount() : spendable();
+		if(have.canAfford(cost))
+			return true;
+	}
 	// plan the purchase first: everything must be affordable with gold alone
 	int64_t goldNeeded = cost[GameResID::GOLD];
 	std::vector<std::pair<GameResID, int>> purchases;
@@ -2704,7 +3045,7 @@ void AdventureAI::manageTowns(bool /*endOfTurn*/)
 
 void AdventureAI::hireHeroes()
 {
-	int wanted = (today <= 7 ? 2 : (today <= 21 ? 3 : 4)) + params.scouts;
+	int wanted = (today <= 7 ? params.heroesWeek1 : (today <= 21 ? params.heroesWeek3 : params.heroesLater)) + params.scouts;
 	if(economy.rho > 2 && spendable()[GameResID::GOLD] > 8000)
 		wanted += 2;
 	// every lost hero feeds the enemy experience: after a loss only replace the minimum
