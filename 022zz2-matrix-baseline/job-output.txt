@@ -348,3 +348,10 @@ Paired against `base`: mean score difference over the games both played (95% CI)
 
 == xl-islands-8p
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/d5d4448388/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2-matrix-baseline/xl-islands-8p/base-s42 --pool mix1-xl-islands-8p --max-days 90 --timeout 3600 --stall-seconds 180 --base-port 8100
+playing 8 matches on 4 maps with 6 parallel job(s)
+match    4 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.30 [491.9s]
+match    0 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.20 [555.2s]
+match    1 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.32 [582.1s]
+match    3 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.22 [617.3s]
+match    5 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.23 [681.9s]
+match    2 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.32 [687.6s]
