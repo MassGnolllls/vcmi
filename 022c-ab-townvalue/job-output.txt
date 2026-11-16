@@ -284,3 +284,58 @@ match   34       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [6.
 match   28       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [12.7s]
 match   31  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [11.9s]
 match   29  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [13.1s]
+match   36       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=44 [13.4s]
+match   37  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [12.7s]
+match   30       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [24.3s]
+match   39  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [15.7s]
+match   38       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [17.6s]
+match   44       FairAI (red) vs Nullkiller2  (blue): victory winner=red day=1 [1.0s]
+match   45  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=2 [1.0s]
+match   41  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=29 [13.7s]
+match   43  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=25 [11.5s]
+match   40       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [23.3s]
+match   48       FairAI (red) vs Nullkiller2  (blue): victory winner=red day=23 [5.1s]
+match   49  Nullkiller2 (red) vs FairAI       (blue): victory winner=blue day=16 [6.2s]
+match   42       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [21.9s]
+match   50       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [8.1s]
+match   47  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [16.0s]
+match   46       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=35 [17.7s]
+match   55  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=2 [1.8s]
+match   56       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=3 [2.3s]
+match   54       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [8.1s]
+match   57  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [6.2s]
+match   58       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [6.3s]
+match   51  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [26.0s]
+match   59  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [15.9s]
+match   52       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [27.9s]
+match   62       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [5.1s]
+match   53  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [26.7s]
+match   64       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [3.8s]
+match   61  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [27.1s]
+match   67  Nullkiller2 (red) vs FairAI       (blue): victory winner=blue day=36 [9.0s]
+match   60       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [30.2s]
+match   66       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [14.8s]
+match   68       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=11 [3.6s]
+match   63  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [18.6s]
+match   65  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [20.1s]
+match   69  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=24 [8.3s]
+match   70       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [18.4s]
+match   71  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [21.8s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 72 (runner errors: 0)
+- decided: 23 -> FairAI won 7, lost 16  (win rate 30%, 95% CI 16%-51%)
+- day limit reached: 49 (material lead for FairAI in 22)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 21 days
+- cheat flags raised: 0
+# A/B test (2 configs, seeds 42, 43)
+
+Paired against `base`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| base | `{}` | 144 | 12 | 45 | 0.426 ± 0.058 | - | 144 |
+| towns25 | `{"neutralTownValue": 25000, "enemyTownValue": 35000}` | 144 | 16 | 40 | 0.438 ± 0.057 | +0.013 ± 0.058 | 144 |
+
