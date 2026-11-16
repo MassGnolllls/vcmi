@@ -89,6 +89,7 @@ private:
 	BattleSide battleSide = BattleSide::NONE;
 	uint64_t battleOwnStrength = 0; ///< our army strength when the battle started (loss calibration log)
 	uint64_t battleEnemyStrength = 0;
+	int battleEnemyHero = -1; ///< hero type of the enemy hero in the running battle (-1: none)
 
 	void makeTurn();
 	void endTurn();

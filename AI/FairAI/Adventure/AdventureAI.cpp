@@ -1528,7 +1528,42 @@ double AdventureAI::heroFactor(const ObservedObject & hero) const
 		}
 		factor *= std::sqrt((1.0 + melee) / std::max(0.3, 1.0 - armour));
 	}
+	// Magic we have seen this hero cast. In the early battles of the log spells decided nothing; late
+	// in a game a hero that slows or hastens a whole army at once (a master of the school) wins
+	// battles its numbers would lose: 346k of ours were destroyed by 205k under a mass Slow.
+	{
+		std::unique_lock lock(intelMutex);
+		auto known = heroIntel.find(hero.subtype.getNum());
+		if(known != heroIntel.end())
+			factor *= known->second.magic;
+	}
 	return factor;
+}
+
+void AdventureAI::noteHeroSpell(HeroTypeID hero, SpellID spell, int affected)
+{
+	if(!hero.hasValue() || !spell.hasValue())
+		return;
+	double magic = 1.0;
+	if(spell == SpellID::SLOW || spell == SpellID::HASTE)
+		magic = affected >= 4 ? (spell == SpellID::SLOW ? 1.6 : 1.4) : 1.1;
+	else if(spell == SpellID::BLIND || spell == SpellID::BERSERK || spell == SpellID::HYPNOTIZE || spell == SpellID::FORGETFULNESS)
+		magic = affected >= 4 ? 1.6 : 1.15;
+	else if(spell == SpellID::IMPLOSION || spell == SpellID::CHAIN_LIGHTNING || spell == SpellID::METEOR_SHOWER || spell == SpellID::ARMAGEDDON
+		|| spell == SpellID::RESURRECTION || spell == SpellID::ANIMATE_DEAD || spell == SpellID::CLONE)
+		magic = 1.4;
+	else if(affected >= 4)
+		magic = 1.15; // a mass blessing or curse
+	if(magic <= 1.0)
+		return;
+	std::unique_lock lock(intelMutex);
+	HeroIntel & intel = heroIntel[hero.getNum()];
+	if(magic > intel.magic)
+	{
+		logAi->info("FairAI %s: enemy hero %s casts %s on %d units - counted as %.2f times its strength from now on", me.toString(),
+			hero.toHeroType() ? hero.toHeroType()->getNameTranslated() : std::string("?"), spell.toSpell()->getNameTranslated(), affected, magic);
+		intel.magic = magic;
+	}
 }
 
 double AdventureAI::heroFightLoss(const CGHeroInstance * hero, const ObservedObject & enemy) const

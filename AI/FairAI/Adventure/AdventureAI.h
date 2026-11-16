@@ -129,6 +129,7 @@ public:
 	/// The game showed us a hero's primary skills (attack, defence, spell power, knowledge): in a
 	/// battle against it or in our thieves' guild. Remembered with the day.
 	void noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills);
+	void noteHeroSpell(HeroTypeID hero, SpellID spell, int affected);
 	/// A battle is lost: is buying our army free for `cost` gold the better end? ownValue: AI value we
 	/// still have on the field, enemyLoss: what it would still kill (parameter surrender)
 	bool surrenderWorth(int cost, double ownValue, double enemyLoss) const;
@@ -268,6 +269,7 @@ private:
 	{
 		int day = -1;
 		std::array<double, 4> skills{}; ///< attack, defence, spell power, knowledge
+		double magic = 1.0; ///< what the spells we saw it cast add to its strength (noteHeroSpell)
 	};
 	std::map<int, HeroIntel> heroIntel; ///< hero type -> primary skills the game showed us, and when
 	mutable std::mutex intelMutex;

@@ -385,6 +385,7 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 		// In battle the game shows the enemy hero's primary skills (its window on the battlefield):
 		// remembered for the next time we judge a fight against that hero.
 		const CGHeroInstance * enemyHero = side == BattleSide::ATTACKER ? hero2 : hero1;
+		battleEnemyHero = enemyHero ? enemyHero->getHeroTypeID().getNum() : -1;
 		if(enemyHero && adventure)
 		{
 			const InfoAboutHero shown = battle->battleGetHeroInfo(side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER);
@@ -432,8 +433,14 @@ void FairAIGateway::battleStacksAttacked(const BattleID & battleID, const std::v
 void FairAIGateway::battleSpellCast(const BattleID & battleID, const BattleSpellCast * sc)
 {
 	if(sc)
+	{
 		logAi->info("FairAI %s battle spell: %s %s casts %s on %d units", playerID.toString(), sc->side == battleSide ? "our" : "enemy",
 			sc->castByHero ? "hero" : "creature", sc->spellID.toSpell()->getNameTranslated(), static_cast<int>(sc->affectedCres.size()));
+		// what an enemy hero casts in front of us is remembered: a hero that slows a whole army is
+		// worth far more than its army and its attack and defence say
+		if(sc->castByHero && sc->side != battleSide && battleEnemyHero >= 0 && adventure)
+			adventure->noteHeroSpell(HeroTypeID(battleEnemyHero), sc->spellID, static_cast<int>(sc->affectedCres.size()));
+	}
 	CAdventureAI::battleSpellCast(battleID, sc);
 }
 
