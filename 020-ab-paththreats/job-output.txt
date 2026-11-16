@@ -320,3 +320,22 @@ match   67  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=36 
 match   70       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [9.3s]
 match   71  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [20.2s]
 match   69  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [23.2s]
+match   31  Nullkiller2 (red) vs FairAI       (blue): wall-clock timeout after 600s winner=- day=- [601.5s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 72 (runner errors: 1)
+- decided: 25 -> FairAI won 2, lost 23  (win rate 8%, 95% CI 2%-25%)
+- day limit reached: 46 (material lead for FairAI in 15)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 23 days
+- cheat flags raised: 0
+# A/B test (2 configs, seeds 42, 43)
+
+Paired against `path`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| path | `{}` | 144 | 9 | 46 | 0.407 ± 0.056 | - | 144 |
+| eucl | `{"pathThreats": 0}` | 142 | 5 | 50 | 0.371 ± 0.054 | -0.035 ± 0.053 | 142 |
+
