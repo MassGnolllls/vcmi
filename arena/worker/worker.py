@@ -171,9 +171,51 @@ def pending_jobs():
     return result
 
 
+def vcmi_mods_dir() -> Path:
+    base = os.environ.get("XDG_DATA_HOME") or str(Path.home() / ".local" / "share")
+    return Path(base) / "vcmi" / "Mods"
+
+
+def ensure_mods(names) -> None:
+    """Install the mods a job needs, exactly as pinned in mods.json next to this file (public
+    repository and commit). The stored token is never offered to those repositories."""
+    if not names:
+        return
+    pinned = json.loads((SRC / "arena" / "worker" / "mods.json").read_text())
+    for name in names:
+        spec = pinned[name]  # a job cannot ask for anything that is not pinned in the fork
+        target = vcmi_mods_dir() / name
+        marker = target / ".fairai-commit"
+        if marker.exists() and marker.read_text().strip() == spec["commit"]:
+            continue
+        log(f"installing mod {name} ({spec['url']} at {spec['commit'][:10]}), this may take a while")
+        tmp = vcmi_mods_dir() / f".{name}-download"
+        shutil.rmtree(tmp, ignore_errors=True)
+        tmp.mkdir(parents=True)
+        no_token = ["-c", "credential.helper="]
+        steps = [["git", "init", "-q"],
+                 ["git", *no_token, "fetch", "-q", "--depth", "1", spec["url"], spec["commit"]],
+                 ["git", "checkout", "-q", "FETCH_HEAD"]]
+        for step in steps:
+            res = subprocess.run(step, cwd=tmp, text=True, capture_output=True, env=GIT_ENV, stdin=subprocess.DEVNULL, timeout=3600)
+            if res.returncode != 0:
+                shutil.rmtree(tmp, ignore_errors=True)
+                raise RuntimeError(f"mod {name}: {' '.join(step[:4])} failed: {res.stderr.strip()[-300:]}")
+        head = subprocess.run(["git", "rev-parse", "HEAD"], cwd=tmp, text=True, capture_output=True).stdout.strip()
+        if head != spec["commit"]:
+            shutil.rmtree(tmp, ignore_errors=True)
+            raise RuntimeError(f"mod {name}: got {head}, expected {spec['commit']}")
+        shutil.rmtree(tmp / ".git", ignore_errors=True)  # half the disk space; the marker records the version
+        (tmp / ".fairai-commit").write_text(spec["commit"] + "\n")
+        shutil.rmtree(target, ignore_errors=True)
+        tmp.rename(target)
+        log(f"mod {name} installed in {target}")
+
+
 def run_job(path: Path, commit: str) -> None:
     job_id = path.stem
     job = json.loads(path.read_text())
+    ensure_mods(job.get("mods", []))
     snap = frozen_build(commit)
     out = RUNS / job_id
     shutil.rmtree(out, ignore_errors=True)

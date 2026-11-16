@@ -1,0 +1,21 @@
+{
+ "note": "baseline with HotA factions over seven map categories",
+ "mods": [
+  "hota"
+ ],
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_hota.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "42"
+ ],
+ "jobs": 6
+}

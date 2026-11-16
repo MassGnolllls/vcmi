@@ -1,0 +1,15 @@
+{
+ "note": "map matrix with the HotA mod: starting towns are drawn from all twelve factions (Cove, Factory, Bulwark included)",
+ "mods": [
+  "hota"
+ ],
+ "script": "matrix.py",
+ "args": [
+  "gen",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_hota.json"
+ ],
+ "jobs": 1
+}

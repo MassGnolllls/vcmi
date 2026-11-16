@@ -1,0 +1,85 @@
+{
+ "pool": "mixh1",
+ "mods": "hota",
+ "categories": [
+  {
+   "name": "s-land-2p",
+   "template": "2SM4d",
+   "size": "s",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 31000,
+   "days": 45
+  },
+  {
+   "name": "m-land-2p",
+   "template": "Skirmish M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 31200,
+   "days": 60
+  },
+  {
+   "name": "m-islands-2p",
+   "template": "2SM4d",
+   "size": "m",
+   "levels": 1,
+   "water": "islands",
+   "players": 2,
+   "count": 6,
+   "seed": 31400,
+   "days": 60
+  },
+  {
+   "name": "m-ffa-4p",
+   "template": "2SM4d(2)",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 4,
+   "count": 6,
+   "seed": 31500,
+   "days": 60
+  },
+  {
+   "name": "m-teams-4p",
+   "template": "2SM4d(2)",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 4,
+   "teams": "0,1,0,1",
+   "count": 6,
+   "seed": 31600,
+   "days": 60
+  },
+  {
+   "name": "l-ffa-6p-u",
+   "template": "2SM4d(3)",
+   "size": "l",
+   "levels": 2,
+   "water": "none",
+   "players": 6,
+   "count": 6,
+   "seed": 31800,
+   "days": 75
+  },
+  {
+   "name": "xl-ffa-8p-u",
+   "template": "8XM12",
+   "size": "xl",
+   "levels": 2,
+   "water": "none",
+   "players": 8,
+   "count": 4,
+   "seed": 32000,
+   "days": 90,
+   "timeout": 3600
+  }
+ ]
+}
