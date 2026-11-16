@@ -52,7 +52,7 @@ struct Params
 	double refillShare = 0;            ///< campaign: troops waiting in our towns worth this share of the main hero's army interrupt the campaign - the hero fetches them first (0: never). Off: the first test (0.4, with other changes) won no game where the campaign without it had won three
 	int fetchByShare = 0;              ///< 1: troops waiting for the main hero (in towns, with our other heroes) count by how much they would add to its army - full value from fetchShare of the army on, a tenth for a trickle. Off until a test shows a gain
 	double fetchShare = 0.5;           ///< see fetchByShare
-	int noChase = 0;                   ///< 1: enemy heroes are targets only when they can be reached today (or stand in a town): no running after heroes that move on. Off until a test shows a gain
+	int noChase = 0;                   ///< 1: enemy heroes are targets only when in reach today or standing in a town (no chasing across the map); 2: the same, but only while on campaign. Off until a test shows a gain
 	double threatGrowth = 0.15;        ///< an enemy hero we have not seen for a day has probably picked up this much more army (per day)
 	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength (main hero)
 	double threatToleranceSecondary = 1.4; ///< same for the other heroes

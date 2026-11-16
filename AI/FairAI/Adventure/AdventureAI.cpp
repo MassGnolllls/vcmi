@@ -3012,7 +3012,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const bool foreignTown = object.type == Obj::TOWN && object.owner != me;
 			// An enemy hero further off than today's march will not be there when we arrive: no chase
 			// (one standing in a town is that town's defender - the town is the target)
-			if(params.noChase && foreignHero && node->turns > 0)
+			if((params.noChase == 1 || (params.noChase == 2 && campaign(hero))) && foreignHero && node->turns > 0)
 			{
 				bool inTown = false;
 				for(const auto & [otherId, other] : known)
