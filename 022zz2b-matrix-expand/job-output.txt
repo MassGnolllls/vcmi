@@ -442,3 +442,14 @@ match   10 FairAI as red,tan of 4: timeout winner= day=61 score=0.69 [57.2s]
 match    6 FairAI as red,tan of 4: timeout winner= day=61 score=0.00 [106.3s]
 match    7 FairAI as blue,green of 4: timeout winner= day=61 score=0.00 [112.2s]
 match   11 FairAI as blue,green of 4: timeout winner= day=61 score=0.50 [101.3s]
+match    1 FairAI as blue,green of 4: wall-clock timeout after 1800s winner=- day=- score=- [1824.5s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 12 (runner errors: 1)
+- decided: 2 -> FairAI won 1, lost 1  (win rate 50%, 95% CI 9%-91%)
+- day limit reached: 9 (material lead for FairAI in 2)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 54 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/8705a06119/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2b-matrix-expand/m-ffa-4p/ffv-s42 --pool mix1-m-ffa-4p --max-days 60 --timeout 1800 --stall-seconds 180 --base-port 7300 --ai-params {"fightForecast": 1, "guardKillValue": 0.3}
