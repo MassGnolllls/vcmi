@@ -5,7 +5,7 @@ Paired against `base`: mean score difference over the games both played (95% CI)
 | config | params | games | won | lost | score | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|
 | base | `{}` | 24 | 0 | 6 | 0.344 ± 0.132 | - | 24 |
-| share | `{"fetchByShare": 1}` | 0 | 0 | 0 | nan ± nan | - | 0 |
+| share | `{"fetchByShare": 1}` | 24 | 0 | 7 | 0.338 ± 0.121 | -0.006 ± 0.178 | 24 |
 | hero | `{"heroModel": 1}` | 0 | 0 | 0 | nan ± nan | - | 0 |
 | camp | `{"leaderFocus": 1, "noChase": 1, "heroModel": 1}` | 0 | 0 | 0 | nan ± nan | - | 0 |
 | expand | `{"unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12}` | 0 | 0 | 0 | nan ± nan | - | 0 |
