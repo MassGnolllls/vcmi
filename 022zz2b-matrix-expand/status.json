@@ -1,0 +1,9 @@
+{
+ "job": "022zz2b-matrix-expand",
+ "state": "running",
+ "commit": "8705a06119aa3ccaf708fda10cdb3eebc9db5628",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T17:43:58",
+ "note": "expansion switches over six map categories (new build: troop hand-overs fixed, so 'base' against the earlier baseline 022zz2 shows the fix): early gold, more heroes, couriers, forecast-based fights, all together"
+}
