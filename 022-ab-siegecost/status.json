@@ -1,9 +1,12 @@
 {
  "job": "022-ab-siegecost",
- "state": "running",
+ "state": "done",
  "commit": "d5bf662d41bb1eb772aa35a1a7a1fbc84e439430",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T12:46:36",
- "note": "moat and arrow tower losses in the decision to attack a town vs ignoring them; 2x72 paired games, day 60 (sieges happen later)"
+ "note": "moat and arrow tower losses in the decision to attack a town vs ignoring them; 2x72 paired games, day 60 (sieges happen later)",
+ "returncode": 0,
+ "finished": "2026-11-16T13:01:16",
+ "minutes": 14.7
 }

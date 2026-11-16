@@ -4,5 +4,5 @@ Paired against `siege`: mean score difference over the games both played (95% CI
 
 | config | params | games | won | lost | score | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|
-| siege | `{}` | 72 | 4 | 26 | 0.353 ± 0.077 | - | 72 |
-| nocost | `{"siegeCost": 0}` | 72 | 9 | 23 | 0.423 ± 0.086 | +0.069 ± 0.070 | 72 |
+| siege | `{}` | 144 | 11 | 54 | 0.355 ± 0.058 | - | 144 |
+| nocost | `{"siegeCost": 0}` | 144 | 18 | 51 | 0.410 ± 0.061 | +0.055 ± 0.055 | 144 |
