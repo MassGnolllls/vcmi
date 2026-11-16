@@ -1,9 +1,12 @@
 {
  "job": "001-baseline-fairai-vs-nk2",
- "state": "running",
+ "state": "done",
  "commit": "c1351b590d8026b687f23d97f4a719e62250f3d6",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T11:24:09",
- "note": "speed check and baseline: FairAI vs Nullkiller2, 36 full games on the second PC"
+ "note": "speed check and baseline: FairAI vs Nullkiller2, 36 full games on the second PC",
+ "returncode": 0,
+ "finished": "2026-11-16T11:34:15",
+ "minutes": 10.1
 }

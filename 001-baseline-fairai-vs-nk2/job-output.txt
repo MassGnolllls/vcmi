@@ -34,3 +34,13 @@ match   35  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=27 
 match   26       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=98 [53.5s]
 match   34       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=48 [28.9s]
 match   30       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=89 [47.5s]
+match    2       FairAI (red) vs Nullkiller2  (blue): wall-clock timeout after 600s winner=- day=- [603.6s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 36 (runner errors: 1)
+- decided: 25 -> FairAI won 2, lost 23  (win rate 8%, 95% CI 2%-25%)
+- day limit reached: 10 (material lead for FairAI in 4)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 50 days
+- cheat flags raised: 0
