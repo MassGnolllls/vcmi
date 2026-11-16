@@ -3,8 +3,19 @@
 # The token is checked against GitHub first; ~/.git-credentials is only changed when it works.
 set -uo pipefail
 echo "Kopiere jetzt auf github.com den Token (Fine-grained tokens > dein Token > 'Regenerate token',"
-echo "falls du ihn nicht mehr hast) und füge ihn hier mit Rechtsklick ein. Er bleibt unsichtbar."
-read -rs -p "Token einfügen, dann Enter: " token < /dev/tty
+echo "falls du ihn nicht mehr hast) und füge ihn hier mit Rechtsklick ein. Statt des Tokens erscheinen Sternchen."
+# masked input: every pasted or typed character shows as *, so you can see the paste arrived
+token=""
+printf 'Token einfügen, dann Enter: '
+while IFS= read -rs -n1 ch < /dev/tty; do
+    [ -z "$ch" ] && break                       # Enter
+    if [ "$ch" = $'\177' ] || [ "$ch" = $'\b' ]; then   # Backspace
+        if [ -n "$token" ]; then token="${token%?}"; printf '\b \b'; fi
+        continue
+    fi
+    token+="$ch"
+    printf '*'
+done
 echo
 token="$(printf '%s' "$token" | tr -d '[:space:]')"
 if [ -z "$token" ]; then
