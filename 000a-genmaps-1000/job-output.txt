@@ -1,0 +1,7 @@
+generated: /home/alex/.local/share/vcmi/Maps/arena/2SM4d_s_l1_none_1000.vmap
+generated: /home/alex/.local/share/vcmi/Maps/arena/2SM4d_s_l1_none_1001.vmap
+generated: /home/alex/.local/share/vcmi/Maps/arena/2SM4d_s_l1_none_1002.vmap
+generated: /home/alex/.local/share/vcmi/Maps/arena/2SM4d_s_l1_none_1003.vmap
+generated: /home/alex/.local/share/vcmi/Maps/arena/2SM4d_s_l1_none_1004.vmap
+generated: /home/alex/.local/share/vcmi/Maps/arena/2SM4d_s_l1_none_1005.vmap
+6/6 maps ready in /home/alex/.local/share/vcmi/Maps/arena

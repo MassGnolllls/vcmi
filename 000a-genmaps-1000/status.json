@@ -1,9 +1,12 @@
 {
  "job": "000a-genmaps-1000",
- "state": "running",
+ "state": "done",
  "commit": "c1351b590d8026b687f23d97f4a719e62250f3d6",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T11:22:59",
- "note": "arena maps 1000-1005 (same seeds as the cloud machine)"
+ "note": "arena maps 1000-1005 (same seeds as the cloud machine)",
+ "returncode": 0,
+ "finished": "2026-11-16T11:23:30",
+ "minutes": 0.5
 }
