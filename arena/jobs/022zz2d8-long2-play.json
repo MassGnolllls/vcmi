@@ -1,5 +1,5 @@
 {
- "note": "long games with all twelve factions as starting faction (pool long2, 150 days, 24 games per config: each AI plays every faction twice): base, fin and finrsc as in 022zz2d5 - does what holds on the usual pool hold for Necropolis, Inferno, Dungeon, Conflux, Cove, Factory and Bulwark too?",
+ "note": "long games with all twelve factions as starting faction (pool long2, 150 days, 24 games per config: each AI plays every faction twice): base, f0 and fNDSR as in 022zz2d5 (campaign with pursuit; plus no chasing, town defence, scouts, garrison room) - does what holds on the usual pool hold for Necropolis, Inferno, Dungeon, Conflux, Cove, Factory and Bulwark too?",
  "mods": [
   "hota"
  ],
@@ -17,7 +17,7 @@
   "--seeds",
   "42",
   "--configs",
-  "{\"base\": {}, \"fin\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2}, \"finrsc\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"garrisonRoom\": 1, \"scouts\": 2}}"
+  "{\"base\": {}, \"f0\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2}, \"fNDSR\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 1, \"townDefenceValue\": 40000, \"scouts\": 2, \"garrisonRoom\": 1, \"collectorsTakeGarrison\": 0}}"
  ],
  "jobs": 6
 }
