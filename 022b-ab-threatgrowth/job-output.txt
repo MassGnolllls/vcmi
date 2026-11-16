@@ -307,3 +307,35 @@ match   51  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=31 
 match   53  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=31 [15.1s]
 match   57  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=34 [8.9s]
 match   58       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [7.2s]
+match   62       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [4.7s]
+match   52       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [20.8s]
+match   64       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [4.0s]
+match   59  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [17.8s]
+match   63  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [17.3s]
+match   67  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=25 [5.7s]
+match   66       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=27 [9.2s]
+match   60       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=39 [22.7s]
+match   68       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=12 [3.7s]
+match   65  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [20.5s]
+match   61  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [28.4s]
+match   71  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [9.1s]
+match   70       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [14.0s]
+match   69  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=25 [15.0s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 72 (runner errors: 0)
+- decided: 37 -> FairAI won 7, lost 30  (win rate 19%, 95% CI 9%-34%)
+- day limit reached: 35 (material lead for FairAI in 16)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 25 days
+- cheat flags raised: 0
+# A/B test (2 configs, seeds 42, 43)
+
+Paired against `base`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| base | `{}` | 144 | 13 | 46 | 0.421 ± 0.058 | - | 144 |
+| nogrowth | `{"threatGrowth": 0}` | 144 | 16 | 50 | 0.394 ± 0.060 | -0.026 ± 0.049 | 144 |
+
