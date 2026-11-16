@@ -1,0 +1,57 @@
+{
+	"cheatsAllowed" : false,
+	"day" : 28,
+	"difficulty" : "king",
+	"endEvents" : [
+		{
+			"day" : 28,
+			"player" : "blue",
+			"victory" : false
+		}
+	],
+	"lastTurnOf" : "blue",
+	"lastTurnOfAI" : "Nullkiller2",
+	"map" : "MAPS/ARENA/2SM4D_S_L1_NONE_2019",
+	"outcome" : "victory",
+	"players" : {
+		"blue" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 165,
+			"cheated" : false,
+			"gold" : 13940,
+			"heroes" : 1,
+			"income" : 0,
+			"mapExploredRatio" : 0.946612,
+			"maxHeroLevel" : 2,
+			"mines" : 1,
+			"numberArtifacts" : 2,
+			"numberDwellings" : 0,
+			"score" : 386,
+			"status" : "loser",
+			"totalExperience" : 1231,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		},
+		"red" : {
+			"ai" : "FairAI",
+			"armyStrength" : 39116,
+			"cheated" : false,
+			"gold" : 5510,
+			"heroes" : 6,
+			"income" : 4131,
+			"mapExploredRatio" : 0.622177,
+			"maxHeroLevel" : 5,
+			"mines" : 3,
+			"numberArtifacts" : 8,
+			"numberDwellings" : 0,
+			"score" : 392,
+			"status" : "ingame",
+			"totalExperience" : 7513,
+			"townBuiltRatio" : 0.171053,
+			"towns" : 4
+		}
+	},
+	"seed" : 1205264596,
+	"wallTimeSec" : 5.61506,
+	"winner" : "red"
+}
