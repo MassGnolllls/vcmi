@@ -370,6 +370,11 @@ private:
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Upgrades the hero's creatures in the town it visits
 	void upgradeArmy(const CArmedInstance * army);
+	/// (heroChoice) what a hero on offer in the tavern is worth to us, in gold
+	double tavernHeroValue(const CGHeroInstance * candidate, bool fighter) const;
+	/// (magicFocus) guild levels of this town the hero can learn that were built since its last visit
+	int unlearnedGuildLevels(const CGHeroInstance * hero, const CGTownInstance * town) const;
+	std::map<std::pair<ObjectInstanceID, ObjectInstanceID>, int> guildSeen; ///< (hero, town) -> guild levels learned there
 	/// (garrisonRoom) frees a slot for `creature` in the army if the troops to buy are worth it
 	bool makeRoom(const CGTownInstance * town, const CArmedInstance * army, CreatureID creature, double batchValue);
 	/// stacks of one kind in one army become one stack

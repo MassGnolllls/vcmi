@@ -285,6 +285,8 @@ void Params::loadOverrides(int playerIndex)
 	read("townAmbush", townAmbush);
 	read("campaignPrior", campaignPrior);
 	read("garrisonRoom", garrisonRoom);
+	read("magicFocus", magicFocus);
+	read("heroChoice", heroChoice);
 	read("roomFactor", roomFactor);
 	read("exploreRegion", exploreRegion);
 	read("fetchRoundTrip", fetchRoundTrip);
@@ -2856,6 +2858,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor * reinforcementBoost(troops) * fetchFactor(hero);
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
 				value += 300;
+			// (magicFocus) spells waiting in the guild for a hero that can learn them
+			if(params.magicFocus)
+				value += 600.0 * unlearnedGuildLevels(hero, town);
 			auto trip = roundTrip.find(hero->id);
 			const bool onTrip = trip != roundTrip.end() && trip->second.town == town->id;
 			if(params.townGuard && !onTrip)
@@ -3600,8 +3605,13 @@ double AdventureAI::skillValueAs(const CGHeroInstance * hero, SecondarySkill ski
 	// today's army is a sample of the hero's career: never judge a skill by an extreme mix
 	const double rangedShare = army > 0 ? std::clamp(shooters / army, 0.15, 0.6) : 0.3;
 	const double livingShare = army > 0 ? std::clamp(living / army, 0.2, 1.0) : 0.8;
-	const double perPercent = fighter ? 140.0 : 15.0; // one percent more fighting strength
-	const double perMove = fighter ? 200.0 : 120.0;   // one percent more movement
+	// A skill is chosen for the hero's whole career: the leader's skills are valued for the army it
+	// will lead (150k and more from the second month on - one percent of that is 900 in gold), not
+	// for today's. With the first figures (140 a percent, the worth of a 23k army) a leader took
+	// Estates before Offence.
+	const double perPercent = fighter ? 900.0 : 15.0; // one percent more fighting strength
+	const double perMove = fighter ? 600.0 : 120.0;   // one percent more movement
+	const double magicScale = fighter ? 3.0 : 1.0;    // spells work on the army's scale, too
 	const bool necromancer = hero->getFactionID().hasValue() && hero->getFactionID().toEntity(LIBRARY)->getJsonKey() == "necropolis";
 
 	double value = 0;
@@ -3642,13 +3652,13 @@ double AdventureAI::skillValueAs(const CGHeroInstance * hero, SecondarySkill ski
 			value += v * 0.25 * perPercent;
 			break;
 		case BonusType::UNDEAD_RAISE_PERCENTAGE:
-			value += v * (fighter ? (necromancer ? 270.0 : 80.0) : 20.0);
+			value += v * (fighter ? (necromancer ? 800.0 : 240.0) : 20.0);
 			break;
 		case BonusType::MAX_LEARNABLE_SPELL_LEVEL:
 		{
 			// third level spells matter most; the fifth guild level is rarely built
 			const double steps = v >= 3 ? 3600 : (v >= 2 ? 3000 : (v >= 1 ? 2000 : 0));
-			value += fighter ? steps * (caster ? 1.0 : 0.5) : 150.0 * v;
+			value += fighter ? magicScale * steps * (caster ? 1.0 : 0.5) : 150.0 * v;
 			break;
 		}
 		case BonusType::MAGIC_SCHOOL_SKILL:
@@ -3662,7 +3672,7 @@ double AdventureAI::skillValueAs(const CGHeroInstance * hero, SecondarySkill ski
 				school = 1500;
 			else if(bonus->subtype == BonusSubtypeID(SpellSchool::FIRE))
 				school = 1400;
-			value += v * (fighter ? school * (caster ? 1.0 : 0.4) : 150.0);
+			value += v * (fighter ? magicScale * school * (caster ? 1.0 : 0.4) : 150.0);
 			break;
 		}
 		case BonusType::MANA_PER_KNOWLEDGE_PERCENTAGE:
@@ -4423,6 +4433,17 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 	}
 }
 
+int AdventureAI::unlearnedGuildLevels(const CGHeroInstance * hero, const CGTownInstance * town) const
+{
+	// without a book the first visit buys one (manageTownVisit) and the spells come with it
+	if(!hero || !town || town->tempOwner != me || !hero->hasSpellbook())
+		return 0;
+	// levels the hero can learn (Wisdom) that were built - or came into its reach - since its last visit
+	const int limit = std::min(hero->maxSpellLevel(), town->mageGuildLevel());
+	auto seen = guildSeen.find({hero->id, town->id});
+	return std::max(0, limit - (seen == guildSeen.end() ? 0 : seen->second));
+}
+
 void AdventureAI::mergeDuplicates(const CArmedInstance * army)
 {
 	for(int guard = 0; guard < GameConstants::ARMY_SIZE && army; ++guard)
@@ -4627,6 +4648,18 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 	if(!hero || !town || town->tempOwner != me)
 		return;
 	const bool main = isMain(hero);
+	// whoever leaves the function: what the guild had to teach this hero, it has taught
+	struct NoteGuild
+	{
+		AdventureAI & ai;
+		ObjectInstanceID heroId;
+		const CGTownInstance * town;
+		~NoteGuild()
+		{
+			if(const auto * now = ai.ownHero(heroId); now && now->hasSpellbook())
+				ai.guildSeen[{heroId, town->id}] = std::min(now->maxSpellLevel(), town->mageGuildLevel());
+		}
+	} noteGuild{*this, hero->id, town};
 	if(main)
 	{
 		mergeBaits(hero);
@@ -4896,6 +4929,27 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 			if(creature)
 				value += std::max(1, creature->getHorde()) * creature->getAIValue() * params.goldPerArmyValue * params.dwellingHorizonWeeks * armyWeight;
 		}
+	}
+	else if(params.magicFocus && id >= BuildingID::MAGES_GUILD_1 && id <= BuildingID::MAGES_GUILD_5)
+	{
+		// What a guild level does for the hero that leads the army: slowing or hasting a whole army,
+		// and from the fourth level on the spells that decide big battles (Chain Lightning,
+		// Resurrection, Implosion). Worth it for a hero that can learn the level (spellbook; Wisdom
+		// for levels three to five) - a little otherwise: the next leader may. Further towns add
+		// other spells of the same levels: half.
+		static const std::array<double, 5> worth = {1500, 2500, 3000, 4000, 5000};
+		const int level = id.getNum() - BuildingID(BuildingID::MAGES_GUILD_1).getNum() + 1;
+		const CGHeroInstance * leader = ownHero(mainHero);
+		double share = 0.15;
+		if(leader && leader->maxSpellLevel() >= level)
+			share = leader->hasSpellbook() || level == 1 ? 1.0 : 0.5;
+		int others = 0;
+		for(const auto * t : perception.ownTowns())
+			others += t != town && t->hasBuilt(id) ? 1 : 0;
+		// the army's size is what the spells work on: little early, a lot once the army is big
+		const double army = leader ? static_cast<double>(leader->getArmyStrength()) : 0.0;
+		const double scale = std::clamp(army / 40000.0, 0.4, 3.0);
+		value += worth[std::clamp(level, 1, 5) - 1] * share * (others > 0 ? 0.5 : 1.0) * scale;
 	}
 	else if(id == BuildingID::MAGES_GUILD_1)
 		value += params.mageGuildValue;
@@ -5286,6 +5340,12 @@ void AdventureAI::hireHeroes()
 					best = candidate;
 				special = true;
 			}
+			else if(!special && params.heroChoice)
+			{
+				const bool fighter = !ownHero(mainHero);
+				if(!best || tavernHeroValue(candidate, fighter) > tavernHeroValue(best, fighter))
+					best = candidate;
+			}
 			else if(!special && (!best || candidate->getTotalStrength() > best->getTotalStrength()))
 				best = candidate;
 		}
@@ -5331,6 +5391,31 @@ void AdventureAI::hireHeroes()
 			}
 		}
 	}
+}
+
+double AdventureAI::tavernHeroValue(const CGHeroInstance * candidate, bool fighter) const
+{
+	// All of this is what the tavern shows of a hero: its troops, skills and specialty.
+	if(!candidate)
+		return 0;
+	double value = static_cast<double>(candidate->getArmyStrength()) * params.goldPerArmyValue;
+	for(const auto & [skill, level] : candidate->secSkills)
+		value += skillValueAs(candidate, skill, level, fighter);
+	// what the specialty brings in day by day (350 gold, one of a rare resource), over three weeks
+	if(const auto bonuses = candidate->getBonusesOfType(BonusType::GENERATE_RESOURCE))
+	{
+		for(const auto & bonus : *bonuses)
+		{
+			if(bonus->source != BonusSource::HERO_SPECIAL)
+				continue;
+			const GameResID res = bonus->subtype.as<GameResID>();
+			value += bonus->val * (res == GameResID::GOLD ? 1.0 : resourceValue(res)) * 21.0;
+		}
+	}
+	// a leader fights with its attack and defence
+	if(fighter)
+		value += 300.0 * (candidate->getPrimSkillLevel(PrimarySkill::ATTACK) + candidate->getPrimSkillLevel(PrimarySkill::DEFENSE));
+	return value;
 }
 
 void AdventureAI::buyTavernArmies()
