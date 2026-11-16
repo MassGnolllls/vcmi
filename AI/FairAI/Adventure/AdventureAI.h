@@ -129,6 +129,8 @@ public:
 	/// The game showed us a hero's primary skills (attack, defence, spell power, knowledge): in a
 	/// battle against it or in our thieves' guild. Remembered with the day.
 	void noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills);
+	/// a battle against an enemy hero is over: what we know of its army is what the battle left of it
+	void noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength);
 	void noteHeroSpell(HeroTypeID hero, SpellID spell, int affected);
 	/// A battle is lost: is buying our army free for `cost` gold the better end? ownValue: AI value we
 	/// still have on the field, enemyLoss: what it would still kill (parameter surrender)
@@ -279,6 +281,18 @@ private:
 		double strength = 0; ///< army as shown, times the hero factor
 	};
 	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
+	/// what a battle against an enemy hero left of it (reported by the battle thread, applied in updateThreats)
+	struct BattleOutcome
+	{
+		int hero = -1;
+		bool gone = false;         ///< we won: the hero fell, fled or surrendered
+		double remainingShare = 1; ///< else: the share of its army that survived
+		double ownStrength = 0;    ///< our army in that battle
+		double enemyStrength = 0;  ///< its army in that battle
+	};
+	std::vector<BattleOutcome> pendingOutcomes; ///< guarded by intelMutex
+	std::map<int, int> defeatedDay;             ///< hero type -> day we beat it
+	int decisiveVictoryDay = -1;                ///< the day we beat what was the strongest enemy army we knew of
 	double oppositionHeroes = 0; ///< strongest enemy hero seen in the last three weeks (0: none)
 	double hiddenMain = 0;        ///< strongest of those we cannot see today: it may sit in a town (parameter townAmbush)
 	std::vector<int3> ambushTowns; ///< enemy towns we know of
@@ -355,7 +369,11 @@ private:
 	int64_t recruitableValue(const CGTownInstance * town, int64_t gold) const;
 	void manageTownVisit(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Upgrades the hero's creatures in the town it visits
-	void upgradeArmy(const CGHeroInstance * hero);
+	void upgradeArmy(const CArmedInstance * army);
+	/// (garrisonRoom) frees a slot for `creature` in the army if the troops to buy are worth it
+	bool makeRoom(const CGTownInstance * town, const CArmedInstance * army, CreatureID creature, double batchValue);
+	/// stacks of one kind in one army become one stack
+	void mergeDuplicates(const CArmedInstance * army);
 	/// single creatures split off the cheapest stacks into free slots: they take retaliations and block
 	/// in battle (the combat search knows how to use them); merged back before troops are exchanged
 	void arrangeBaits(const CGHeroInstance * hero);

@@ -1,0 +1,15 @@
+{
+ "note": "maps for long games in which every faction starts equally often (pool long2): twelve medium land maps, each of the twelve factions - Cove, Factory and Bulwark included - starts on two of them",
+ "mods": [
+  "hota"
+ ],
+ "script": "matrix.py",
+ "args": [
+  "gen",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long2.json"
+ ],
+ "jobs": 1
+}

@@ -1,0 +1,22 @@
+{
+ "note": "long games on medium land maps (150 days, 24 games per config), code of 23:20. In 95 games of the evening FairAI won 1, lost 17 and stood undecided in 77 - with the bigger army in 62 of those, twice the enemy's in 44: it does not finish. fin = campaign against the enemy's towns at three times the strongest enemy hero seen + hero model + no chasing on campaign; new in it: an enemy army we have beaten no longer counts as opposition (it did for three weeks, growing 3 % a day - after the decisive battle the campaign was further away than before), and for three weeks after beating the enemy's main army the campaign runs without further conditions (pursuit). fin2 = the same at twice; finr = fin + garrisons whose seven slots are full of leftovers make room for what the town grows (nothing was bought there before); finsc = fin + two scouts (the map and the enemy's main hero are seen); finrsc = all three. Results list every battle between players (battle_log.py) (second seed of the same test: 48 games per config together)",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "43",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"base\": {}, \"fin\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2}, \"fin2\": {\"leaderFocus\": 1, \"campaignEdge\": 2.0, \"heroModel\": 1, \"noChase\": 2}, \"finr\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"garrisonRoom\": 1}, \"finsc\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"scouts\": 2}, \"finrsc\": {\"leaderFocus\": 1, \"campaignEdge\": 3.0, \"heroModel\": 1, \"noChase\": 2, \"garrisonRoom\": 1, \"scouts\": 2}}"
+ ],
+ "jobs": 6
+}

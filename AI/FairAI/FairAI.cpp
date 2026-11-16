@@ -459,6 +459,17 @@ void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br
 		logAi->info("FairAI %s battle result: %s, %d of our creatures died (value %llu of %llu, enemy %llu)", playerID.toString(),
 			br->winner == battleSide ? "won" : "lost", lost, (unsigned long long)lostValue, (unsigned long long)battleOwnStrength,
 			(unsigned long long)battleEnemyStrength);
+		if(battleEnemyHero >= 0 && adventure)
+		{
+			// the result window shows both sides' casualties: what is left of that hero's army is known
+			const BattleSide other = battleSide == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
+			uint64_t enemyLost = 0;
+			for(const auto & entry : br->casualties[other])
+				enemyLost += static_cast<uint64_t>(entry.second) * entry.first.toCreature()->getAIValue();
+			const double remaining = battleEnemyStrength > 0 ? 1.0 - std::min(1.0, static_cast<double>(enemyLost) / static_cast<double>(battleEnemyStrength)) : 0.0;
+			adventure->noteBattleOutcome(HeroTypeID(battleEnemyHero), br->winner == battleSide, remaining,
+				static_cast<double>(battleOwnStrength), static_cast<double>(battleEnemyStrength));
+		}
 	}
 	CAdventureAI::battleEnd(battleID, br, queryID);
 

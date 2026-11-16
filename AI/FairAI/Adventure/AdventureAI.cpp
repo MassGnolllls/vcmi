@@ -284,6 +284,8 @@ void Params::loadOverrides(int playerIndex)
 	read("armyFirst", armyFirst);
 	read("townAmbush", townAmbush);
 	read("campaignPrior", campaignPrior);
+	read("garrisonRoom", garrisonRoom);
+	read("roomFactor", roomFactor);
 	read("exploreRegion", exploreRegion);
 	read("fetchRoundTrip", fetchRoundTrip);
 	read("supplyShare", supplyShare);
@@ -1298,12 +1300,52 @@ void AdventureAI::updateThreats()
 		for(const auto & [color, shown] : guild.bestHero)
 			guildBestHero[color] = shown.hero.getNum();
 	}
+	{
+		// Battles against enemy heroes since the last look: an army we destroyed is no opposition any
+		// more. (Its last sighting used to count for three weeks, growing by 3 % a day - after the
+		// decisive battle the enemy looked stronger than before it, and the campaign never began.)
+		std::vector<BattleOutcome> outcomes;
+		{
+			std::unique_lock lock(intelMutex);
+			outcomes.swap(pendingOutcomes);
+		}
+		for(const auto & outcome : outcomes)
+		{
+			auto seen = enemySightings.find(outcome.hero);
+			if(outcome.gone)
+			{
+				double strongest = 0;
+				for(const auto & [type, sighting] : enemySightings)
+					if(today - sighting.day <= 21)
+						strongest = std::max(strongest, sighting.strength);
+				// the strongest enemy army we knew of (or close to it), and no skirmish: the way is open
+				// (a hero that came out of the fog has no sighting: its army as counted in the battle, without the hero's worth)
+				const bool wasMain = seen != enemySightings.end() ? seen->second.strength >= 0.7 * strongest : outcome.enemyStrength >= 0.5 * strongest;
+				if(wasMain && outcome.enemyStrength >= 0.2 * outcome.ownStrength && outcome.enemyStrength >= 20000)
+				{
+					decisiveVictoryDay = today;
+					logAi->info("FairAI %s day %d: decisive victory - the strongest enemy army we knew of (%.0f) is beaten", me.toString(), today, outcome.enemyStrength);
+				}
+				defeatedDay[outcome.hero] = today;
+				if(seen != enemySightings.end())
+					enemySightings.erase(seen);
+			}
+			else if(seen != enemySightings.end())
+			{
+				seen->second.day = today;
+				seen->second.strength *= std::clamp(outcome.remainingShare, 0.0, 1.0);
+			}
+		}
+	}
 	for(const auto & [id, object] : known)
 	{
 		if(object.type != Obj::HERO || !isEnemy(object.owner) || !object.army)
 			continue;
 		const int age = today - object.lastSeenDay;
 		if(age > 3)
+			continue;
+		// a memory of a hero we have beaten since (its tile is hidden, so the record stayed)
+		if(auto beaten = defeatedDay.find(object.subtype.getNum()); beaten != defeatedDay.end() && beaten->second >= object.lastSeenDay && !object.visibleNow)
 			continue;
 		Threat t;
 		t.pos = object.visitablePos;
@@ -1359,9 +1401,14 @@ void AdventureAI::updateThreats()
 				continue;
 			guildKnown = true;
 			auto seen = enemySightings.find(type);
+			auto beaten = defeatedDay.find(type);
+			if(beaten != defeatedDay.end() && today - beaten->second <= 28)
+				continue; // we know where that army is: we destroyed it
 			if(seen == enemySightings.end() || today - seen->second.day > 28)
 				mainsSeen = false;
 		}
+		// pursuit: for three weeks after beating the enemy's main army nothing more needs to be seen
+		const bool pursuit = decisiveVictoryDay > 0 && today - decisiveVictoryDay <= 21;
 		// no tavern, no guild: at least something of weight must have shown itself
 		if(!guildKnown && leader && oppositionHeroes < 0.25 * fieldStrength(leader))
 			mainsSeen = false;
@@ -1402,19 +1449,19 @@ void AdventureAI::updateThreats()
 			const double leaderFactor = fieldStrength(leader) / std::max(1.0, static_cast<double>(leader->getArmyStrength()));
 			reference = std::max(reference, 0.5 * ownTotal * leaderFactor * worst);
 		}
-		if(!params.leaderFocus || !leader || today < 21 || oppositionHeroes <= 0)
+		if(!params.leaderFocus || !leader || today < 21 || (oppositionHeroes <= 0 && !pursuit))
 			campaignMode = false;
 		else
 		{
-			const double edge = fieldStrength(leader) / reference;
-			if(edge >= params.campaignEdge && mainsSeen)
+			const double edge = reference > 0 ? fieldStrength(leader) / reference : 1e9;
+			if(edge >= params.campaignEdge && (mainsSeen || pursuit))
 				campaignMode = true;
 			else if(edge < 0.65 * params.campaignEdge)
 				campaignMode = false;
 		}
 		if(before != campaignMode)
-			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f, measured against %.0f, their best heroes seen: %s)", me.toString(), today,
-				campaignMode ? "on" : "off", fieldStrength(leader), oppositionHeroes, reference, mainsSeen ? "yes" : "no");
+			logAi->info("FairAI %s day %d: campaign %s (main hero %.0f, strongest enemy hero seen lately %.0f, measured against %.0f, their best heroes seen: %s%s)", me.toString(), today,
+				campaignMode ? "on" : "off", fieldStrength(leader), oppositionHeroes, reference, mainsSeen ? "yes" : "no", pursuit ? ", in pursuit after a decisive victory" : "");
 		// On campaign the hero does not walk home for a trickle. But what has grown at home to a good
 		// part of its own army is what decides the war (a campaign fought with half of our troops,
 		// the other half waiting in the towns, was how games were lost): fetch it, then march again.
@@ -1584,6 +1631,14 @@ double AdventureAI::heroFactor(const ObservedObject & hero) const
 			factor *= known->second.magic;
 	}
 	return factor;
+}
+
+void AdventureAI::noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength)
+{
+	if(!hero.hasValue())
+		return;
+	std::unique_lock lock(intelMutex);
+	pendingOutcomes.push_back(BattleOutcome{hero.getNum(), gone, remainingShare, ownStrength, enemyStrength});
 }
 
 void AdventureAI::noteHeroSpell(HeroTypeID hero, SpellID spell, int affected)
@@ -4357,10 +4412,93 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 		const CArmedInstance * target = destination;
 		if(!target->getSlotFor(creature).validSlot())
 			target = town->getUpperArmy();
-		if(!target->getSlotFor(creature).validSlot())
+		if(!target->getSlotFor(creature).validSlot()
+			&& !makeRoom(town, target, creature, static_cast<double>(amount) * type->getAIValue()))
+		{
 			continue;
+		}
 		cb->recruitCreatures(town, target, creature, amount, level);
 	}
+}
+
+void AdventureAI::mergeDuplicates(const CArmedInstance * army)
+{
+	for(int guard = 0; guard < GameConstants::ARMY_SIZE && army; ++guard)
+	{
+		SlotID from;
+		SlotID into;
+		for(const auto & [slot, stack] : army->Slots())
+		{
+			if(!stack || !stack->getCreature())
+				continue;
+			for(const auto & [other, otherStack] : army->Slots())
+			{
+				if(other != slot && otherStack && otherStack->getCreature() == stack->getCreature())
+				{
+					from = other;
+					into = slot;
+					break;
+				}
+			}
+			if(from.validSlot())
+				break;
+		}
+		if(!from.validSlot() || from == into)
+			return;
+		cb->mergeStacks(army, army, from, into);
+	}
+}
+
+bool AdventureAI::makeRoom(const CGTownInstance * town, const CArmedInstance * army, CreatureID creature, double batchValue)
+{
+	// Seven slots fill up with leftovers - the weakest stacks a hero left behind, what a hired hero
+	// brought along, troops bought before their dwelling was upgraded. From then on nothing the
+	// town grows found a slot, and nothing was bought: in a logged game 42 power liches, 56 vampire
+	// lords and more waited in the dwellings of a town whose garrison held four harpies and six gogs.
+	if(!params.garrisonRoom || !army || batchValue <= 0)
+		return false;
+	// 1. what the town can upgrade becomes the kind it sells; two stacks of one kind become one
+	upgradeArmy(army);
+	mergeDuplicates(army);
+	if(army->getSlotFor(creature).validSlot())
+		return true;
+	// 2. the weakest stack goes, if what comes instead is worth clearly more - a kind this town
+	//    does not sell first: its own kinds grow every week and would only be bought again
+	auto soldHere = [town](const CStackInstance * stack)
+	{
+		if(!town || !stack)
+			return false;
+		for(const auto & entry : town->creatures)
+			for(const auto & id : entry.second)
+				if(id == stack->getCreatureID())
+					return true;
+		return false;
+	};
+	SlotID weakest;
+	double weakestValue = std::numeric_limits<double>::max();
+	bool weakestForeign = false;
+	for(const auto & [slot, stack] : army->Slots())
+	{
+		const double v = stackValue(stack.get());
+		const bool foreign = !soldHere(stack.get());
+		if(foreign && params.roomFactor * v > batchValue)
+			continue; // worth too much to go: no candidate before one of the town's own kinds
+		if((foreign && !weakestForeign) || (foreign == weakestForeign && v < weakestValue))
+		{
+			weakestValue = v;
+			weakest = slot;
+			weakestForeign = foreign;
+		}
+	}
+	if(!weakest.validSlot() || army->stacksCount() <= 1 || params.roomFactor * weakestValue > batchValue)
+		return false;
+	const CStackInstance * stack = army->getStackPtr(weakest);
+	if(!stack || !stack->getCreature())
+		return false;
+	logAi->debug("FairAI %s day %d: %d %s are dismissed (worth %.0f) to make room for %s worth %.0f", me.toString(), today,
+		static_cast<int>(stack->getCount()), stack->getCreature()->getJsonKey(), weakestValue, creature.toCreature()->getJsonKey(), batchValue);
+	cb->dismissCreature(army, weakest);
+	return army->getSlotFor(creature).validSlot();
 }
 
 void AdventureAI::leaveGarrison(const CGHeroInstance * hero, const CGTownInstance * town)
@@ -4612,8 +4750,10 @@ void AdventureAI::updateEconomy()
 	economy = e;
 }
 
-void AdventureAI::upgradeArmy(const CGHeroInstance * hero)
+void AdventureAI::upgradeArmy(const CArmedInstance * hero)
 {
+	if(!hero)
+		return;
 	// best value gain per gold first; keep a reserve while gold is the bottleneck
 	const int64_t reserve = economy.rho > 1.5 ? 0 : 2000;
 	for(int round = 0; round < GameConstants::ARMY_SIZE; ++round)
@@ -5050,7 +5190,7 @@ bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet
 	return (forEarmark ? cb->getResourceAmount() : spendable()).canAfford(cost);
 }
 
-void AdventureAI::manageTowns(bool /*endOfTurn*/)
+void AdventureAI::manageTowns(bool endOfTurn)
 {
 	for(const auto * town : perception.ownTowns())
 	{
@@ -5060,6 +5200,46 @@ void AdventureAI::manageTowns(bool /*endOfTurn*/)
 		// troops in the garrison defend the town and wait for the main hero
 		const int64_t reserve = economy.rho > 1.5 ? 0 : 1000;
 		recruitInTown(town, town->getUpperArmy(), reserve);
+		if(params.garrisonRoom && endOfTurn && economy.rho > 1.5)
+		{
+			// gold to spare: the garrison's troops become what the town's dwellings sell now
+			upgradeArmy(town->getUpperArmy());
+			mergeDuplicates(town->getUpperArmy());
+		}
+		if(endOfTurn && logAi->isDebugEnabled())
+		{
+			// what stays unbought at the end of the day, and what stands in the way
+			std::string left;
+			int64_t leftGold = 0;
+			for(int level = static_cast<int>(town->creatures.size()) - 1; level >= 0; --level)
+			{
+				const auto & entry = town->creatures[level];
+				if(entry.first == 0 || entry.second.empty())
+					continue;
+				const CCreature * type = entry.second.back().toCreature();
+				leftGold += static_cast<int64_t>(entry.first) * type->getRecruitCost(GameResID::GOLD);
+				std::string why;
+				const ResourceSet available = spendable();
+				for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+				{
+					const int cost = type->getRecruitCost(res);
+					if(cost > 0 && available[res] < cost)
+						why += " no " + res.toResource()->getJsonKey();
+				}
+				if(!town->getUpperArmy()->getSlotFor(type->getId()).validSlot())
+					why += " no slot";
+				left += boost::str(boost::format(" %d %s%s;") % entry.first % type->getJsonKey() % why);
+			}
+			if(!left.empty())
+			{
+				std::string holds;
+				for(const auto & [slot, stack] : town->getUpperArmy()->Slots())
+					if(stack && stack->getCreature())
+						holds += boost::str(boost::format(" %d %s") % stack->getCount() % stack->getCreature()->getJsonKey());
+				logAi->debug("FairAI %s day %d: unbought in %s (%lld gold):%s %s holds:%s", me.toString(), today, town->getNameTranslated(),
+					static_cast<long long>(leftGold), left, town->getGarrisonHero() ? town->getGarrisonHero()->getNameTranslated() : std::string("garrison"), holds);
+			}
+		}
 	}
 }
 

@@ -147,6 +147,9 @@ def cmd_genmaps(args) -> int:
     maps_dir = vcmi_data_dir() / "Maps" / (args.pool or ARENA_MAP_SUBDIR)
     maps_dir.mkdir(parents=True, exist_ok=True)
     ok = 0
+    # several town lists separated by ';' are used in turn (map i gets list i modulo their number):
+    # a pool in which every faction starts equally often
+    towns_cycle = [t for t in args.towns.split(";") if t] if args.towns else []
     for i in range(args.count):
         seed = args.seed + i
         tag = ""
@@ -164,8 +167,8 @@ def cmd_genmaps(args) -> int:
                "--arena-water", args.water, "--arena-monsters", args.monsters, "--arena-players", str(args.players)]
         if args.teams:
             cmd += ["--arena-teams", args.teams]
-        if args.towns:
-            cmd += ["--arena-towns", args.towns]
+        if towns_cycle:
+            cmd += ["--arena-towns", towns_cycle[i % len(towns_cycle)]]
         config_home = make_config_home(args.mods)
         try:
             res = subprocess.run(cmd, capture_output=True, text=True, timeout=900, env=client_env(config_home, args.client))
@@ -563,7 +566,7 @@ def main() -> int:
     g.add_argument("--size", default="s", choices=["s", "m", "l", "xl", "h", "xh", "g"])
     g.add_argument("--players", type=int, default=2)
     g.add_argument("--teams", default="", help="team per player, e.g. 0,0,1,1 (default: free for all)")
-    g.add_argument("--towns", default="", help="starting town per player, e.g. castle,hota.cove:cove (default: random)")
+    g.add_argument("--towns", default="", help="starting town per player, e.g. castle,hota.cove:cove (default: random); several lists separated by ';' are used in turn, one per map")
     g.add_argument("--tag", default="", help="extra text for the map file names")
     g.add_argument("--pool", default="", help="map pool = sub-folder of Maps/ (default: arena)")
     g.add_argument("--mods", default="", help="extra mods to enable, comma-separated (e.g. hota)")

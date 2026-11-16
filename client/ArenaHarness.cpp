@@ -75,6 +75,10 @@ struct BattleTally
 	int64_t playerKills = 0;
 };
 std::map<PlayerColor, BattleTally> battleTally;
+/// every battle between players: [day, attacker, defender, attacker's army value, defender's, attacker's loss,
+/// defender's loss, winner (0 attacker, 1 defender), fought at a town (0/1), defender led by a hero (0/1),
+/// attacker's hero level, defender's hero level, how it ended (0 normal, 1 escape, 2 surrender)]
+std::vector<JsonNode> playerBattles;
 bool finished = false;
 const auto startTime = std::chrono::steady_clock::now();
 
@@ -158,6 +162,8 @@ JsonNode playerStats(const CGameState & gs, const PlayerState & ps)
 		result["endEvents"].Vector().push_back(ev);
 	for(const auto & day : timeline)
 		result["timeline"].Vector().push_back(day);
+	for(const auto & fight : playerBattles)
+		result["playerBattles"].Vector().push_back(fight);
 	for(const auto & [color, tally] : battleTally)
 	{
 		JsonNode & node = result["battles"][color.toString()];
@@ -759,6 +765,32 @@ void onBattleResult(CClient & client, const BattleResult & result)
 	{
 		logGlobal->info("ARENA_BATTLE %s", info.toCompactString());
 		std::lock_guard lock(arenaMutex);
+		if(battle->getSidePlayer(BattleSide::ATTACKER).isValidPlayer() && battle->getSidePlayer(BattleSide::DEFENDER).isValidPlayer())
+		{
+			const auto * attackerHero = battle->getSideHero(BattleSide::ATTACKER);
+			const auto * defenderHero = battle->getSideHero(BattleSide::DEFENDER);
+			JsonNode fight;
+			auto add = [&fight](int64_t value)
+			{
+				JsonNode n;
+				n.Integer() = value;
+				fight.Vector().push_back(n);
+			};
+			add(gs.getDate(Date::DAY));
+			add(battle->getSidePlayer(BattleSide::ATTACKER).getNum());
+			add(battle->getSidePlayer(BattleSide::DEFENDER).getNum());
+			add(info["sides"].Vector().at(0)["initialStrength"].Integer());
+			add(info["sides"].Vector().at(1)["initialStrength"].Integer());
+			add(info["sides"].Vector().at(0)["lostStrength"].Integer());
+			add(info["sides"].Vector().at(1)["lostStrength"].Integer());
+			add(result.winner == BattleSide::ATTACKER ? 0 : 1);
+			add(battle->getDefendedTown() ? 1 : 0);
+			add(defenderHero ? 1 : 0);
+			add(attackerHero ? attackerHero->level : 0);
+			add(defenderHero ? defenderHero->level : 0);
+			add(result.result == EBattleResult::NORMAL ? 0 : (result.result == EBattleResult::ESCAPE ? 1 : 2));
+			playerBattles.push_back(fight);
+		}
 		for(BattleSide side : {BattleSide::ATTACKER, BattleSide::DEFENDER})
 		{
 			const BattleSide otherSide = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
