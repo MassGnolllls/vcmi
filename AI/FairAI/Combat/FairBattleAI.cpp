@@ -89,7 +89,237 @@ struct Candidate
 };
 }
 
+struct FairBattleAI::SimCheck
+{
+	struct Row
+	{
+		uint32_t id = 0;
+		int64_t before = 0;
+		int64_t predicted = 0;
+		bool activeBefore = true;
+		std::set<SpellID> spellsBefore;
+		BattleHex posPredicted;
+	};
+	std::vector<Row> rows;
+	uint32_t actor = 0;
+	int64_t target = -1;
+	std::string kind;
+};
+
+namespace
+{
+bool simCheckEnabled()
+{
+	static const bool enabled = std::getenv("FAI_SIMCHECK") != nullptr;
+	return enabled;
+}
+
+int64_t healthOf(const CStack * stack)
+{
+	return stack && stack->alive() ? stack->getAvailableHealth() : 0;
+}
+
+std::string creatureKey(const CStack * stack)
+{
+	const auto * creature = stack ? stack->creatureId().toCreature() : nullptr;
+	return creature ? creature->getJsonKey() : std::string("?");
+}
+
+std::set<SpellID> spellsOn(const CStack * stack)
+{
+	std::set<SpellID> result;
+	if(stack)
+		for(const auto & spell : stack->activeSpells())
+			result.insert(spell);
+	return result;
+}
+}
+
 FairBattleAI::FairBattleAI() = default;
+
+void FairBattleAI::battleStacksAttacked(const BattleID & battleID, const std::vector<BattleStackAttacked> & bsa, bool ranged)
+{
+	if(!bsa.empty())
+		quietDecisions = 0;
+}
+
+void FairBattleAI::actionStarted(const BattleID & battleID, const BattleAction & action)
+{
+	pendingCheck.reset();
+	if(!simCheckEnabled() || side != BattleSide::ATTACKER)
+		return;
+	try
+	{
+		auto battle = cb->getBattle(battleID);
+		if(!battle || battle->battleGetDefendedTown())
+			return;
+
+		// what changed while nobody acted: regeneration, poison, effects at the start of a turn
+		for(const auto * stack : battle->battleGetAllStacks(false))
+		{
+			auto known = lastHealth.find(stack->unitId());
+			const int64_t now = healthOf(stack);
+			if(known != lastHealth.end() && known->second != now && !lastActionWasSpell)
+				logAi->info("FairAI simidle|%s|%d|%lld|%lld", creatureKey(stack), stack->getCount(), static_cast<long long>(known->second), static_cast<long long>(now));
+			lastHealth[stack->unitId()] = now;
+		}
+		lastActionWasSpell = action.actionType == EActionType::HERO_SPELL || action.actionType == EActionType::MONSTER_SPELL;
+
+		const CStack * actor = battle->battleGetStackByID(action.stackNumber, true);
+		if(!actor)
+			return;
+		const auto targets = action.getTarget(battle.get());
+		const battle::Unit * target = nullptr;
+		SimAction simAction;
+		std::string kind;
+		switch(action.actionType)
+		{
+		case EActionType::WALK:
+			if(targets.empty())
+				return;
+			simAction = {SimActionType::MOVE, -1, targets[0].hexValue};
+			kind = "move";
+			break;
+		case EActionType::WALK_AND_ATTACK:
+			if(targets.size() < 2)
+				return;
+			target = battle->battleGetUnitByPos(targets[1].hexValue, true);
+			simAction = {SimActionType::ATTACK, -1, targets[0].hexValue};
+			kind = "attack";
+			break;
+		case EActionType::SHOOT:
+			if(targets.empty())
+				return;
+			target = targets[0].unitValue ? targets[0].unitValue : battle->battleGetUnitByPos(targets[0].hexValue, true);
+			simAction = {SimActionType::SHOOT, -1, BattleHex()};
+			kind = "shoot";
+			break;
+		case EActionType::WAIT:
+			simAction = {SimActionType::WAIT, -1, BattleHex()};
+			kind = "wait";
+			break;
+		case EActionType::DEFEND:
+			simAction = {SimActionType::DEFEND, -1, BattleHex()};
+			kind = "defend";
+			break;
+		default:
+			return;
+		}
+		if((kind == "attack" || kind == "shoot") && !target)
+			return;
+
+		std::vector<const battle::Unit *> units;
+		for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
+			units.push_back(u);
+		DamageTable table;
+		table.build(*battle, units);
+		SimState state;
+		state.init(*battle, units, table);
+		const int me = state.indexOf(actor->unitId());
+		if(me < 0)
+			return;
+		if(target)
+		{
+			simAction.target = state.indexOf(target->unitId());
+			if(simAction.target < 0)
+				return;
+		}
+
+		auto check = std::make_unique<SimCheck>();
+		check->actor = actor->unitId();
+		check->target = target ? static_cast<int64_t>(target->unitId()) : -1;
+		check->kind = kind;
+		for(const auto & u : state.units)
+		{
+			SimCheck::Row row;
+			row.id = u.id;
+			row.before = u.totalHP();
+			const CStack * stack = battle->battleGetStackByID(u.id, false);
+			row.activeBefore = stack && !stack->hasBonusOfType(BonusType::NOT_ACTIVE);
+			row.spellsBefore = spellsOn(stack);
+			check->rows.push_back(row);
+		}
+		state.apply(me, simAction);
+		for(size_t i = 0; i < check->rows.size(); ++i)
+		{
+			check->rows[i].predicted = state.units[i].totalHP();
+			check->rows[i].posPredicted = state.units[i].pos;
+		}
+		pendingCheck = std::move(check);
+	}
+	catch(const std::exception & e)
+	{
+		logAi->debug("FairAI simcheck: prediction failed (%s)", e.what());
+	}
+}
+
+void FairBattleAI::actionFinished(const BattleID & battleID, const BattleAction & action)
+{
+	if(!simCheckEnabled() || side != BattleSide::ATTACKER)
+		return;
+	try
+	{
+		auto battle = cb->getBattle(battleID);
+		if(!battle)
+			return;
+		if(pendingCheck)
+		{
+			const auto & check = *pendingCheck;
+			long long targetPred = 0, targetReal = 0, actorPred = 0, actorReal = 0, othersPred = 0, othersReal = 0;
+			std::string targetCreature = "-", actorCreature = "?", targetSpells, actorSpells;
+			int targetCount = 0, actorCount = 0, targetInactive = 0, positionOk = 1;
+			auto newSpells = [](const std::set<SpellID> & before, const CStack * stack)
+			{
+				std::string text;
+				for(const auto & spell : spellsOn(stack))
+					if(!before.count(spell))
+						text += (text.empty() ? "" : ",") + spell.toSpell()->getJsonKey();
+				return text;
+			};
+			for(const auto & row : check.rows)
+			{
+				const CStack * stack = battle->battleGetStackByID(row.id, false);
+				const long long pred = row.before - row.predicted;
+				const long long real = row.before - healthOf(stack);
+				if(row.id == check.actor)
+				{
+					actorPred = pred;
+					actorReal = real;
+					actorCreature = creatureKey(stack);
+					actorCount = stack ? stack->getCount() : 0;
+					actorSpells = newSpells(row.spellsBefore, stack);
+					positionOk = stack && stack->alive() ? (stack->getPosition() == row.posPredicted ? 1 : 0) : 1;
+				}
+				else if(static_cast<int64_t>(row.id) == check.target)
+				{
+					targetPred = pred;
+					targetReal = real;
+					targetCreature = creatureKey(stack);
+					targetCount = stack ? stack->getCount() : 0;
+					targetSpells = newSpells(row.spellsBefore, stack);
+					targetInactive = stack && stack->alive() && row.activeBefore && stack->hasBonusOfType(BonusType::NOT_ACTIVE) ? 1 : 0;
+				}
+				else
+				{
+					othersPred += std::abs(pred);
+					othersReal += std::abs(real);
+				}
+			}
+			const bool interesting = check.kind == "attack" || check.kind == "shoot" || !positionOk || actorPred != actorReal || othersReal != 0;
+			if(interesting)
+				logAi->info("FairAI simcheck|%s|%s|%d|%s|%d|%lld|%lld|%lld|%lld|%lld|%lld|%s|%s|%d|%d", check.kind, actorCreature, actorCount,
+					targetCreature, targetCount, targetPred, targetReal, actorPred, actorReal, othersPred, othersReal,
+					targetSpells.empty() ? "-" : targetSpells, actorSpells.empty() ? "-" : actorSpells, targetInactive, positionOk);
+			pendingCheck.reset();
+		}
+		for(const auto * stack : battle->battleGetAllStacks(false))
+			lastHealth[stack->unitId()] = healthOf(stack);
+	}
+	catch(const std::exception & e)
+	{
+		logAi->debug("FairAI simcheck: comparison failed (%s)", e.what());
+	}
+}
 
 FairBattleAI::~FairBattleAI()
 {
@@ -123,6 +353,8 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 void FairBattleAI::battleStart(const BattleID & battleID, const CCreatureSet * army1, const CCreatureSet * army2, int3 tile, const CGHeroInstance * hero1, const CGHeroInstance * hero2, BattleSide Side, bool replayAllowed)
 {
 	side = Side;
+	quietDecisions = 0;
+	lastHealth.clear();
 	if(fallback)
 		fallback->battleStart(battleID, army1, army2, tile, hero1, hero2, Side, replayAllowed);
 }
@@ -316,7 +548,14 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 		if(tryHeroSpell(battleID, stack))
 			return; // the same unit gets activated again after the spell
 
-		cb->battleMakeUnitAction(battleID, searchUnitAction(battleID, stack));
+		// The attacker has to bring a battle to an end: when nobody has been hurt for about two
+		// rounds (both sides waiting for the other to come), standing still is no longer an option.
+		int ownUnits = 0;
+		for(const auto * unit : cb->getBattle(battleID)->battleGetAllStacks(false))
+			ownUnits += unit->alive() && unit->unitSide() == side ? 1 : 0;
+		const bool pressure = side == BattleSide::ATTACKER && quietDecisions > 4 * ownUnits + 1; // (wait + act) x 2 rounds
+		++quietDecisions;
+		cb->battleMakeUnitAction(battleID, searchUnitAction(battleID, stack, pressure));
 	}
 	catch(const std::exception & e)
 	{
@@ -353,15 +592,15 @@ std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battl
 	return cb->makeSurrenderRetreatDecision(battleID, bs);
 }
 
-BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack)
+BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack, bool forbidPassive)
 {
 	auto state = std::make_shared<HypotheticBattle>(env.get(), cb->getBattle(battleID));
-	auto choice = bestUnitAction(state, stack);
-	logAi->debug("FairBattleAI: %s -> %s (score %.0f)", stack->getDescription(), choice.description, choice.score);
+	auto choice = bestUnitAction(state, stack, -1, forbidPassive);
+	logAi->debug("FairBattleAI: %s -> %s (score %.0f)%s", stack->getDescription(), choice.description, choice.score, forbidPassive ? " [must act]" : "");
 	return choice.action;
 }
 
-FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<HypotheticBattle> & battle, const CStack * realStack, int roundsAhead)
+FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<HypotheticBattle> & battle, const CStack * realStack, int roundsAhead, bool forbidPassive)
 {
 	// the unit as it is in this (possibly hypothetical) state: spells change its speed and position
 	const battle::Unit * stack = battle->battleGetUnitByID(realStack->unitId());
@@ -458,9 +697,12 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 			addMove(pick([&](const BattleHex & h) { return -closestEnemyDistance(h, false, true); }), "keep distance");
 	}
 
-	if(!stack->waited())
-		candidates.push_back({{SimActionType::WAIT, -1, BattleHex()}, BattleAction::makeWait(stack), "wait"});
-	candidates.push_back({{SimActionType::DEFEND, -1, BattleHex()}, BattleAction::makeDefend(stack), "defend"});
+	if(!forbidPassive || candidates.empty())
+	{
+		if(!stack->waited())
+			candidates.push_back({{SimActionType::WAIT, -1, BattleHex()}, BattleAction::makeWait(stack), "wait"});
+		candidates.push_back({{SimActionType::DEFEND, -1, BattleHex()}, BattleAction::makeDefend(stack), "defend"});
+	}
 
 	// look ahead: every candidate is played out against an attacking and a waiting opponent,
 	// the worse of both counts (robust against opponents that do not walk into our traps)
