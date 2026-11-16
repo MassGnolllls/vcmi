@@ -1,0 +1,9 @@
+{
+ "job": "021-ab-townguard",
+ "state": "running",
+ "commit": "00fba0456291f94790c3d7137b80aa3836f1c1bd",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-16T12:31:19",
+ "note": "town defence by need (garrison, recruits, walls), round trips from a needy town, gate clearing vs old rules; 2x72 paired games, day 45"
+}
