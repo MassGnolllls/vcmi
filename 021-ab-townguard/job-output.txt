@@ -295,3 +295,47 @@ match   46       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=14
 match   42       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [20.1s]
 match   48       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [6.6s]
 match   43  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=33 [21.7s]
+match   41  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [26.0s]
+match   40       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [27.7s]
+match   47  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [19.0s]
+match   54       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [3.5s]
+match   55  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=2 [1.6s]
+match   50       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [15.8s]
+match   56       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=2 [2.3s]
+match   51  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [17.0s]
+match   57  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [3.4s]
+match   49  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [21.3s]
+match   58       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [5.7s]
+match   52       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [20.9s]
+match   53  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [23.4s]
+match   62       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [5.1s]
+match   59  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [12.6s]
+match   64       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [5.1s]
+match   66       FairAI (red) vs Nullkiller2  (blue): victory winner=blue day=21 [7.8s]
+match   67  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [8.3s]
+match   61  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=44 [28.0s]
+match   60       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [29.3s]
+match   65  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [23.1s]
+match   69  Nullkiller2 (red) vs FairAI       (blue): victory winner=red day=27 [11.0s]
+match   68       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [24.8s]
+match   70       FairAI (red) vs Nullkiller2  (blue): timeout winner= day=46 [16.7s]
+match   71  Nullkiller2 (red) vs FairAI       (blue): timeout winner= day=46 [19.5s]
+match   63  Nullkiller2 (red) vs FairAI       (blue): stalled winner= day=28 [68.2s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 72 (runner errors: 0)
+- decided: 19 -> FairAI won 2, lost 17  (win rate 11%, 95% CI 3%-31%)
+- day limit reached: 52 (material lead for FairAI in 21)
+- stalled games (AI stopped responding), by AI on turn: Nullkiller2: 1
+- average length of decided games: 19 days
+- cheat flags raised: 0
+# A/B test (2 configs, seeds 42, 43)
+
+Paired against `guard`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| guard | `{}` | 144 | 15 | 42 | 0.417 ± 0.056 | - | 144 |
+| old | `{"townGuard": 0}` | 144 | 5 | 41 | 0.412 ± 0.052 | -0.005 ± 0.050 | 144 |
+
