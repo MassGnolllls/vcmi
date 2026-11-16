@@ -1,9 +1,12 @@
 {
  "job": "023-ab-baits",
- "state": "running",
+ "state": "done",
  "commit": "11b743704ed400bae196eac9905b6f7bdda03690",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-16T13:57:54",
- "note": "main hero keeps 1 or 2 single-creature bait stacks vs none; 2x72 paired games each, day 45"
+ "note": "main hero keeps 1 or 2 single-creature bait stacks vs none; 2x72 paired games each, day 45",
+ "returncode": 0,
+ "finished": "2026-11-16T14:33:12",
+ "minutes": 35.3
 }
