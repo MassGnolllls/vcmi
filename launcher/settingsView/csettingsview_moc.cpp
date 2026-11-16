@@ -153,6 +153,10 @@ void CSettingsView::fillValidAdventureAILibraries(QComboBox * comboBox, QString 
 	comboBox->addItem(tr("Nullkiller2 (default, recommended)"), "Nullkiller2");
 #endif
 
+#ifdef ENABLE_FAIR_AI
+	comboBox->addItem(tr("FairAI (experimental, plays without cheats)"), "FairAI");
+#endif
+
 	fillValidAnyAILibraries(comboBox, activeAI);
 	comboBox->blockSignals(false);
 }
