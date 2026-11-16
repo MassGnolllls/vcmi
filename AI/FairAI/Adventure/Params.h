@@ -43,6 +43,7 @@ struct Params
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
 	int townGuard = 1;                 ///< 1: town defence weighs the town's own means, the main hero only makes round trips from a town that needs it and clears the gate of our other heroes (0: old rules)
 	double wallsFactor = 1.5;          ///< sieges: defenders behind town walls count this much more
+	int siegeCost = 1;                 ///< sieges: moat and arrow towers cost troops before the walls fall (0: ignore)
 
 	// --- movement and planning
 	double travelOffset = 0.15;        ///< days added to every travel time (visit overhead)

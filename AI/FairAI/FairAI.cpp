@@ -17,6 +17,8 @@
 #include "../../lib/UnlockGuard.h"
 #include "../../lib/mapObjects/CGDwelling.h"
 #include "../../lib/CCreatureHandler.h"
+#include "../../lib/CStack.h"
+#include "../../lib/spells/CSpellHandler.h"
 #include "../../lib/CConfigHandler.h"
 #include "../../lib/json/JsonNode.h"
 #include "../../lib/CThreadHelper.h"
@@ -361,6 +363,47 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 		}
 	}
 	CAdventureAI::battleStart(battleID, army1, army2, tile, hero1, hero2, side, replayAllowed);
+}
+
+void FairAIGateway::actionStarted(const BattleID & battleID, const BattleAction & action)
+{
+	if(logAi->isDebugEnabled())
+	{
+		if(auto battle = cb->getBattle(battleID))
+		{
+			const auto * unit = battle->battleGetStackByID(action.stackNumber, false);
+			logAi->debug("FairAI %s battle action: %s %s", playerID.toString(),
+				unit ? unit->getDescription() : std::string("hero/other"), action.toString());
+		}
+	}
+	CAdventureAI::actionStarted(battleID, action);
+}
+
+void FairAIGateway::battleStacksAttacked(const BattleID & battleID, const std::vector<BattleStackAttacked> & bsa, bool ranged)
+{
+	if(logAi->isDebugEnabled())
+	{
+		if(auto battle = cb->getBattle(battleID))
+		{
+			for(const auto & hit : bsa)
+			{
+				const auto * target = battle->battleGetStackByID(hit.stackAttacked, false);
+				const auto * attacker = battle->battleGetStackByID(hit.attackerID, false);
+				logAi->debug("FairAI %s battle hit: %s -> %s, damage %lld, killed %u%s", playerID.toString(),
+					attacker ? attacker->getDescription() : std::string("?"), target ? target->getDescription() : std::string("?"),
+					static_cast<long long>(hit.damageAmount), hit.killedAmount, ranged ? " (ranged)" : "");
+			}
+		}
+	}
+	CAdventureAI::battleStacksAttacked(battleID, bsa, ranged);
+}
+
+void FairAIGateway::battleSpellCast(const BattleID & battleID, const BattleSpellCast * sc)
+{
+	if(sc)
+		logAi->info("FairAI %s battle spell: %s %s casts %s on %d units", playerID.toString(), sc->side == battleSide ? "our" : "enemy",
+			sc->castByHero ? "hero" : "creature", sc->spellID.toSpell()->getNameTranslated(), static_cast<int>(sc->affectedCres.size()));
+	CAdventureAI::battleSpellCast(battleID, sc);
 }
 
 void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br, QueryID queryID)

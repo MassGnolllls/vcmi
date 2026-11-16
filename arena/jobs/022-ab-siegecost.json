@@ -1,0 +1,27 @@
+{
+ "note": "moat and arrow tower losses in the decision to attack a town vs ignoring them; 2x72 paired games, day 60 (sieges happen later)",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"siege\": {}, \"nocost\": {\"siegeCost\": 0}}",
+  "--seeds",
+  "42,43",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "60",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

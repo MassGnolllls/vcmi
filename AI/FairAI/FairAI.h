@@ -68,6 +68,10 @@ public:
 	// ---- battle bookkeeping (combat itself is forwarded by CAdventureAI) ----
 	void battleStart(const BattleID & battleID, const CCreatureSet * army1, const CCreatureSet * army2, int3 tile, const CGHeroInstance * hero1, const CGHeroInstance * hero2, BattleSide side, bool replayAllowed) override;
 	void battleEnd(const BattleID & battleID, const BattleResult * br, QueryID queryID) override;
+	// battle diagnostics (debug log) and the spells the enemy has shown us
+	void actionStarted(const BattleID & battleID, const BattleAction & action) override;
+	void battleStacksAttacked(const BattleID & battleID, const std::vector<BattleStackAttacked> & bsa, bool ranged) override;
+	void battleSpellCast(const BattleID & battleID, const BattleSpellCast * sc) override;
 	void battleEnded() override;
 
 	// ---- used by the adventure module

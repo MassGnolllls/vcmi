@@ -192,6 +192,7 @@ void Params::loadOverrides(int playerIndex)
 	read("buyWarMachines", buyWarMachines);
 	read("pathThreats", pathThreats);
 	read("townGuard", townGuard);
+	read("siegeCost", siegeCost);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -730,6 +731,12 @@ void AdventureAI::rememberStaticObjects()
 {
 	for(const auto & [id, object] : perception.knownObjects())
 	{
+		if(object.type == Obj::TOWN)
+		{
+			// walls and towers show on the map; they can grow, so look again whenever the town is in sight
+			if(const auto * town = dynamic_cast<const CGTownInstance *>(perception.visibleObject(id)))
+				townFortLevel[id] = town->fortLevel();
+		}
 		if(object.type == Obj::HERO || (entryMasks.count(id) && teleportChannels.count(id)))
 			continue;
 		const CGObjectInstance * instance = perception.visibleObject(id);
@@ -978,6 +985,35 @@ double AdventureAI::townNeed(const CGTownInstance * town, const CGHeroInstance *
 	if(threat <= local)
 		return 0;
 	return std::min(1.0, (threat - local) / threat);
+}
+
+double AdventureAI::siegeOverhead(const CGHeroInstance * hero, int fortLevel) const
+{
+	if(!params.siegeCost || fortLevel < CGTownInstance::CITADEL)
+		return 0; // a fort has walls only: no moat, no arrow tower
+	// moat: up to 70 damage to every stack that crosses (game config: moatDamage); arrow towers ignore
+	// defence and shoot every round: keep 10+2L..2x, side towers 6+L..2x (L = buildings in town,
+	// not visible on the map: assumed 10 for a citadel, 15 for a castle); about four rounds until the
+	// walls fall and the fight is decided
+	constexpr double moatDamage = 70;
+	constexpr double rounds = 4;
+	const double level = fortLevel >= CGTownInstance::CASTLE ? 15 : 10;
+	double hpLoss = 1.5 * (10 + 2 * level) * rounds;
+	if(fortLevel >= CGTownInstance::CASTLE)
+		hpLoss += 2 * 1.5 * (6 + level) * rounds;
+	double totalHp = 0;
+	for(const auto & slot : hero->Slots())
+	{
+		const CStackInstance * stack = slot.second.get();
+		if(!stack || !stack->getCreature())
+			continue;
+		const double stackHp = static_cast<double>(stack->getCount()) * stack->getCreature()->getMaxHealth();
+		totalHp += stackHp;
+		hpLoss += std::min(moatDamage, stackHp);
+	}
+	if(totalHp <= 0)
+		return 0;
+	return std::min(1.0, hpLoss / totalHp) * static_cast<double>(hero->getArmyStrength());
 }
 
 void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero)
@@ -1355,6 +1391,22 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			{
 				++rejected["too strong"];
 				continue;
+			}
+			if(object.type == Obj::TOWN && object.owner != me && !desperate)
+			{
+				// moat and arrow towers take their share before the walls fall
+				auto fort = townFortLevel.find(id);
+				const double overhead = fort != townFortLevel.end() ? siegeOverhead(hero, fort->second) : 0;
+				if(overhead > 0)
+				{
+					const double left = static_cast<double>(hero->getTotalStrength()) - overhead;
+					if(overhead > 0.5 * static_cast<double>(hero->getTotalStrength()) || left < danger * params.safetyRatioHero)
+					{
+						++rejected["walls"];
+						continue;
+					}
+					loss += overhead * params.lossFactor * params.goldPerArmyValue * params.lossAversion;
+				}
 			}
 			if(!desperate && unsafe(node, object.type == Obj::HERO ? id : ObjectInstanceID()))
 			{

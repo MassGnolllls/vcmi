@@ -17,8 +17,11 @@
 #include "../../BattleAI/StackWithBonuses.h"
 
 #include "../../../lib/CStack.h"
+#include "../../../lib/CCreatureHandler.h"
 #include "../../../lib/StartInfo.h"
 #include "../../../lib/battle/BattleAction.h"
+#include "../../../lib/battle/CObstacleInstance.h"
+#include "../../../lib/battle/ReachabilityInfo.h"
 #include "../../../lib/battle/CPlayerBattleCallback.h"
 #include "../../../lib/bonuses/BonusEnum.h"
 #include "../../../lib/callback/CBattleCallback.h"
@@ -137,11 +140,66 @@ bool FairBattleAI::tryHeroSpell(const BattleID & battleID, const CStack * stack)
 	return evaluator.canCastSpell() && evaluator.attemptCastingSpell(stack);
 }
 
+std::optional<BattleAction> FairBattleAI::siegeWalkerAction(const BattleID & battleID, const CStack * stack) const
+{
+	auto battle = cb->getBattle(battleID);
+	if(stack->unitSide() != BattleSide::ATTACKER || stack->isShooter() || stack->hasBonusOfType(BonusType::FLYING))
+		return std::nullopt;
+	// a way in: broken gate or a breach in the wall (a gate a defender opened closes again)
+	if(battle->battleGetGateState() == EGateState::DESTROYED)
+		return std::nullopt;
+	for(EWallPart part : {EWallPart::BOTTOM_WALL, EWallPart::BELOW_GATE, EWallPart::OVER_GATE, EWallPart::UPPER_WALL})
+		if(battle->battleGetWallState(part) == EWallState::DESTROYED)
+			return std::nullopt;
+
+	BattleHexArray moat;
+	for(const auto & obstacle : battle->battleGetAllObstacles())
+		if(obstacle->obstacleType == CObstacleInstance::MOAT)
+			for(const auto & hex : obstacle->getAffectedTiles())
+				moat.insert(hex);
+
+	// a defender came out: hit the most valuable one we reach without standing in the moat
+	ReachabilityInfo reach = battle->getReachability(stack);
+	const uint32_t range = stack->getMovementRange();
+	std::optional<BattleAction> best;
+	int64_t bestValue = 0;
+	for(const auto * unit : battle->battleGetAllStacks(false))
+	{
+		if(!unit->alive() || unit->unitSide() == stack->unitSide() || unit->isTurret())
+			continue;
+		for(const auto & hex : unit->getSurroundingHexes())
+		{
+			if(!hex.isValid() || moat.contains(hex) || !reach.isReachable(hex) || reach.distances[hex.toInt()] > range)
+				continue;
+			const int64_t value = static_cast<int64_t>(unit->getCount()) * unit->creatureId().toCreature()->getAIValue();
+			if(!best || value > bestValue)
+			{
+				best = BattleAction::makeMeleeAttack(stack, unit->getPosition(), hex);
+				bestValue = value;
+			}
+			break;
+		}
+	}
+	if(best)
+		return best;
+	return BattleAction::makeDefend(stack);
+}
+
 void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 {
 	try
 	{
-		if(needsFallback(stack))
+		// sieges: our simulator knows no walls, moat or towers - VCMI's BattleAI handles them until FairAI
+		// models sieges itself, except that our walkers do not wade into the moat while there is no way in
+		if(!needsFallback(stack) && cb->getBattle(battleID)->battleGetDefendedTown())
+		{
+			if(auto action = siegeWalkerAction(battleID, stack))
+			{
+				cb->battleMakeUnitAction(battleID, *action);
+				return;
+			}
+		}
+		if(needsFallback(stack) || cb->getBattle(battleID)->battleGetDefendedTown())
 		{
 			fallback->activeStack(battleID, stack);
 			return;

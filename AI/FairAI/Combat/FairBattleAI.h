@@ -4,8 +4,8 @@
  * FairAI's combat AI.
  *
  * Decision per unit:
- *  1. special units (catapult, first aid tent, berserk, creature spell casters) and the hero's
- *     spells are still handled by components of VCMI's BattleAI (compiled into FairAI)
+ *  1. special units (catapult, first aid tent, berserk, creature spell casters), the hero's
+ *     spells and all of a siege are still handled by components of VCMI's BattleAI (compiled into FairAI)
  *  2. all regular unit actions are chosen by look-ahead search: every legal attack, shot, a few
  *     move targets, wait and defend are played forward in CombatSim (both sides with a greedy
  *     policy) for the rest of this round and two more; the action with the best material balance
@@ -56,6 +56,10 @@ private:
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);
+	/// Siege attack, walkers only: while walls and gate still stand, attack defenders who came out
+	/// (never from a moat hex) or wait outside instead of wading through the moat (VCMI's BattleAI
+	/// lost whole armies that way). nullopt: there is a way in, let BattleAI lead the assault.
+	std::optional<BattleAction> siegeWalkerAction(const BattleID & battleID, const CStack * stack) const;
 	std::optional<BattleAction> considerRetreat(const BattleID & battleID);
 	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack);
 };

@@ -180,6 +180,10 @@ private:
 	/// objects that can be entered (and left) only from some sides, as the game's pathfinder rules
 	/// say: object -> mask of allowed directions (bit (dy+1)*3+(dx+1)), remembered while we see it
 	std::map<ObjectInstanceID, uint16_t> entryMasks;
+	/// fortification level of towns (visible on the map), remembered while we see them
+	std::map<ObjectInstanceID, int> townFortLevel;
+	/// Strength our hero is expected to lose to moat and arrow towers before the walls fall
+	double siegeOverhead(const CGHeroInstance * hero, int fortLevel) const;
 	void rememberStaticObjects();
 
 	// ---- helpers
