@@ -300,3 +300,23 @@ match    6 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.27 [488
 match    9 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.02 [506.9s]
 match    7 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.02 [840.4s]
 match   10 FairAI as red,tan,orange of 6: timeout winner= day=76 score=0.19 [802.4s]
+match   11 FairAI as blue,green,purple of 6: timeout winner= day=76 score=0.00 [902.2s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 12 (runner errors: 0)
+- decided: 2 -> FairAI won 0, lost 2  (win rate 0%, 95% CI 0%-66%)
+- day limit reached: 10 (material lead for FairAI in 0)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 73 days
+- cheat flags raised: 0
+# A/B test (1 configs, seeds 42)
+
+Paired against `base`: mean score difference over the games both played (95% CI).
+
+| config | params | games | won | lost | score | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|
+| base | `{}` | 12 | 0 | 4 | 0.108 ± 0.069 | - | 12 |
+
+== xl-ffa-8p-u
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/d5d4448388/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2-matrix-baseline/xl-ffa-8p-u/base-s42 --pool mix1-xl-ffa-8p-u --max-days 90 --timeout 3600 --stall-seconds 180 --base-port 8000

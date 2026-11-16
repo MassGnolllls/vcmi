@@ -13,7 +13,7 @@ Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = 
 | m-teams-4p | 12, 0.104 ± 0.077 |
 | l-land-2p | 12, 0.325 ± 0.067 |
 | l-ffa-6p-u | 12, 0.156 ± 0.066 |
-| l-teams-6p | - |
+| l-teams-6p | 12, 0.108 ± 0.069 |
 | xl-ffa-8p-u | - |
 | xl-islands-8p | - |
-| **mean of categories** | 0.290 |
+| **mean of categories** | 0.272 |
