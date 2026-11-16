@@ -135,8 +135,12 @@ private:
 	double threatAt(const int3 & tile, ObjectInstanceID ignoreHero = ObjectInstanceID(), bool cautious = false) const;
 	/// Tiles a collector may work on: close to one of our towns
 	bool inTerritory(const int3 & tile) const;
+	void dumpKnowledge() const;
 	int lastHeroLossDay = -100;
+	int idleDays = 0; ///< consecutive days the main hero hardly moved
+	std::map<int, int> resourceNeed; ///< resource -> amount our best blocked buildings lack
 	std::set<ObjectInstanceID> heroesLastTurn;
+	std::set<ObjectInstanceID> usedTeleporters;
 	/// An enemy hero was seen within `radius` tiles of `tile` during the last `days` days
 	bool enemySeenNear(const int3 & tile, int days, double radius) const;
 	/// Strength the hero would defend with on this tile (own town: garrison and walls help)
@@ -156,7 +160,7 @@ private:
 	double observedDanger(const ObservedObject & object) const;
 	double guardDanger(const int3 & tile) const;
 	/// Expected losses in gold equivalents, or a negative value if the fight is too risky
-	double expectedLoss(const CGHeroInstance * hero, double danger, bool desperate = false) const;
+	double expectedLoss(const CGHeroInstance * hero, double danger, bool desperate = false, bool versusHero = false) const;
 
 	/// Moves the hero one step towards `tile`. Returns false if no step could be made.
 	bool stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths);

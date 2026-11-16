@@ -60,6 +60,20 @@ MMAI braucht seine Mod im VCMI-Datenordner; für VCMI 1.7.x die Version aus dem 
 
 Ergebnis: `results.jsonl` (eine Zeile pro Partie) und `summary.md` mit Siegquote und 95-%-Konfidenzintervall.
 
+## Auswertung ganzer Partien
+
+```bash
+python3 run_tournament.py play --client VCMICLIENT --ai FairAI --opponent Nullkiller2 \
+    --map-filter 2SM4d_s_l1_none --max-maps 12 --max-days 28 --jobs 2 --keep-logs --out lauf1
+python3 game_stats.py lauf1 --brief     # Armee, Städte, Helden, Gold, erkundeter Anteil je Seite
+python3 battle_stats.py lauf1 --list 20 # FairAIs Kämpfe: wer greift wen an, wer gewinnt
+```
+
+- Labels `Abenteuer+Kampf` (z. B. `Nullkiller2+FairAI`) wählen beide KIs eines Platzes.
+- `FAI_PARAMS='{"safetyRatio":1.2}'` überschreibt FairAI-Parameter (siehe `AI/FairAI/Adventure/Params.h`).
+- `ARENA_AI_LOG=debug` schreibt die Entscheidungen der KIs ins Log (`--keep-logs`), `FAI_DUMP_MAP=1` zusätzlich FairAIs Kartenwissen an den Tagen 7, 14 und 28.
+- Für lange Läufe eine feste Kopie des Builds verwenden (sonst wechseln laufende Turniere mitten drin die Bibliothek), z. B. `cp -al build/bin snap/v1` und `--client snap/v1/vcmiclient`.
+
 ## Fairness-Regeln für FairAI
 
 1. Keine Cheat-Codes, keine Chat-Befehle. In Turnieren sind Cheats serverseitig verboten, jeder Versuch wird als `cheated` im Ergebnis gemeldet.

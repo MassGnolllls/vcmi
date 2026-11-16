@@ -7,6 +7,7 @@
  */
 #include "../StdInc.h"
 #include "FairBattleAI.h"
+#include "../../../lib/battle/BattleStateInfoForRetreat.h"
 #include "CombatSim.h"
 
 // components of VCMI's BattleAI (compiled into FairAI, see CMakeLists.txt)
@@ -145,6 +146,12 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			return;
 		}
 
+		if(auto retreat = considerRetreat(battleID))
+		{
+			cb->battleMakeUnitAction(battleID, *retreat);
+			return;
+		}
+
 		if(tryHeroSpell(battleID, stack))
 			return; // the same unit gets activated again after the spell
 
@@ -155,6 +162,34 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 		logAi->error("FairBattleAI: search failed (%s), falling back to BattleAI", e.what());
 		fallback->activeStack(battleID, stack);
 	}
+}
+
+std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battleID)
+{
+	auto battle = cb->getBattle(battleID);
+	BattleStateInfoForRetreat bs;
+	bs.canFlee = battle->battleCanFlee();
+	bs.canSurrender = battle->battleCanSurrender(playerID);
+	if(!bs.canFlee && !bs.canSurrender)
+		return std::nullopt;
+	bs.ourSide = battle->battleGetMySide();
+	bs.ourHero = battle->battleGetMyHero();
+	bs.enemyHero = nullptr;
+	for(const auto * unit : battle->battleGetAllStacks(false))
+	{
+		if(!unit->alive())
+			continue;
+		if(unit->unitSide() == bs.ourSide)
+			bs.ourStacks.push_back(unit);
+		else
+		{
+			bs.enemyStacks.push_back(unit);
+			bs.enemyHero = battle->battleGetOwnerHero(unit);
+		}
+	}
+	bs.turnsSkippedByDefense = 0;
+	// the adventure AI decides: it knows what the hero is worth
+	return cb->makeSurrenderRetreatDecision(battleID, bs);
 }
 
 BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack)

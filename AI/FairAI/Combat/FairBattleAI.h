@@ -56,6 +56,7 @@ private:
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);
+	std::optional<BattleAction> considerRetreat(const BattleID & battleID);
 	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack);
 };
 

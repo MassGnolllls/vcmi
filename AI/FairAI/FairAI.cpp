@@ -196,6 +196,17 @@ void FairAIGateway::showMapObjectSelectDialog(QueryID askID, const Component & i
 
 std::optional<BattleAction> FairAIGateway::makeSurrenderRetreatDecision(const BattleID & battleID, const BattleStateInfoForRetreat & battleState)
 {
+	// A lost battle costs the army either way; fleeing keeps the hero (level, skills, artifacts),
+	// who can be hired again. Without a town there is nothing to flee to.
+	if(!battleState.canFlee || !battleState.ourHero || cb->getTownsInfo().empty())
+		return std::nullopt;
+	const double ours = static_cast<double>(battleState.getOurStrength());
+	const double theirs = std::max<double>(1.0, static_cast<double>(battleState.getEnemyStrength()));
+	if(ours / theirs < 0.25 && battleState.ourHero->level >= 4)
+	{
+		logAi->info("FairAI %s: %s retreats from a lost battle (%.0f vs %.0f)", playerID.toString(), battleState.ourHero->getNameTranslated(), ours, theirs);
+		return BattleAction::makeRetreat(battleState.ourSide);
+	}
 	return std::nullopt;
 }
 

@@ -150,6 +150,7 @@ void Params::loadOverrides(int playerIndex)
 	read("resourceValueFactor", resourceValueFactor);
 	read("safetyRatio", safetyRatio);
 	read("dangerUpperWeight", dangerUpperWeight);
+	read("safetyRatioHero", safetyRatioHero);
 	read("safetyRatioSecondary", safetyRatioSecondary);
 	read("lossFactor", lossFactor);
 	read("lossAversion", lossAversion);
@@ -176,6 +177,15 @@ void Params::loadOverrides(int playerIndex)
 	read("collectorRadius", collectorRadius);
 	read("wallsFactor", wallsFactor);
 	read("maxHeroes", maxHeroes);
+	read("keepGarrison", keepGarrison);
+	read("collectorsRoam", collectorsRoam);
+	read("patienceStep", patienceStep);
+	read("resourceNeedFactor", resourceNeedFactor);
+	read("guardFogFactor", guardFogFactor);
+	read("minSafetyRatio", minSafetyRatio);
+	read("exploreMaxTurns", exploreMaxTurns);
+	read("huntFactor", huntFactor);
+	read("collectorsTakeGarrison", collectorsTakeGarrison);
 }
 
 // ======================================================================= setup
@@ -231,10 +241,10 @@ std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * her
 	auto result = std::make_shared<CPathsInfo>(cb->getMapSize(), hero);
 	auto config = std::make_shared<SingleHeroPathfinderConfig>(*result, *cb, hero);
 	config->options.ignoreGuards = ignoreGuards;
-	// Phase 2 keeps to land: no boats, monoliths or gates yet
+	// land only (no boats); monoliths and gates whose exits we know
 	config->options.useEmbarkAndDisembark = false;
-	config->options.useTeleportTwoWay = false;
-	config->options.useTeleportOneWay = false;
+	config->options.useTeleportTwoWay = true;
+	config->options.useTeleportOneWay = true;
 	config->options.useTeleportOneWayRandom = false;
 	config->options.useTeleportWhirlpool = false;
 	config->options.turnLimit = static_cast<uint8_t>(std::clamp(params.maxTravelTurns + 1, 1, 250));
@@ -272,6 +282,7 @@ void AdventureAI::playTurn()
 	logAi->info("FairAI %s day %d economy: income %.0f/week, growth costs %.0f/week, rho %.2f", me.toString(), today,
 		economy.weeklyIncome, economy.weeklyRecruitCost, economy.rho);
 
+	resourceNeed.clear();
 	manageTowns(false);
 	hireHeroes();
 	chooseMainHero();
@@ -286,8 +297,17 @@ void AdventureAI::playTurn()
 		return std::chrono::duration<double>(std::chrono::steady_clock::now() - turnStart).count() < TURN_TIME_BUDGET_SEC;
 	};
 
-	if(ownHero(mainHero))
+	if(const auto * main = ownHero(mainHero))
+	{
+		const int3 start = main->visitablePos();
+		const ObjectInstanceID id = mainHero;
 		playHero(mainHero);
+		const auto * after = ownHero(id);
+		if(after && after->visitablePos().dist2d(start) < 3)
+			++idleDays;
+		else
+			idleDays = 0;
+	}
 
 	hireHeroes();
 	chooseMainHero();
@@ -305,12 +325,26 @@ void AdventureAI::playTurn()
 		const auto * hb = ownHero(b);
 		return (ha ? ha->getTotalStrength() : 0) > (hb ? hb->getTotalStrength() : 0);
 	});
+	int roaming = 0;
 	for(auto id : others)
 	{
 		if(!timeLeft())
 		{
 			logAi->warn("FairAI: turn time budget exhausted on day %d", today);
 			break;
+		}
+		if(roaming++ >= params.collectorsRoam)
+		{
+			// secondary heroes guard towns from the garrison instead of roaming
+			const auto * hero = ownHero(id);
+			const auto * town = hero ? hero->getVisitedTown() : nullptr;
+			if(town && !hero->isGarrisoned() && !town->getGarrisonHero())
+			{
+				cb->swapGarrisonHero(town);
+				gateway.waitTillFree();
+			}
+			if(town)
+				continue;
 		}
 		playHero(id);
 	}
@@ -322,6 +356,9 @@ void AdventureAI::playTurn()
 	heroesLastTurn.clear();
 	for(const auto * hero : perception.ownHeroes())
 		heroesLastTurn.insert(hero->id);
+
+	if(std::getenv("FAI_DUMP_MAP") && (today == 7 || today == 14 || today == 28))
+		dumpKnowledge();
 
 	const auto * main = ownHero(mainHero);
 	logAi->info("FairAI %s day %d end: gold %d, heroes %d, towns %d, main hero %s army %d", me.toString(), today,
@@ -354,8 +391,12 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		if(hero->isGarrisoned())
 		{
 			const CGTownInstance * town = hero->getVisitedTown();
-			if(!town || town->getVisitingHero())
+			if(!town)
+				return;
+			const CGHeroInstance * visitor = town->getVisitingHero();
+			if(visitor && visitor->tempOwner != me)
 				return; // the gate is taken
+			// our own hero in the gate simply swaps places with us
 			cb->swapGarrisonHero(town);
 			gateway.waitTillFree();
 			hero = ownHero(heroId);
@@ -436,6 +477,16 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		}
 
 		bool progress = sent && (hero->visitablePos() != posBefore || hero->movementPointsRemaining() != mpBefore);
+		if(sent && hero->visitablePos().dist2d(posBefore) > 2.5)
+		{
+			// teleported: both ends of the channel are explored now
+			if(best.object.hasValue())
+				usedTeleporters.insert(best.object);
+			for(const auto * obj : cb->getVisitableObjs(hero->visitablePos(), false))
+				usedTeleporters.insert(obj->id);
+			for(const auto * obj : cb->getVisitableObjs(posBefore, false))
+				usedTeleporters.insert(obj->id);
+		}
 		if(!progress && sent && best.object.hasValue())
 		{
 			// visiting an adjacent object does not always move the hero: check the object instead
@@ -472,6 +523,13 @@ bool AdventureAI::stepTowards(const CGHeroInstance * hero, const int3 & tile, co
 	if(next.turns > 0)
 		return false;
 
+	if(next.action == EPathNodeAction::TELEPORT_NORMAL || next.action == EPathNodeAction::TELEPORT_BLOCKING_VISIT
+		|| next.action == EPathNodeAction::TELEPORT_BATTLE)
+	{
+		// standing on a teleporter: visiting it again sends us through
+		cb->moveHero(hero, hero->pos, false);
+		return true;
+	}
 	const bool transit = next.layer == EPathfindingLayer::AIR;
 	cb->moveHero(hero, hero->convertFromVisitablePos(next.coord), transit);
 	return true;
@@ -520,12 +578,15 @@ double AdventureAI::guardDanger(const int3 & tile) const
 	return danger;
 }
 
-double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, bool desperate) const
+double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, bool desperate, bool versusHero) const
 {
 	if(danger <= 0)
 		return 0;
 	const double strength = static_cast<double>(hero->getTotalStrength());
-	double ratio = isMain(hero) ? params.safetyRatio : params.safetyRatioSecondary;
+	double ratio = isMain(hero) ? (versusHero ? params.safetyRatioHero : params.safetyRatio) : params.safetyRatioSecondary;
+	// a main hero that has been stuck for days accepts riskier fights against guards
+	if(isMain(hero) && !versusHero)
+		ratio = std::max(params.minSafetyRatio, ratio - params.patienceStep * idleDays);
 	if(desperate)
 		ratio = 1.0; // no town left: a coin flip is better than certain defeat
 	if(strength < danger * ratio)
@@ -600,6 +661,42 @@ bool AdventureAI::enemySeenNear(const int3 & tile, int days, double radius) cons
 	return false;
 }
 
+void AdventureAI::dumpKnowledge() const
+{
+	// what we know, as ASCII: ' ' unknown, '.' seen, objects by letter (debugging aid)
+	const int3 size = cb->getMapSize();
+	std::vector<std::string> rows(size.y, std::string(size.x, ' '));
+	for(int y = 0; y < size.y; ++y)
+		for(int x = 0; x < size.x; ++x)
+			if(cb->isVisible(int3(x, y, 0)))
+				rows[y][x] = '.';
+	for(const auto & [id, o] : perception.knownObjects())
+	{
+		if(o.visitablePos.z != 0)
+			continue;
+		char c = 'o';
+		switch(o.type.toEnum())
+		{
+		case Obj::MONSTER: c = 'M'; break;
+		case Obj::TOWN: c = o.owner == me ? 'T' : (o.owner.isValidPlayer() ? 'E' : 't'); break;
+		case Obj::HERO: c = o.owner == me ? 'H' : 'X'; break;
+		case Obj::MINE: c = o.owner == me ? 'm' : 'n'; break;
+		case Obj::MONOLITH_TWO_WAY:
+		case Obj::MONOLITH_ONE_WAY_ENTRANCE:
+		case Obj::MONOLITH_ONE_WAY_EXIT:
+		case Obj::SUBTERRANEAN_GATE: c = usedTeleporters.count(id) ? 'u' : 'O'; break;
+		case Obj::RESOURCE: c = 'r'; break;
+		default: break;
+		}
+		rows[o.visitablePos.y][o.visitablePos.x] = c;
+	}
+	std::string out;
+	for(const auto & r : rows)
+		out += "|" + r + "|\n";
+	logAi->info("FairAI %s knowledge on day %d (M monster, T/E/t town own/enemy/neutral, H/X hero, m/n mine, O/u monolith new/used):\n%s",
+		me.toString(), today, out);
+}
+
 double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) const
 {
 	double strength = static_cast<double>(hero->getTotalStrength());
@@ -610,6 +707,8 @@ double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) co
 		double garrison = 0;
 		for(const auto & slot : town->Slots())
 			garrison += stackValue(slot.second.get());
+		if(const auto * guard = town->getGarrisonHero(); guard && guard != hero)
+			garrison += static_cast<double>(guard->getArmyStrength());
 		double walls = town->fortLevel() >= CGTownInstance::CITADEL ? 1.5 : (town->fortLevel() >= CGTownInstance::FORT ? 1.3 : 1.0);
 		strength = (strength + garrison) * walls;
 	}
@@ -651,7 +750,11 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		if(!res.hasValue() || res.getNum() >= GameResID::COUNT)
 			return 0;
 		double amount = res == GameResID::GOLD ? 750 : ((res == GameResID::WOOD || res == GameResID::ORE) ? 7.5 : 4.5);
-		return amount * resourceValue(res) * (res == GameResID::GOLD ? goldFactor : 1.0);
+		double need = 1.0;
+		auto wanted = resourceNeed.find(res.getNum());
+		if(wanted != resourceNeed.end())
+			need += params.resourceNeedFactor * std::min(1.0, wanted->second / amount);
+		return amount * resourceValue(res) * (res == GameResID::GOLD ? goldFactor : need);
 	}
 	case Obj::CAMPFIRE:
 		return 500 + 5 * resourceValue(GameResID::MERCURY);
@@ -699,6 +802,8 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			return 0;
 		double perDay = res == GameResID::GOLD ? 1000 : ((res == GameResID::WOOD || res == GameResID::ORE) ? 2 : 1);
 		double value = perDay * resourceValue(res) * params.incomeHorizonDays * (res == GameResID::GOLD ? goldFactor : 1.0);
+		if(resourceNeed.count(res.getNum()))
+			value *= 1.0 + 0.5 * params.resourceNeedFactor;
 		return enemy ? 1.5 * value : value;
 	}
 	case Obj::CREATURE_GENERATOR1:
@@ -764,6 +869,13 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 	case Obj::FOUNTAIN_OF_YOUTH:
 	case Obj::SWAN_POND:
 		return (!main || visitedByHero()) ? 0 : 150;
+	case Obj::MONOLITH_TWO_WAY:
+	case Obj::MONOLITH_ONE_WAY_ENTRANCE:
+	case Obj::SUBTERRANEAN_GATE:
+		// stepping in reveals a new region; afterwards the pathfinder knows the way
+		if(usedTeleporters.count(object.id))
+			return 0;
+		return 40 * params.explorationTileValue * std::max(0.5, 1.0 - today / 56.0);
 	case Obj::TOWN:
 	{
 		if(own)
@@ -774,6 +886,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			double troops = 0;
 			for(const auto & slot : town->Slots())
 				troops += stackValue(slot.second.get());
+			// troops recruited while a hero guards the garrison sit in that hero's army
+			if(const auto * guard = town->getGarrisonHero(); guard && guard != hero && guard->tempOwner == me)
+				troops += transferableValue(guard);
 			troops += recruitableValue(town, cb->getResourceAmount(GameResID::GOLD));
 			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor;
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
@@ -936,7 +1051,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				danger += town ? defenders * params.wallsFactor : defenders;
 			}
 			const bool desperate = object.type == Obj::TOWN && perception.ownTowns().empty();
-			double loss = expectedLoss(hero, danger, desperate);
+			const bool versusHero = (object.type == Obj::HERO || object.type == Obj::TOWN) && object.owner.isValidPlayer() && object.owner != me;
+			double loss = expectedLoss(hero, danger, desperate, versusHero);
 			if(loss < 0 || (!desperate && unsafe(node, object.type == Obj::HERO ? id : ObjectInstanceID())))
 				continue;
 			// a threatened own town needs its defender
@@ -961,8 +1077,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	}
 
 	// ---- exploration
+	RevealGrid revealGrid(*cb, perception.staleTiles(), params.staleTileWeight);
+	double tileValue = params.explorationTileValue;
 	{
-		RevealGrid grid(*cb, perception.staleTiles(), params.staleTileWeight);
+		RevealGrid & grid = revealGrid;
 		const int radius = hero->getSightRadius();
 		// exploring stays important until we know where the enemy lives; a strong main hero hunts
 		bool enemyTownKnown = false;
@@ -974,8 +1092,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		double decay = enemyTownKnown ? std::max(0.25, 1.0 - today / 56.0) : std::max(0.6, 1.0 - today / 56.0);
 		if(!enemyTownKnown && isMain(hero) && today > 14)
-			decay *= 2.0;
-		const double tileValue = params.explorationTileValue * decay;
+			decay *= params.huntFactor;
+		tileValue = params.explorationTileValue * decay;
 		const int3 size = cb->getMapSize();
 		Target bestExplore;
 		bestExplore.score = 0;
@@ -990,9 +1108,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					if(tile == heroPos || failedToday.count({heroNum, tile}) || trail[hero->id].count(tile))
 						continue;
 					const CGPathNode * node = reachable(paths, tile);
-					const bool normal = node && node->action == EPathNodeAction::NORMAL;
+					const bool normal = node && node->turns <= params.exploreMaxTurns && node->action == EPathNodeAction::NORMAL;
 					const CGPathNode * free = normal ? nullptr : reachable(freePaths, tile);
-					if(!normal && !(free && free->action == EPathNodeAction::NORMAL))
+					if(!normal && !(free && free->turns <= params.exploreMaxTurns && free->action == EPathNodeAction::NORMAL))
 						continue;
 					double reveal = grid.count(tile, radius);
 					if(reveal < 4)
@@ -1048,6 +1166,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hp += unit.creature.toCreature()->getMaxHealth() * 0.5 * (unit.minCount + unit.maxCount);
 		}
 		double value = hp * expValue(hero);
+		// a guard next to unexplored land probably blocks a way into it
+		value += params.guardFogFactor * tileValue * revealGrid.count(object.visitablePos, hero->getSightRadius());
 		auto unlock = unlockValue.find(id);
 		if(unlock != unlockValue.end())
 			value += params.unlockFactor * unlock->second;
@@ -1225,6 +1345,33 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source)
 {
 	const bool sourceIsHero = source->ID == Obj::HERO;
+
+	// An empty town is taken by any scout walking in: leave the weakest stack behind
+	SlotID reserved;
+	if(!sourceIsHero && params.keepGarrison && destination->ID == Obj::HERO)
+	{
+		if(source->stacksCount() == 1)
+		{
+			const auto & [slot, stack] = *source->Slots().begin();
+			const int keep = std::max(1, static_cast<int>(stack->getCount()) / 3);
+			const int move = static_cast<int>(stack->getCount()) - keep;
+			SlotID target = destination->getSlotFor(stack->getCreatureID());
+			if(move > 0 && target.validSlot())
+				cb->splitStack(source, destination, slot, target, destination->getStackCount(target) + move);
+			return;
+		}
+		double weakest = std::numeric_limits<double>::max();
+		for(const auto & [slot, stack] : source->Slots())
+		{
+			double v = stackValue(stack.get());
+			if(v < weakest)
+			{
+				weakest = v;
+				reserved = slot;
+			}
+		}
+	}
+
 	for(int guard = 0; guard < 24; ++guard)
 	{
 		gateway.checkInterruption();
@@ -1233,7 +1380,7 @@ void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CA
 		// 1. join stacks of the same type
 		for(const auto & [slot, stack] : source->Slots())
 		{
-			if(!stack || !stack->getCreature())
+			if(!stack || !stack->getCreature() || slot == reserved)
 				continue;
 			SlotID target = destination->getSlotFor(stack->getCreatureID());
 			if(!target.validSlot() || !destination->hasStackAtSlot(target))
@@ -1257,6 +1404,8 @@ void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CA
 		double bestValue = 0;
 		for(const auto & [slot, stack] : source->Slots())
 		{
+			if(slot == reserved)
+				continue;
 			double v = stackValue(stack.get());
 			if(v > bestValue)
 			{
@@ -1359,6 +1508,9 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 	{
 		recruitInTown(town, hero, 0);
 		pickBestCreatures(hero, town);
+		const CGHeroInstance * garrisoned = town->getGarrisonHero();
+		if(garrisoned && garrisoned != hero && garrisoned->tempOwner == me)
+			pickBestCreatures(hero, garrisoned);
 		if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1)
 			&& cb->getResourceAmount(GameResID::GOLD) >= GameConstants::SPELLBOOK_GOLD_COST + 500)
 		{
@@ -1366,7 +1518,7 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 		}
 		upgradeArmy(hero);
 	}
-	else if(ownHero(mainHero))
+	else if(ownHero(mainHero) && params.collectorsTakeGarrison)
 	{
 		// collectors ferry the garrison to the main hero
 		pickBestCreatures(hero, town);
@@ -1531,7 +1683,15 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 	else if(id == BuildingID::MAGES_GUILD_2 || id == BuildingID::MAGES_GUILD_3)
 		value += 400;
 	else if(id == BuildingID::MARKETPLACE)
+	{
+		// trading unblocks buildings we cannot afford for lack of a resource
+		bool anyMarket = false;
+		for(const auto * t : perception.ownTowns())
+			anyMarket = anyMarket || t->hasBuiltResourceMarketplace();
 		value += 800;
+		if(!anyMarket && economy.rho > 1.5)
+			value += 4000;
+	}
 	else if(id == BuildingID::TAVERN)
 	{
 		bool anyTavern = false;
@@ -1633,6 +1793,33 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 	for(const auto & entry : options)
 		ranked.push_back(entry.second);
 	std::sort(ranked.begin(), ranked.end(), [](const Option & a, const Option & b) { return a.score > b.score; });
+
+	if(!ranked.empty())
+		logAi->debug("FairAI %s day %d: best build option in %s: %s (%s, score %.2f)", me.toString(), today, town->getNameTranslated(),
+			info->buildings.at(ranked.front().build)->getNameTranslated(), ranked.front().state == EBuildingState::ALLOWED ? "affordable" : "missing resources",
+			ranked.front().score);
+	{
+		// remember what our most wanted buildings lack: heroes value those resources more
+		const ResourceSet have = cb->getResourceAmount();
+		int counted = 0;
+		for(const auto & option : ranked)
+		{
+			if(counted >= 3 || option.score < 0.5)
+				break;
+			++counted;
+			if(option.state != EBuildingState::NO_RESOURCES)
+				continue;
+			const ResourceSet & cost = info->buildings.at(option.build)->resources;
+			for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			{
+				if(res == GameResID::GOLD)
+					continue;
+				int missing = cost[res] - have[res];
+				if(missing > 0)
+					resourceNeed[res.getNum()] = std::max(resourceNeed[res.getNum()], missing);
+			}
+		}
+	}
 
 	int attempts = 0;
 	for(const auto & option : ranked)
@@ -1744,7 +1931,7 @@ void AdventureAI::hireHeroes()
 		bool parked = false;
 		if(visitor)
 		{
-			if(visitor->tempOwner != me || town->getGarrisonHero())
+			if(visitor->tempOwner != me || town->getGarrisonHero() || today > 3)
 				continue;
 			cb->swapGarrisonHero(town);
 			gateway.waitTillFree();
