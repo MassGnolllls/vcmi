@@ -86,6 +86,17 @@ FAI_PARAMS="$(cat tune1/best.json)" python3 run_tournament.py play ...   # Ergeb
 
 Eine Bewertung (24 Partien à 28 Tage) dauert mit 2 Kernen etwa 5 Minuten, mit 6 Kernen etwa 2. Für ernsthaftes Tuning (Hunderte Bewertungen) ist der Zweitrechner gedacht. Per Seat lassen sich Parameter auch direkt setzen: `run_tournament.py play --ai-params '{...}' --opponent-params '{...}'` (Client-Option `--arena-fairai-params`).
 
+## A/B-Tests (gepaart)
+
+`ab_test.py` lässt mehrere Parametersätze mit demselben Build exakt dieselben Partien spielen (Karten, Seiten, Spiel-Seeds) und vergleicht jede Partie mit der ersten Konfiguration. Die Paarung entfernt den Großteil des Rauschens zwischen Karten. Neue Funktionen kommen deshalb hinter einen Parameter (alt/neu umschaltbar) und werden so gemessen.
+
+```bash
+python3 ab_test.py --client snap/v1/vcmiclient --out ab1 --jobs 6 --seeds 42,43 \
+    --configs '{"base": {}, "x": {"safetyRatio": 1.2}}' --map-filter 2SM4d_s_l1_none --max-maps 36 --max-days 45
+```
+
+Ergebnis: `ab1/ab_summary.md` (Punkte je Konfiguration und mittlere Differenz zur Basis mit 95%-Intervall). Auf dem Zweitrechner sind das Jobs mit `"script": "ab_test.py"`; `job_report.py` zeigt die Tabellen an.
+
 ## Fairness-Regeln für FairAI
 
 1. Keine Cheat-Codes, keine Chat-Befehle. In Turnieren sind Cheats serverseitig verboten, jeder Versuch wird als `cheated` im Ergebnis gemeldet.

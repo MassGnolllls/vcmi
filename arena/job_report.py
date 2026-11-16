@@ -45,6 +45,15 @@ def main() -> int:
             continue
         status = json.loads((job_dir / "status.json").read_text()) if (job_dir / "status.json").exists() else {}
         results = job_dir / "results.jsonl"
+        ab = job_dir / "ab_summary.md"
+        if ab.exists():
+            # A/B job: one paired table (ab_test.py)
+            print(f"{job_dir.name:34s} {status.get('state', '?'):8s} A/B ({status.get('minutes', '-')} min)")
+            for line in ab.read_text().splitlines():
+                if line.startswith("| ") and not line.startswith("| config"):
+                    cells = [c.strip() for c in line.strip("|").split("|")]
+                    print(f"    {cells[0]:16s} games {cells[2]:>4s}  won {cells[3]:>3s}  lost {cells[4]:>3s}  score {cells[5]:16s} diff {cells[6]}")
+            continue
         if not results.exists():
             print(f"{job_dir.name:34s} {status.get('state', '?'):8s}")
             continue

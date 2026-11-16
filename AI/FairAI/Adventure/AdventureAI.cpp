@@ -30,6 +30,11 @@
 #include "../../../lib/networkPacks/Component.h"
 #include "../../../lib/pathfinder/CGPathNode.h"
 #include "../../../lib/pathfinder/PathfinderOptions.h"
+#include "../../../lib/mapping/TerrainTile.h"
+#include "../../../lib/TerrainHandler.h"
+#include "../../../lib/RoadHandler.h"
+
+#include <queue>
 
 namespace FAI
 {
@@ -183,6 +188,7 @@ void Params::loadOverrides(int playerIndex)
 	read("garrisonShare", garrisonShare);
 	read("mageGuildValue", mageGuildValue);
 	read("buyWarMachines", buyWarMachines);
+	read("pathThreats", pathThreats);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -615,7 +621,8 @@ void AdventureAI::updateThreats()
 			continue;
 		Threat t;
 		t.pos = object.visitablePos;
-		t.strength = observedDanger(object) * params.enemyHeroFactor;
+		t.army = observedDanger(object);
+		t.strength = t.army * params.enemyHeroFactor;
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
@@ -628,15 +635,117 @@ double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, boo
 	double worst = 0;
 	for(const auto & t : threats)
 	{
-		if(t.hero == ignoreHero || t.pos.z != tile.z)
+		if(t.hero == ignoreHero || t.pos.z != tile.z || t.strength <= worst)
 			continue;
 		if(!cautious && t.age > 2)
 			continue;
 		double radius = cautious ? params.threatRadius + 8.0 * t.age : t.radius;
-		if(t.pos.dist2d(tile) <= radius)
-			worst = std::max(worst, t.strength);
+		// roads at most halve the way: tiles further than this are out of reach anyway
+		if(t.pos.dist2d(tile) * 0.5 > radius)
+			continue;
+		if(enemyDistance(t.hero, t.pos, t.army, tile, radius) <= radius)
+			worst = t.strength;
 	}
 	return worst;
+}
+
+double AdventureAI::enemyDistance(ObjectInstanceID enemy, const int3 & from, double strength, const int3 & tile, double maxTiles) const
+{
+	if(from.z != tile.z || !cb->isInTheMap(tile))
+		return std::numeric_limits<double>::infinity();
+	if(!params.pathThreats)
+	{
+		const double straight = from.dist2d(tile);
+		return straight <= maxTiles ? straight : std::numeric_limits<double>::infinity();
+	}
+	ReachMap & reach = reachCache[{enemy.getNum(), from}];
+	if(reach.day != today || reach.strength != strength || reach.maxTiles < maxTiles)
+		computeReach(reach, from, strength, std::max(maxTiles, reach.day == today ? reach.maxTiles : 0.0));
+	const float d = reach.tiles[tile.y * cb->getMapSize().x + tile.x];
+	return d < 0 ? std::numeric_limits<double>::infinity() : d;
+}
+
+void AdventureAI::computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles) const
+{
+	const int3 size = cb->getMapSize();
+	const int width = size.x;
+	reach.origin = from;
+	reach.day = today;
+	reach.strength = strength;
+	reach.maxTiles = maxTiles;
+	reach.tiles.assign(static_cast<size_t>(size.x) * size.y, -1.f);
+
+	// what we know of the land: 0 open, 1 blocked, 2 ends the walk (our towns: attacking them)
+	std::vector<uint8_t> kind(reach.tiles.size(), 0);
+	std::vector<float> stepCost(reach.tiles.size(), 1.f);
+	const TerrainTile * start = cb->getTile(from, false);
+	const bool onWater = start && start->isWater();
+	for(int y = 0; y < size.y; ++y)
+		for(int x = 0; x < size.x; ++x)
+		{
+			const TerrainTile * t = cb->getTile(int3(x, y, from.z), false);
+			if(!t)
+				continue; // never seen: assume open land
+			const size_t i = static_cast<size_t>(y) * width + x;
+			if(!t->getTerrain()->isPassable() || (t->isWater() && !onWater) || (t->blocked() && !t->visitable()))
+				kind[i] = 1;
+			else if(t->hasRoad())
+				stepCost[i] = std::max(0.5f, t->getRoad()->movementCost / 100.f);
+		}
+	// known monsters this hero would not beat block the tiles they guard
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type != Obj::MONSTER || object.visitablePos.z != from.z || observedDanger(object) <= strength)
+			continue;
+		for(int dx = -1; dx <= 1; ++dx)
+			for(int dy = -1; dy <= 1; ++dy)
+			{
+				const int x = object.visitablePos.x + dx;
+				const int y = object.visitablePos.y + dy;
+				if(x >= 0 && y >= 0 && x < size.x && y < size.y)
+					kind[static_cast<size_t>(y) * width + x] = 1;
+			}
+	}
+	for(const auto * town : perception.ownTowns())
+	{
+		const int3 gate = town->visitablePos();
+		if(gate.z == from.z)
+			kind[static_cast<size_t>(gate.y) * width + gate.x] = 2;
+	}
+
+	using Entry = std::pair<float, int>;
+	std::priority_queue<Entry, std::vector<Entry>, std::greater<>> open;
+	const int startIndex = from.y * width + from.x;
+	reach.tiles[startIndex] = 0;
+	open.emplace(0.f, startIndex);
+	while(!open.empty())
+	{
+		auto [cost, index] = open.top();
+		open.pop();
+		if(cost > reach.tiles[index])
+			continue;
+		if(index != startIndex && kind[index] == 2)
+			continue; // attacking our town ends the move
+		const int x = index % width;
+		const int y = index / width;
+		for(int dx = -1; dx <= 1; ++dx)
+			for(int dy = -1; dy <= 1; ++dy)
+			{
+				const int nx = x + dx;
+				const int ny = y + dy;
+				if((dx == 0 && dy == 0) || nx < 0 || ny < 0 || nx >= size.x || ny >= size.y)
+					continue;
+				const int next = ny * width + nx;
+				if(kind[next] == 1)
+					continue;
+				const float step = stepCost[next] * ((dx != 0 && dy != 0) ? 1.41421356f : 1.f);
+				const float total = cost + step;
+				if(total > maxTiles || (reach.tiles[next] >= 0 && reach.tiles[next] <= total))
+					continue;
+				reach.tiles[next] = total;
+				open.emplace(total, next);
+			}
+	}
 }
 
 bool AdventureAI::inTerritory(const int3 & tile) const
@@ -660,7 +769,8 @@ bool AdventureAI::enemySeenNear(const int3 & tile, int days, double radius) cons
 			continue;
 		if(today - object.lastSeenDay > days || object.visitablePos.z != tile.z)
 			continue;
-		if(cb->getPlayerRelations(me, object.owner) == PlayerRelations::ENEMIES && object.visitablePos.dist2d(tile) <= radius)
+		if(cb->getPlayerRelations(me, object.owner) == PlayerRelations::ENEMIES
+			&& enemyDistance(id, object.visitablePos, observedDanger(object), tile, radius) <= radius)
 			return true;
 	}
 	return false;
@@ -1251,7 +1361,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				for(const auto & t : threats)
 				{
 					if(t.pos.z == tile.z && (!cautious ? t.age <= 2 : true) && t.strength > params.threatTolerance * ownStrength)
-						nearest = std::min(nearest, t.pos.dist2d(tile));
+						nearest = std::min(nearest, enemyDistance(t.hero, t.pos, t.army, tile, 60));
 				}
 				return nearest;
 			};
@@ -2091,7 +2201,7 @@ void AdventureAI::defendTowns()
 		for(const auto & [id, object] : known)
 		{
 			if(object.type == Obj::HERO && object.visibleNow && object.owner.isValidPlayer() && object.owner != me
-				&& object.visitablePos.z == town->visitablePos().z && object.visitablePos.dist2d(town->visitablePos()) < 14)
+				&& enemyDistance(id, object.visitablePos, observedDanger(object), town->visitablePos(), 14) < 14)
 			{
 				threatened = true;
 				break;

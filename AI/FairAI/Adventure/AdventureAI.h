@@ -59,6 +59,17 @@ struct Threat
 	double radius = 0;
 	int age = 0; ///< days since we saw it
 	ObjectInstanceID hero;
+	double army = 0; ///< observed army strength (without hero bonuses), decides which guards it can pass
+};
+
+/// Walking distances of one enemy hero, judged from our map knowledge (see AdventureAI::enemyDistance)
+struct ReachMap
+{
+	int3 origin{-1, -1, -1};
+	int day = -1;
+	double maxTiles = 0;
+	double strength = 0;
+	std::vector<float> tiles; ///< tile units (100 movement points) per tile of the origin's level; < 0: not reached
 };
 
 /// Where the economy stands: is gold or creature supply the bottleneck?
@@ -146,6 +157,14 @@ private:
 	bool enemySeenNear(const int3 & tile, int days, double radius) const;
 	/// Strength the hero would defend with on this tile (own town: garrison and walls help)
 	double defenceAt(const CGHeroInstance * hero, const int3 & tile) const;
+	/// Walking distance (tiles of normal terrain) an enemy hero at `from` needs to reach `tile`, judged
+	/// from what we know of the map: unexplored land counts as open, obstacles and water block, and so
+	/// do tiles guarded by known monsters stronger than the hero. Our towns end the walk, roads speed
+	/// it up, terrain penalties are ignored (the enemy may be native). Teleports are ignored.
+	/// Infinity if the tile is further than maxTiles. Cached per day.
+	double enemyDistance(ObjectInstanceID enemy, const int3 & from, double strength, const int3 & tile, double maxTiles) const;
+	void computeReach(ReachMap & reach, const int3 & from, double strength, double maxTiles) const;
+	mutable std::map<std::pair<int, int3>, ReachMap> reachCache;
 
 	// ---- helpers
 	const CGHeroInstance * ownHero(ObjectInstanceID id) const;

@@ -1,0 +1,27 @@
+{
+ "note": "parameter sensitivity after the threat change, 72 paired games each, day 45",
+ "script": "ab_test.py",
+ "args": [
+  "--client",
+  "{client}",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--configs",
+  "{\"base\": {}, \"garrisonshare02\": {\"garrisonShare\": 0.2}, \"roam0\": {\"collectorsRoam\": 0}, \"roam2\": {\"collectorsRoam\": 2}, \"safety115\": {\"safetyRatio\": 1.15}, \"safety145\": {\"safetyRatio\": 1.45}, \"tolerance10\": {\"threatTolerance\": 1.0}, \"tolerance18\": {\"threatTolerance\": 1.8}, \"radius12\": {\"threatRadius\": 12}, \"radius22\": {\"threatRadius\": 22}, \"explore60\": {\"explorationTileValue\": 60}, \"notavern\": {\"tavernArmies\": 0}, \"mageguild2500\": {\"mageGuildValue\": 2500}, \"warmachines\": {\"buyWarMachines\": 1}}",
+  "--seeds",
+  "42",
+  "--map-filter",
+  "2SM4d_s_l1_none",
+  "--max-maps",
+  "36",
+  "--max-days",
+  "45",
+  "--timeout",
+  "600",
+  "--stall-seconds",
+  "60"
+ ],
+ "jobs": 6
+}

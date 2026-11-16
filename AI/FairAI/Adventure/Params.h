@@ -37,6 +37,7 @@ struct Params
 
 	// --- enemy heroes
 	double threatRadius = 16;          ///< tiles an enemy hero may cover until our next turn
+	int pathThreats = 1;               ///< threat zones follow the walkable land we know (0: straight-line radius)
 	double enemyHeroFactor = 1.15;     ///< assumed attack/defence bonus of an enemy hero
 	double threatTolerance = 1.4;      ///< avoid tiles where threat > tolerance x own strength
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
