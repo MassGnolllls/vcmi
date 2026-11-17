@@ -152,6 +152,30 @@ public:
 		return sumAt(x1, y1, c.z) - sumAt(x0, y1, c.z) - sumAt(x1, y0, c.z) + sumAt(x0, y0, c.z);
 	}
 
+	/// share of unexplored tiles in that square (the part of it that lies on the map)
+	double boxShare(const int3 & c, int r)
+	{
+		const int x0 = std::max(0, c.x - r);
+		const int y0 = std::max(0, c.y - r);
+		const int x1 = std::min(size.x, c.x + r + 1);
+		const int y1 = std::min(size.y, c.y + r + 1);
+		return countBox(c, r) / std::max(1, (x1 - x0) * (y1 - y0));
+	}
+
+	/// does the land we know end here - is a tile next to this one unexplored?
+	bool edge(const int3 & c) const
+	{
+		for(int dx = -1; dx <= 1; ++dx)
+			for(int dy = -1; dy <= 1; ++dy)
+			{
+				const int x = c.x + dx;
+				const int y = c.y + dy;
+				if((dx || dy) && x >= 0 && y >= 0 && x < size.x && y < size.y && weights[index(x, y, c.z)] > 0)
+					return true;
+			}
+		return false;
+	}
+
 private:
 	int3 size;
 	std::vector<float> weights;
@@ -273,6 +297,7 @@ void Params::loadOverrides(int playerIndex)
 	read("sites", sites);
 	read("armyFit", armyFit);
 	read("fastKeeper", fastKeeper);
+	read("passage", passage);
 	read("idleRho", idleRho);
 	read("idleReserve", idleReserve);
 	read("manaValueMain", manaValueMain);
@@ -4621,6 +4646,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		bestExplore.score = 0;
 		std::map<ObjectInstanceID, double> behindGuard;
 		std::map<ObjectInstanceID, double> fogBehind; // most tiles one step behind the guard would reveal
+		std::map<ObjectInstanceID, double> openEnd; // (passage) the land we know behind the guard ends in land we have not seen: how much of the map around there is unseen
 		for(int z = 0; z < size.z; ++z)
 		{
 			for(int x = 0; x < size.x; ++x)
@@ -4635,7 +4661,26 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					const CGPathNode * node = reachable(paths, tile);
 					const bool normal = node && node->turns <= exploreHorizon && node->action == EPathNodeAction::NORMAL;
 					const CGPathNode * free = normal ? nullptr : reachable(freePaths, tile);
-					if(!normal && !(free && free->turns <= exploreHorizon && free->action == EPathNodeAction::NORMAL))
+					// (passage) The tiles a guard watches on its far side are land behind it as well. On
+					// generated maps the guard between two regions stands in a gap one tile wide, and
+					// the view often ends right behind it: no open tile lies beyond, so the guard
+					// "opened" nothing. (A main hero of 13,000 left 35 troglodytes of 3,000 standing
+					// from day 10 to day 28 - they were the only way out of its corner of the map.)
+					bool watched = params.passage && free && free->action == EPathNodeAction::BATTLE;
+					if(watched)
+					{
+						// the far side: no tile we can simply walk to within two steps
+						for(int dx = -2; dx <= 2 && watched; ++dx)
+							for(int dy = -2; dy <= 2 && watched; ++dy)
+							{
+								const int3 near(x + dx, y + dy, z);
+								if(!cb->isInTheMap(near))
+									continue;
+								const CGPathNode * walk = reachable(paths, near);
+								watched = !(walk && walk->action == EPathNodeAction::NORMAL);
+							}
+					}
+					if(!normal && !(free && free->turns <= exploreHorizon && (free->action == EPathNodeAction::NORMAL || watched)))
 						continue;
 					double reveal = grid.count(tile, radius);
 					if(reveal < 4)
@@ -4680,7 +4725,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 						{
 							behindGuard[g.guard] = std::max(behindGuard[g.guard], value * unlockShare(g, free));
 							if(g.count == 1)
+							{
 								fogBehind[g.guard] = std::max(fogBehind[g.guard], reveal);
+								if(params.passage && grid.edge(tile))
+									openEnd[g.guard] = std::max(openEnd[g.guard], grid.boxShare(tile, 12));
+							}
 						}
 					}
 				}
@@ -4695,7 +4744,26 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		// Land we have not seen behind a guard is more than the strip the first step reveals: on a
 		// map of zones it is a new region with its mines, treasures and perhaps a town.
-		if(params.regionValue > 0 && isMain(hero))
+		if(params.regionValue > 0 && isMain(hero) && params.passage)
+		{
+			// (passage) A region lies behind a guard when the land we know beyond it runs on into
+			// land we have not seen - not when unseen rock surrounds the pocket it watches. How much
+			// of a region: the share of the map around that end that is unseen. A guard whose far
+			// side we have not seen yet (seen from afar) is taken for such a one until we know better;
+			// the hero looks again at every step, long before it stands next to the guard.
+			for(const auto & [id, object] : known)
+			{
+				if(object.type == Obj::MONSTER && reachable(paths, object.visitablePos) && grid.countBox(object.visitablePos, 2) > 0)
+					openEnd[id] = std::max(openEnd[id], grid.boxShare(object.visitablePos, 12));
+			}
+			for(const auto & [guard, share] : openEnd)
+			{
+				const double region = params.regionValue * std::clamp(share / 0.3, 0.0, 1.0);
+				unlockValue[guard] += region;
+				strategicUnlock[guard] += region;
+			}
+		}
+		else if(params.regionValue > 0 && isMain(hero))
 		{
 			// A guard seen only from afar has no known tile behind it to stand on: count what shows
 			// from the guard's own place once it is gone. (Without this the guards on the way out
