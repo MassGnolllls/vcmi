@@ -46,6 +46,7 @@
 #include "../../../lib/spells/ISpellMechanics.h"
 #include "../../../lib/ResourceSet.h"
 #include "../../../lib/gameState/UpgradeInfo.h"
+#include "../../../lib/gameState/QuestInfo.h"
 #include "../../../lib/mapObjects/army/CStackInstance.h"
 #include "../../../lib/mapObjects/army/CStackBasicDescriptor.h"
 #include "../../../lib/entities/hero/CHeroHandler.h"
@@ -449,6 +450,7 @@ void AdventureAI::playTurn()
 	roundTrip.clear();
 	forecastCache.clear();
 	perception.refresh();
+	updateQuests();
 	{
 		// heroes killed during the enemy's turn
 		std::set<ObjectInstanceID> current;
@@ -936,9 +938,17 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			continue;
 		}
 		failures = 0;
-		// arrived at a building with rules of its own: do what there is to do there
-		if(params.sites && best.object.hasValue() && !meetingOwnHero && hero->visitablePos() == best.tile && !hero->getVisitedTown())
+		// arrived at a building with rules of its own: do what there is to do there (a building one
+		// cannot enter is visited from the tile next to it: the hero stays where it was and the visit costs movement)
+		const bool atSite = hero->visitablePos() == best.tile
+			|| (sent && hero->visitablePos() == posBefore && hero->movementPointsRemaining() != mpBefore && posBefore.z == best.tile.z && posBefore.dist2d(best.tile) < 1.6);
+		if(params.sites && best.object.hasValue() && !meetingOwnHero && atSite && !hero->getVisitedTown())
 		{
+			const bool asked = quests.count(best.object) > 0;
+			updateQuests();
+			// a seer that has nothing to say to us (its wish was granted by somebody else, or its time is over)
+			if(!asked && !quests.count(best.object) && dynamic_cast<const CGSeerHut *>(perception.visibleObject(best.object)))
+				sitesDone.insert(best.object);
 			useSite(hero, best.object);
 			hero = ownHero(heroId);
 			if(!hero)
@@ -1333,6 +1343,56 @@ double AdventureAI::universitySkillValue(const CGHeroInstance * hero, SecondaryS
 	return priority >= 6 ? 300.0 * priority : 0.0;
 }
 
+void AdventureAI::updateQuests()
+{
+	quests.clear();
+	questArtifacts.clear();
+	if(!params.sites)
+		return;
+	// The quest log: every seer and quest guard one of our heroes has spoken to, with its wish.
+	for(const QuestInfo & entry : cb->getMyQuests())
+	{
+		const CGObjectInstance * object = entry.getObject(cb.get());
+		const auto * asker = dynamic_cast<const IQuestObject *>(object);
+		if(!object || !asker || !dynamic_cast<const CGSeerHut *>(object))
+			continue;
+		const CQuest & quest = asker->getQuest();
+		if(quest.isCompleted || (quest.lastDay >= 0 && today - 1 > quest.lastDay))
+		{
+			sitesDone.insert(object->id);
+			continue;
+		}
+		KnownQuest known;
+		known.artifacts = quest.mission.artifacts;
+		for(const ArtifactID & art : quest.mission.artifacts)
+		{
+			double worth = 1000;
+			if(art.hasValue())
+			{
+				switch(art.toArtifact()->aClass)
+				{
+				case EArtifactClass::ART_TREASURE: worth = 1200; break;
+				case EArtifactClass::ART_MINOR: worth = 2500; break;
+				case EArtifactClass::ART_MAJOR: worth = 5000; break;
+				case EArtifactClass::ART_RELIC: worth = 9000; break;
+				default: break;
+				}
+			}
+			known.cost += worth;
+		}
+		for(const auto & res : LIBRARY->resourceTypeHandler->getAllObjects())
+			known.cost += quest.mission.resources[res] * resourceValue(res);
+		for(const auto & wanted : quest.mission.creatures)
+		{
+			if(wanted.getCreature())
+				known.cost += static_cast<double>(wanted.getCount()) * wanted.getCreature()->getAIValue() * params.goldPerArmyValue;
+		}
+		quests[object->id] = known;
+		for(const ArtifactID & art : quest.mission.artifacts)
+			questArtifacts[art] = object->id;
+	}
+}
+
 double AdventureAI::siteValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const
 {
 	if(!instance)
@@ -1376,6 +1436,21 @@ double AdventureAI::siteValue(const CGHeroInstance * hero, const ObservedObject 
 			}
 		}
 		return value;
+	}
+
+	// Seer huts and quest guards. The wish is in our quest log once a hero has asked; what the seer
+	// gives shows only when the wish is granted - on random maps experience, gold or creatures
+	// worth several thousand gold; the guard opens its passage.
+	if(const auto * seer = dynamic_cast<const CGSeerHut *>(instance))
+	{
+		if(sitesDone.count(object.id))
+			return 0;
+		const auto known = quests.find(object.id);
+		if(known == quests.end())
+			return 300; // not asked yet: worth the question
+		if(known->second.cost > 4000 || !seer->checkQuest(hero))
+			return 0;
+		return (dynamic_cast<const CGQuestGuard *>(instance) ? 3000.0 : 6000.0) - known->second.cost;
 	}
 
 	// University: a skill for the main hero, for gold
@@ -1516,6 +1591,7 @@ void AdventureAI::useSite(const CGHeroInstance * hero, ObjectInstanceID site)
 	if(instance->ID == Obj::HUT_OF_MAGI)
 		sitesDone.insert(site);
 }
+
 
 void AdventureAI::onUniversity(const IMarket * market, const CGHeroInstance * visitor)
 {
@@ -3536,6 +3612,8 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			return hero->hasSpellbook() ? 800 : 300;
 		if(!art.hasValue())
 			return 1000;
+		// (sites) somebody in our quest log asks for exactly this artifact
+		const double wished = questArtifacts.count(art) ? 3000.0 : 0.0;
 		if(params.artifactCare)
 		{
 			// what it would do for the hero leading our army; the others fetch it for that hero.
@@ -3543,7 +3621,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			const CGHeroInstance * leader = ownHero(mainHero);
 			const double forLeader = artifactValue(leader ? leader : hero, art.toArtifact(), true);
 			const double forMe = main ? forLeader : std::max(artifactValue(hero, art.toArtifact(), false), 0.8 * forLeader);
-			return std::clamp(std::max(forMe, 0.1 * art.toArtifact()->getPrice()), 300.0, 20000.0);
+			return wished + std::clamp(std::max(forMe, 0.1 * art.toArtifact()->getPrice()), 300.0, 20000.0);
 		}
 		double value = 1000;
 		switch(art.toArtifact()->aClass)
@@ -3554,7 +3632,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		case EArtifactClass::ART_RELIC: value = 9000; break;
 		default: break;
 		}
-		return main ? value : 0.8 * value;
+		return wished + (main ? value : 0.8 * value);
 	}
 	case Obj::MINE:
 	{
@@ -5345,24 +5423,34 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 			continue;
 		CreatureID creature = entry.second.back();
 		const CCreature * type = creature.toCreature();
-		ResourceSet available = spendable();
-		available[GameResID::GOLD] = std::max<int64_t>(0, available[GameResID::GOLD] - goldReserve);
-		int amount = static_cast<int>(entry.first);
-		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+		auto affordable = [&]()
 		{
-			int cost = type->getRecruitCost(res);
-			if(cost > 0)
-				amount = std::min(amount, static_cast<int>(available[res] / cost));
-		}
+			ResourceSet available = spendable();
+			available[GameResID::GOLD] = std::max<int64_t>(0, available[GameResID::GOLD] - goldReserve);
+			int count = static_cast<int>(entry.first);
+			for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			{
+				int cost = type->getRecruitCost(res);
+				if(cost > 0)
+					count = std::min(count, static_cast<int>(available[res] / cost));
+			}
+			return count;
+		};
+		int amount = affordable();
 		if(amount <= 0)
 			continue;
 		const CArmedInstance * target = destination;
 		if(!target->getSlotFor(creature).validSlot())
 			target = town->getUpperArmy();
-		if(!target->getSlotFor(creature).validSlot()
-			&& !makeRoom(town, target, creature, static_cast<double>(amount) * type->getAIValue()))
+		if(!target->getSlotFor(creature).validSlot())
 		{
-			continue;
+			if(!makeRoom(town, target, creature, static_cast<double>(amount) * type->getAIValue()))
+				continue;
+			// making room upgrades the army first, and that costs: what can we still pay for?
+			// (the server refused such purchases: "lack of resources")
+			amount = affordable();
+			if(amount <= 0 || !target->getSlotFor(creature).validSlot())
+				continue;
 		}
 		cb->recruitCreatures(town, target, creature, amount, level);
 	}
@@ -6366,6 +6454,9 @@ void AdventureAI::buyTavernArmies()
 		{
 			gateway.checkInterruption();
 			if(spendable()[GameResID::GOLD] < reserve || !town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero())
+				break;
+			// the game allows only so many heroes on the map at a time (the server refused the hire: eight are out already)
+			if(cb->howManyHeroes(false) >= cb->getSettings().getInteger(EGameSettings::HEROES_PER_PLAYER_ON_MAP_CAP))
 				break;
 			// never a veteran: a hero of ours that fled or surrendered waits in the tavern to be hired back, not to be dismissed
 			const CGHeroInstance * pick = nullptr;

@@ -410,6 +410,16 @@ private:
 	void useSite(const CGHeroInstance * hero, ObjectInstanceID site);
 	/// what a skill bought at a university is worth to this hero, in gold
 	double universitySkillValue(const CGHeroInstance * hero, SecondarySkill skill) const;
+	/// A wish from our quest log (seer huts, quest guards) that is still open
+	struct KnownQuest
+	{
+		std::vector<ArtifactID> artifacts; ///< artifacts it asks for
+		double cost = 0;                   ///< what granting it takes from us, in gold (artifacts, resources, creatures)
+	};
+	std::map<ObjectInstanceID, KnownQuest> quests;        ///< hut or guard -> its wish
+	std::map<ArtifactID, ObjectInstanceID> questArtifacts; ///< artifact somebody in our quest log asks for -> who
+	/// reads our quest log: what a player sees there (the wish - not the reward, which shows only when it is granted)
+	void updateQuests();
 	std::map<ObjectInstanceID, int> siteWeek;  ///< building -> week we last used it (a refugee camp has new guests every week)
 	std::set<ObjectInstanceID> sitesDone;      ///< buildings that have nothing more for us (a hut of the magi shows the same again)
 	std::atomic<int> guardedTarget{-1};   ///< guarded building the moving hero is heading for (for the game's question at its door)
