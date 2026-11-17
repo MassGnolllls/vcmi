@@ -15,7 +15,7 @@ Paired against `nETHK`: mean difference over the games both played (95% CI). sco
 | nST | `{"scouts": 2, "townWorth": 1}` | 22 | 11 | 5 | 0.592 ± 0.189 | +0.021 ± 0.243 | 0.617 ± 0.187 | +0.013 ± 0.229 | 22 |
 | nSRHK | `{"scouts": 2, "refillShare": 1.0, "townHop": 1, "freshHeroes": 1}` | 24 | 10 | 3 | 0.724 ± 0.149 | +0.158 ± 0.188 | 0.696 ± 0.153 | +0.101 ± 0.185 | 24 |
 | nSCEH | `{"scouts": 2, "supplyRuns": 1, "campaignEdge": 2.0, "townHop": 1}` | 24 | 12 | 1 | 0.697 ± 0.146 | +0.131 ± 0.220 | 0.702 ± 0.143 | +0.107 ± 0.219 | 24 |
-| nSCRETK | `{"scouts": 2, "supplyRuns": 1, "refillShare": 1.0, "campaignEdge": 2.0, "townWorth": 1, "freshHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nSCRETK | `{"scouts": 2, "supplyRuns": 1, "refillShare": 1.0, "campaignEdge": 2.0, "townWorth": 1, "freshHeroes": 1}` | 24 | 15 | 6 | 0.677 ± 0.183 | +0.112 ± 0.196 | 0.679 ± 0.180 | +0.083 ± 0.196 | 24 |
 | nSYEK | `{"scouts": 2, "safeParts": 1, "campaignEdge": 2.0, "freshHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nSYRETH | `{"scouts": 2, "safeParts": 1, "refillShare": 1.0, "campaignEdge": 2.0, "townWorth": 1, "townHop": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nSYCTHK | `{"scouts": 2, "safeParts": 1, "supplyRuns": 1, "townWorth": 1, "townHop": 1, "freshHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
