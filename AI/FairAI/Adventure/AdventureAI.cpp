@@ -594,6 +594,25 @@ void AdventureAI::playTurn()
 			me.toString(), today, towns.empty() ? " none" : towns, huntWanted ? "yes" : "no", oppositionHeroes, oppositionGuards,
 			main ? static_cast<double>(main->getTotalStrength()) : 0.0, campaignMode ? "on" : "off");
 	}
+	if(main && logAi->isDebugEnabled() && today % 7 == 0)
+	{
+		// once a week: what the main hero knows of magic (diagnostics)
+		std::array<int, 6> perLevel{};
+		std::string travel;
+		for(const SpellID & spell : main->getSpellsInSpellbook())
+		{
+			const auto * known = spell.toSpell();
+			if(!known)
+				continue;
+			perLevel[std::clamp(known->getLevel(), 0, 5)]++;
+			if(spell == SpellID::TOWN_PORTAL || spell == SpellID::DIMENSION_DOOR || spell == SpellID::FLY || spell == SpellID::WATER_WALK
+				|| spell == SpellID::VIEW_AIR || spell == SpellID::VIEW_EARTH || spell == SpellID::SUMMON_BOAT)
+				travel += " " + known->getJsonKey();
+		}
+		logAi->debug("FairAI %s day %d: main hero %s level %d, spells by level %d/%d/%d/%d/%d, wisdom %d, mana %d of %d, travel spells:%s", me.toString(), today,
+			main->getNameTranslated(), main->level, perLevel[1], perLevel[2], perLevel[3], perLevel[4], perLevel[5],
+			static_cast<int>(main->getSecSkillLevel(SecondarySkill::WISDOM)), main->mana, main->manaLimit(), travel.empty() ? " none" : travel);
+	}
 	logAi->info("FairAI %s day %d end: gold %d, heroes %d, towns %d, main hero %s army %d, mines %d, wood %d, ore %d", me.toString(), today,
 		cb->getResourceAmount(GameResID::GOLD), static_cast<int>(perception.ownHeroes().size()), static_cast<int>(perception.ownTowns().size()),
 		main ? main->getNameTranslated() : "-", main ? static_cast<int>(main->getArmyStrength()) : 0, mines,
