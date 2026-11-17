@@ -257,3 +257,30 @@ match    7 FairAI as blue of 2: victory winner=blue day=120 score=1.00 [193.3s]
 match    8 FairAI as red of 2: timeout winner= day=151 score=0.06 [190.7s]
 match   10 FairAI as red of 2: victory winner=red day=132 score=1.00 [189.9s]
 match    9 FairAI as blue of 2: timeout winner= day=151 score=0.45 [222.0s]
+match   13 FairAI as blue of 2: victory winner=blue day=89 score=1.00 [102.9s]
+match   11 FairAI as blue of 2: timeout winner= day=151 score=0.00 [269.5s]
+match   12 FairAI as red of 2: victory winner=blue day=144 score=0.00 [250.3s]
+match   14 FairAI as red of 2: timeout winner= day=151 score=0.42 [247.7s]
+match   17 FairAI as blue of 2: victory winner=blue day=128 score=1.00 [162.4s]
+match   15 FairAI as blue of 2: victory winner=red day=135 score=0.00 [244.3s]
+match   19 FairAI as blue of 2: victory winner=blue day=91 score=1.00 [135.0s]
+match   16 FairAI as red of 2: victory winner=blue day=131 score=0.00 [234.9s]
+match   21 FairAI as blue of 2: victory winner=blue day=77 score=1.00 [108.4s]
+match   18 FairAI as red of 2: timeout winner= day=151 score=0.50 [277.6s]
+match   20 FairAI as red of 2: victory winner=blue day=139 score=0.00 [233.3s]
+match   22 FairAI as red of 2: victory winner=blue day=113 score=0.00 [215.9s]
+match   23 FairAI as blue of 2: victory winner=red day=98 score=0.00 [204.6s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 16 -> FairAI won 8, lost 8  (win rate 50%, 95% CI 28%-72%)
+- day limit reached: 8 (material lead for FairAI in 0)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 116 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/755ca2a55a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 42 --out /home/alex/fairai/runs/022zz2d5-long-finish/m-land-2p/fNDSR-s42 --pool long1-m-land-2p --max-days 150 --timeout 3600 --stall-seconds 300 --base-port 7000 --ai-params {"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "townDefenceValue": 40000, "scouts": 2, "garrisonRoom": 1, "collectorsTakeGarrison": 0}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    5 FairAI as blue of 2: victory winner=blue day=62 score=1.00 [66.7s]
+match    6 FairAI as red of 2: victory winner=red day=79 score=1.00 [88.6s]
+match    2 FairAI as red of 2: victory winner=red day=122 score=1.00 [155.5s]

@@ -11,5 +11,5 @@ Paired against `base`: mean difference over the games both played (95% CI). scor
 | fDS | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "townDefenceValue": 40000, "scouts": 2}` | 24 | 10 | 9 | 0.484 ± 0.191 | -0.058 ± 0.236 | 0.470 ± 0.190 | +0.144 ± 0.209 | 24 |
 | fNR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 24 | 9 | 5 | 0.533 ± 0.163 | -0.010 ± 0.156 | 0.488 ± 0.175 | +0.162 ± 0.155 | 24 |
 | fNS | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "scouts": 2}` | 24 | 10 | 7 | 0.549 ± 0.178 | +0.006 ± 0.208 | 0.536 ± 0.177 | +0.209 ± 0.187 | 24 |
-| fND | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "townDefenceValue": 40000}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| fND | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "townDefenceValue": 40000}` | 24 | 8 | 8 | 0.436 ± 0.176 | -0.107 ± 0.222 | 0.375 ± 0.183 | +0.049 ± 0.202 | 24 |
 | fNDSR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "townDefenceValue": 40000, "scouts": 2, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
