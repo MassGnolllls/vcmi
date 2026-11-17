@@ -527,6 +527,10 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 		return std::max(params.maxTravelTurns, 30);
 	// the main hero looks further than a few days (mainHorizon): a guard that bars the way out of our
 	// corner of the map may stand a week's march from where the hero happens to be
+	// (townWorth) the main hero goes for foreign towns on any day: as on campaign they may lie weeks
+	// away (everything else counts only as far as before - see collectTargets)
+	if(isMain(hero) && params.townWorth)
+		return std::max(params.maxTravelTurns, 30);
 	if(isMain(hero) && params.mainHorizon > params.maxTravelTurns)
 		return params.mainHorizon;
 	if(supply && supply->courier == hero->id)
@@ -5026,6 +5030,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			const bool foreignHero = object.type == Obj::HERO && object.owner != me;
 			const bool foreignTown = object.type == Obj::TOWN && object.owner != me;
+			// (townWorth) off campaign the main hero's long view is for foreign towns: a mine, a hero
+			// or a town of ours counts as far away as it did before
+			if(params.townWorth && isMain(hero) && !campaign(hero) && !foreignTown
+				&& node->turns > std::max(params.maxTravelTurns, params.mainHorizon))
+			{
+				++rejected["far"];
+				continue;
+			}
 			// An enemy hero further off than today's march will not be there when we arrive: no chase
 			// (one standing in a town is that town's defender - the town is the target)
 			if((params.noChase == 1 || (params.noChase == 2 && campaign(hero))) && foreignHero && node->turns > 0)
@@ -5204,7 +5216,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			seek.push_back({object.visitablePos.z, value, fogDistances(object.visitablePos)});
 		}
-		else if(campaign(hero) && object.type == Obj::TOWN && isEnemy(object.owner) && object.visitablePos.z == heroPos.z)
+		else if((campaign(hero) || (params.townWorth && isMain(hero))) && object.type == Obj::TOWN && isEnemy(object.owner) && object.visitablePos.z == heroPos.z)
 		{
 			// an enemy town we know of but cannot find a way to (the land around it is hidden, or the
 			// way leads around something): exploring is drawn towards it
