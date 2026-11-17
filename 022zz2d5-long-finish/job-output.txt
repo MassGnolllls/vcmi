@@ -300,3 +300,42 @@ match   13 FairAI as blue of 2: victory winner=red day=140 score=0.00 [261.0s]
 match   15 FairAI as blue of 2: timeout winner= day=151 score=0.39 [264.5s]
 match   16 FairAI as red of 2: timeout winner= day=151 score=0.88 [273.3s]
 match   18 FairAI as red of 2: victory winner=red day=83 score=1.00 [131.5s]
+match   19 FairAI as blue of 2: victory winner=blue day=129 score=1.00 [238.4s]
+match   20 FairAI as red of 2: victory winner=red day=126 score=1.00 [203.0s]
+match   23 FairAI as blue of 2: victory winner=blue day=92 score=1.00 [168.7s]
+match   21 FairAI as blue of 2: victory winner=red day=148 score=0.00 [248.7s]
+match   22 FairAI as red of 2: victory winner=blue day=127 score=0.00 [258.6s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 15 -> FairAI won 12, lost 3  (win rate 80%, 95% CI 55%-93%)
+- day limit reached: 9 (material lead for FairAI in 6)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 114 days
+- cheat flags raised: 0
+# A/B test (9 configs, seeds 42)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 24 | 0 | 7 | 0.543 ± 0.146 | - | 0.326 ± 0.093 | - | 24 |
+| f0 | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2}` | 24 | 5 | 3 | 0.523 ± 0.140 | -0.020 ± 0.153 | 0.464 ± 0.144 | +0.138 ± 0.139 | 24 |
+| fSR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "scouts": 2, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 24 | 12 | 5 | 0.633 ± 0.174 | +0.090 ± 0.236 | 0.655 ± 0.172 | +0.328 ± 0.202 | 24 |
+| fDR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "townDefenceValue": 40000, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 23 | 11 | 4 | 0.656 ± 0.157 | +0.119 ± 0.229 | 0.602 ± 0.172 | +0.281 ± 0.201 | 23 |
+| fDS | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "townDefenceValue": 40000, "scouts": 2}` | 24 | 10 | 9 | 0.484 ± 0.191 | -0.058 ± 0.236 | 0.470 ± 0.190 | +0.144 ± 0.209 | 24 |
+| fNR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 24 | 9 | 5 | 0.533 ± 0.163 | -0.010 ± 0.156 | 0.488 ± 0.175 | +0.162 ± 0.155 | 24 |
+| fNS | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "scouts": 2}` | 24 | 10 | 7 | 0.549 ± 0.178 | +0.006 ± 0.208 | 0.536 ± 0.177 | +0.209 ± 0.187 | 24 |
+| fND | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "townDefenceValue": 40000}` | 24 | 8 | 8 | 0.436 ± 0.176 | -0.107 ± 0.222 | 0.375 ± 0.183 | +0.049 ± 0.202 | 24 |
+| fNDSR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "townDefenceValue": 40000, "scouts": 2, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 24 | 12 | 3 | 0.726 ± 0.142 | +0.184 ± 0.236 | 0.661 ± 0.167 | +0.334 ± 0.219 | 24 |
+
+# Matrix test: 6 map categories, configs base, f0, fSR, fDR, fDS, fNR, fNS, fND, fNDSR, seeds 42
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | base (games, score, decided) | f0 (games, score, decided) | fSR (games, score, decided) | fDR (games, score, decided) | fDS (games, score, decided) | fNR (games, score, decided) | fNS (games, score, decided) | fND (games, score, decided) | fNDSR (games, score, decided) | f0 − base | fSR − base | fDR − base | fDS − base | fNR − base | fNS − base | fND − base | fNDSR − base |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-land-2p | 24, 0.543 ± 0.146, 0 won 7 lost | 24, 0.523 ± 0.140, 5 won 3 lost | 24, 0.633 ± 0.174, 12 won 5 lost | 23, 0.656 ± 0.157, 11 won 4 lost | 24, 0.484 ± 0.191, 10 won 9 lost | 24, 0.533 ± 0.163, 9 won 5 lost | 24, 0.549 ± 0.178, 10 won 7 lost | 24, 0.436 ± 0.176, 8 won 9 lost | 24, 0.726 ± 0.142, 12 won 3 lost | -0.020 ± 0.153 (24) | +0.090 ± 0.236 (24) | +0.119 ± 0.229 (23) | -0.058 ± 0.236 (24) | -0.010 ± 0.156 (24) | +0.006 ± 0.208 (24) | -0.107 ± 0.222 (24) | +0.184 ± 0.236 (24) |
+| **mean of categories** | 0.543 | 0.523 | 0.633 | 0.656 | 0.484 | 0.533 | 0.549 | 0.436 | 0.726 | -0.020 (all games: -0.020 ± 0.153) | +0.090 (all games: +0.090 ± 0.236) | +0.119 (all games: +0.119 ± 0.229) | -0.058 (all games: -0.058 ± 0.236) | -0.010 (all games: -0.010 ± 0.156) | +0.006 (all games: +0.006 ± 0.208) | -0.107 (all games: -0.107 ± 0.222) | +0.184 (all games: +0.184 ± 0.236) |
+

@@ -1,0 +1,8 @@
+# Matrix test: 6 map categories, configs base, f0, fSR, fDR, fDS, fNR, fNS, fND, fNDSR, seeds 42
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | base (games, score, decided) | f0 (games, score, decided) | fSR (games, score, decided) | fDR (games, score, decided) | fDS (games, score, decided) | fNR (games, score, decided) | fNS (games, score, decided) | fND (games, score, decided) | fNDSR (games, score, decided) | f0 − base | fSR − base | fDR − base | fDS − base | fNR − base | fNS − base | fND − base | fNDSR − base |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-land-2p | 24, 0.543 ± 0.146, 0 won 7 lost | 24, 0.523 ± 0.140, 5 won 3 lost | 24, 0.633 ± 0.174, 12 won 5 lost | 23, 0.656 ± 0.157, 11 won 4 lost | 24, 0.484 ± 0.191, 10 won 9 lost | 24, 0.533 ± 0.163, 9 won 5 lost | 24, 0.549 ± 0.178, 10 won 7 lost | 24, 0.436 ± 0.176, 8 won 9 lost | 24, 0.726 ± 0.142, 12 won 3 lost | -0.020 ± 0.153 (24) | +0.090 ± 0.236 (24) | +0.119 ± 0.229 (23) | -0.058 ± 0.236 (24) | -0.010 ± 0.156 (24) | +0.006 ± 0.208 (24) | -0.107 ± 0.222 (24) | +0.184 ± 0.236 (24) |
+| **mean of categories** | 0.543 | 0.523 | 0.633 | 0.656 | 0.484 | 0.533 | 0.549 | 0.436 | 0.726 | -0.020 (all games: -0.020 ± 0.153) | +0.090 (all games: +0.090 ± 0.236) | +0.119 (all games: +0.119 ± 0.229) | -0.058 (all games: -0.058 ± 0.236) | -0.010 (all games: -0.010 ± 0.156) | +0.006 (all games: +0.006 ± 0.208) | -0.107 (all games: -0.107 ± 0.222) | +0.184 (all games: +0.184 ± 0.236) |
