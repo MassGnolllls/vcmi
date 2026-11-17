@@ -1,0 +1,22 @@
+{
+ "note": "Who wins the games that are undecided on day 150? The same twelve medium land maps, both seats, with a day limit of 300: the standard, and the standard with townWorth and the campaign from twice the strongest enemy hero. In 549 long games 38 % stood undecided on day 150 - three towns against four, armies level, the enemy's income higher, our garrisons full. The target is games won, not games not lost: this shows how many of the undecided ones are won or lost in the end. Read the timeline for the state on day 150 (arena/timeline.py, arena/metrics.py).",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long300.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "59",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"new\": {}, \"nTE\": {\"townWorth\": 1, \"campaignEdge\": 2.0}}"
+ ],
+ "jobs": 6
+}

@@ -1,0 +1,20 @@
+{
+ "pool": "long1",
+ "mods": "",
+ "note": "the medium land maps of matrix_long.json with a day limit of 300 instead of 150: who wins the games that are undecided on day 150?",
+ "categories": [
+  {
+   "name": "m-land-2p",
+   "template": "Skirmish M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 12,
+   "seed": 41200,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  }
+ ]
+}
