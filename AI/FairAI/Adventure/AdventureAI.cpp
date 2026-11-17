@@ -3005,6 +3005,19 @@ double AdventureAI::heroFactor(const ObservedObject & hero) const
 	return factor;
 }
 
+std::string AdventureAI::describeEstimate(HeroTypeID hero) const
+{
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type != Obj::HERO || object.subtype.getNum() != hero.getNum() || !object.army)
+			continue;
+		const auto skills = heroSkillsEstimate(object);
+		return boost::str(boost::format("estimated army %.0f (seen day %d), attack %.1f defence %.1f power %.1f knowledge %.1f, hero factor %.2f")
+			% observedDanger(object) % object.lastSeenDay % skills[0] % skills[1] % skills[2] % skills[3] % heroFactor(object));
+	}
+	return "never seen on the map";
+}
+
 double AdventureAI::magicWorthOf(const HeroIntel & intel, const std::array<double, 4> & skills) const
 {
 	// Measured in staged battles against BattleAI, the combat AI of Nullkiller2 (arena/magic_calib.py):

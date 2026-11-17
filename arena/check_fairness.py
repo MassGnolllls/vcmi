@@ -15,6 +15,9 @@ Rules
   3. Never: what a particular building on the map holds (its rolled rewards and guards).
      FairAI knows the table of its kind - what such a building can hold and how often -
      and the guards only once the game lists them.
+  4. A hero's window may be built from the hero itself only as the battle window builds it
+     (initFromHero with EInfoLevel::INBATTLE: primary skills, morale, luck, spell points of
+     both heroes of a battle, as the game's interface shows them) - no other level, anywhere.
 
 Exit code 0 = clean, 1 = violations found.
 """
@@ -37,6 +40,8 @@ FORBIDDEN_EVERYWHERE = {
     r"\bfogOfWarMap\b": "raw fog-of-war data (use Perception)",
     r"(\.|->)\s*configuration\b": "what a particular building holds (only the public table of its kind may be used)",
     r"\bgetAvailableRewards\s*\(": "the rewards a particular building holds",
+    r"\binitFromHero\s*\((?![^;]*EInfoLevel::INBATTLE)": "a hero's window built from the hero itself: only as the battle window shows it (INBATTLE)",
+    r"\bInfoAboutHero\s*\(\s*\w+\s*,": "a hero's window built from the hero itself (use initFromHero with INBATTLE in a battle)",
 }
 
 ONLY_IN_PERCEPTION = {

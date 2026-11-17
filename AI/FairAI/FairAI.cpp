@@ -404,9 +404,20 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 		battleEnemyHero = enemyHero ? enemyHero->getHeroTypeID().getNum() : -1;
 		if(enemyHero && adventure)
 		{
-			const InfoAboutHero shown = battle->battleGetHeroInfo(side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER);
+			// What the battle window shows of either hero - primary skills, morale, luck, spell points -
+			// built the way the game's own interface builds it (client/battle/BattleHero.cpp). The
+			// callback's battleGetHeroInfo hands out the bare name for the enemy's hero, so until
+			// 17.11.2026 nothing was ever remembered here.
+			InfoAboutHero shown;
+			shown.initFromHero(enemyHero, InfoAboutHero::EInfoLevel::INBATTLE);
 			if(shown.details && shown.details->primskills.size() >= 4)
+			{
+				// calibration (log only): what we took this hero for, against what the battle shows of it
+				logAi->info("FairAI %s calibration: enemy hero %s shows attack %d defence %d power %d knowledge %d, army %llu; we had: %s", playerID.toString(),
+					enemyHero->getNameTranslated(), shown.details->primskills[0], shown.details->primskills[1], shown.details->primskills[2], shown.details->primskills[3],
+					static_cast<unsigned long long>(battleEnemyStrength), adventure->describeEstimate(enemyHero->getHeroTypeID()));
 				adventure->noteHeroSkills(enemyHero->getHeroTypeID(), {shown.details->primskills[0], shown.details->primskills[1], shown.details->primskills[2], shown.details->primskills[3]});
+			}
 		}
 		if(const auto * town = battle->battleGetDefendedTown(); town && town->fortLevel() > CGTownInstance::NONE)
 			logAi->info("FairAI %s battle is a siege of %s (fort level %d)", playerID.toString(), town->getNameTranslated(), static_cast<int>(town->fortLevel()));

@@ -151,6 +151,8 @@ public:
 	/// The game showed us a hero's primary skills (attack, defence, spell power, knowledge): in a
 	/// battle against it or in our thieves' guild. Remembered with the day.
 	void noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills);
+	/// (log only) what we took an enemy hero for before a battle shows it: army and hero factor as estimated
+	std::string describeEstimate(HeroTypeID hero) const;
 	/// a battle against an enemy hero is over: what we know of its army is what the battle left of it
 	void noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos);
 	/// (fortress) the strength of an enemy army seen near us lately that outmatches this hero (0: none)
