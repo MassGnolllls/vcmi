@@ -2779,6 +2779,38 @@ void AdventureAI::updateThreats()
 		if(townsKnown[color] < expected)
 			huntWanted = true;
 	}
+	// Test hook for the arena (FAI_TEST_PURSUER=<day>): from that day on, whenever a Sanctuary lies
+	// within today's march of the main hero, an army five times its strength stands next to it. Rare
+	// situations cannot be checked by counting wins; this one is staged and read in the log.
+	if(const char * test = std::getenv("FAI_TEST_PURSUER"))
+	{
+		const CGHeroInstance * leader = ownHero(mainHero);
+		if(leader && today >= std::atoi(test) && !sanctuaries.empty())
+		{
+			auto paths = computePaths(leader, false);
+			bool townToday = false; // a town of ours within today's march is the better shelter: not the case to stage
+			for(const auto * town : perception.ownTowns())
+			{
+				const CGPathNode * home = paths->getPathInfo(town->visitablePos());
+				townToday = townToday || (home && home->reachable() && home->turns == 0);
+			}
+			for(const int3 & tile : sanctuaries)
+			{
+				const CGPathNode * node = paths->getPathInfo(tile);
+				if(townToday || !node || !node->reachable() || node->turns > 0)
+					continue;
+				Threat staged;
+				staged.pos = leader->visitablePos();
+				staged.strength = 5.0 * fieldStrength(leader) + 1000;
+				staged.radius = 40;
+				staged.hero = ObjectInstanceID(1000000); // nobody's: a threat without a hero is skipped
+				threats.push_back(staged);
+				logAi->info("FairAI %s day %d: TEST a pursuer of %.0f stands next to %s at %s; Sanctuary at %s is %.2f days away", me.toString(), today,
+					staged.strength, leader->getNameTranslated(), staged.pos.toString(), tile.toString(), node->cost);
+				break;
+			}
+		}
+	}
 }
 
 void AdventureAI::noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills)

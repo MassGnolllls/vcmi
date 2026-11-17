@@ -93,7 +93,7 @@ Letzte Änderung: 17.11.2026
 |---|---|---|---|
 | G1 | **Kein Gebäude wird pauschal ignoriert.** Jedes wird nach seinem Nutzen in der aktuellen Lage bewertet. | 17.11. | im Test (Schalter `tables` und `sites`) |
 | G2 | Beispiele aus dem Spiel der Profis: früh Wyvern aus dem Dragon Fly Hive, Engel aus dem Griffin Conservatory, Naga-Banken und ähnliche Gebäude früh räumen. | 17.11. | im Test (`tables` = 2: Kreaturenbanken mit simuliertem Kampf) |
-| G3 | **In Betracht ziehen heißt nicht besuchen.** Beispiel Sanctuary: Ist weit und breit kein Gegner, wäre der Weg dorthin verschwendet. Flieht man aber vor einem Helden, der einen in der nächsten Runde einholen würde, ist es auf einmal wertvoll – und man kann dort bleiben. | 17.11. | erfüllt (17.11.: Zuflucht nur bei Bedrohung, sonst Wert null) – Prüfung in einer Partie steht aus |
+| G3 | **In Betracht ziehen heißt nicht besuchen.** Beispiel Sanctuary: Ist weit und breit kein Gegner, wäre der Weg dorthin verschwendet. Flieht man aber vor einem Helden, der einen in der nächsten Runde einholen würde, ist es auf einmal wertvoll – und man kann dort bleiben. | 17.11. | erfüllt (17.11.: Zuflucht nur bei Bedrohung, sonst Wert null; in einer gestellten Lage geprüft: Verfolger mit fünffacher Stärke, keine eigene Stadt in Tagesreichweite – der Held geht ins Sanctuary und beendet dort den Tag) |
 | G4 | Beispiel **Schwanenteich:** Der Glücksbonus steht in keinem Verhältnis dazu, alle Bewegungspunkte des Tages zu verlieren. Kann man aber nur noch 1–2 Felder weit reiten, ist ein Teich in Reichweite und sonst nichts Wichtiges, kann man es andenken. | 17.11. | erfüllt (17.11.: Der verlorene Rest des Tages zählt als Reisezeit; Glück nach Größe der Armee) |
 
 ## Gegner einschätzen
