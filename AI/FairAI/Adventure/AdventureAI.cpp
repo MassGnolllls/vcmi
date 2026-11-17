@@ -281,6 +281,7 @@ void Params::loadOverrides(int playerIndex)
 	read("simAfterHit", simAfterHit);
 	read("manaShare", manaShare);
 	read("spellForecast", spellForecast);
+	read("magicWorth", magicWorth);
 	read("battlePlan", battlePlan);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
@@ -626,9 +627,17 @@ void AdventureAI::playTurn()
 				towns += boost::str(boost::format(" %s%s%s") % (object.owner.isValidPlayer() ? object.owner.toString() : std::string("neutral"))
 					% object.visitablePos.toString() % (object.visibleNow ? "" : boost::str(boost::format("(seen day %d)") % object.lastSeenDay)));
 		}
-		logAi->debug("FairAI %s day %d: foreign towns known:%s; towns unfound %s; opposition heroes %.0f, guards %.0f; main hero strength %.0f, campaign %s",
-			me.toString(), today, towns.empty() ? " none" : towns, huntWanted ? "yes" : "no", oppositionHeroes, oppositionGuards,
-			main ? static_cast<double>(main->getTotalStrength()) : 0.0, campaignMode ? "on" : "off");
+		// what the strongest enemy hero is made of: the army as shown, the factor we give its hero, the days since
+		std::string strongest;
+		if(auto seen = enemySightings.find(oppositionHero); seen != enemySightings.end())
+		{
+			const HeroTypeID type(oppositionHero);
+			strongest = boost::str(boost::format(" (%s, seen %d days ago: army %.0f x hero %.2f x %.2f for the days since)") % (type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?"))
+				% (today - seen->second.day) % seen->second.army % seen->second.factor % (1.0 + 0.03 * (today - seen->second.day)));
+		}
+		logAi->debug("FairAI %s day %d: foreign towns known:%s; towns unfound %s; opposition heroes %.0f%s, guards %.0f; main hero strength %.0f (army %.0f, in the field %.0f), campaign %s",
+			me.toString(), today, towns.empty() ? " none" : towns, huntWanted ? "yes" : "no", oppositionHeroes, strongest, oppositionGuards,
+			main ? static_cast<double>(main->getTotalStrength()) : 0.0, main ? static_cast<double>(main->getArmyStrength()) : 0.0, main ? fieldStrength(main) : 0.0, campaignMode ? "on" : "off");
 	}
 	if(main && logAi->isDebugEnabled() && today % 7 == 0)
 	{
@@ -2676,7 +2685,7 @@ void AdventureAI::updateThreats()
 		const double factor = heroFactor(object);
 		t.strength = observedDanger(object) * factor * (1.0 + params.threatGrowth * age);
 		if(age == 0)
-			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor, object.visitablePos};
+			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor, object.visitablePos, observedDanger(object), factor};
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
@@ -2684,10 +2693,14 @@ void AdventureAI::updateThreats()
 	}
 	// the opposition we know of: enemy heroes seen in the last three weeks (they grow meanwhile), guards on the map
 	oppositionHeroes = 0;
+	oppositionHero = -1;
 	for(const auto & [type, seen] : enemySightings)
 	{
-		if(today - seen.day <= 21)
-			oppositionHeroes = std::max(oppositionHeroes, seen.strength * (1.0 + 0.03 * (today - seen.day)));
+		if(today - seen.day <= 21 && seen.strength * (1.0 + 0.03 * (today - seen.day)) > oppositionHeroes)
+		{
+			oppositionHeroes = seen.strength * (1.0 + 0.03 * (today - seen.day));
+			oppositionHero = type;
+		}
 	}
 	hiddenMain = 0;
 	for(const auto & [type, seen] : enemySightings)
@@ -2984,9 +2997,61 @@ double AdventureAI::heroFactor(const ObservedObject & hero) const
 		std::unique_lock lock(intelMutex);
 		auto known = heroIntel.find(hero.subtype.getNum());
 		if(known != heroIntel.end())
-			factor *= known->second.magic;
+			factor *= params.magicWorth ? magicWorthOf(known->second, skills) : known->second.magic;
 	}
 	return factor;
+}
+
+double AdventureAI::magicWorthOf(const HeroIntel & intel, const std::array<double, 4> & skills) const
+{
+	// Measured in staged battles against BattleAI, the combat AI of Nullkiller2 (arena/magic_calib.py):
+	// by how much our army must grow to keep winning half of the battles when the enemy hero has the
+	// spell. Spells on a whole army count for little, damage for what it takes off our army.
+	double worth = 1.0;
+	if(intel.massSpeed || intel.massOther)
+		worth = 1.05;
+	if(intel.raises)
+		worth = std::max(worth, 1.15);
+	if(intel.blinds)
+		worth = std::max(worth, 1.2);
+	if(!intel.damageSpells.empty())
+	{
+		// the damage it can cast in a battle - its best spell we know of, at the power and with the
+		// spell points we estimate, five rounds at most - against the health of our main army
+		const int power = std::max(1, static_cast<int>(std::lround(skills[2])));
+		const double mana = 10.0 * std::max(1.0, skills[3]);
+		double damage = 0;
+		for(int id : intel.damageSpells)
+		{
+			const CSpell * spell = SpellID(id).toSpell();
+			if(!spell)
+				continue;
+			const auto & info = spell->getLevelInfo(1);
+			double perCast = static_cast<double>(spell->calculateRawEffectValue(1, power, 1));
+			// a chain goes on at half strength each time, a blast or a whole-field spell hits about two stacks
+			for(const auto & [name, node] : info.battleEffects.Struct())
+			{
+				if(node["chainLength"].Integer() > 1)
+					perCast *= 1.9;
+			}
+			if(info.range.empty() || info.range.size() > 1)
+				perCast *= 1.5;
+			const int cost = std::max(1, spell->getCost(1));
+			damage = std::max(damage, perCast * std::min(5.0, std::floor(mana / cost)));
+		}
+		double health = 0;
+		if(const CGHeroInstance * leader = ownHero(mainHero))
+		{
+			for(const auto & [slot, stack] : leader->Slots())
+			{
+				if(stack && stack->getCreature())
+					health += static_cast<double>(stack->getCount()) * stack->getCreature()->getMaxHealth();
+			}
+		}
+		if(health > 0)
+			worth = std::max(worth, 1.0 + 0.7 * std::min(1.0, damage / health));
+	}
+	return worth;
 }
 
 void AdventureAI::noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos)
@@ -3029,10 +3094,20 @@ void AdventureAI::noteHeroSpell(HeroTypeID hero, SpellID spell, int affected)
 {
 	if(!hero.hasValue() || !spell.hasValue())
 		return;
-	if(const auto * info = spell.toSpell(); info && info->isDamage())
 	{
 		std::unique_lock lock(intelMutex);
-		heroIntel[hero.getNum()].damageSpells.insert(spell.getNum());
+		HeroIntel & seen = heroIntel[hero.getNum()];
+		const auto * info = spell.toSpell();
+		if(info && info->isDamage())
+			seen.damageSpells.insert(spell.getNum());
+		else if(spell == SpellID::BLIND)
+			seen.blinds = true;
+		else if(spell == SpellID::RESURRECTION || spell == SpellID::ANIMATE_DEAD)
+			seen.raises = true;
+		else if(affected >= 4 && (spell == SpellID::SLOW || spell == SpellID::HASTE))
+			seen.massSpeed = true;
+		else if(affected >= 4)
+			seen.massOther = true;
 	}
 	double magic = 1.0;
 	if(spell == SpellID::SLOW || spell == SpellID::HASTE)

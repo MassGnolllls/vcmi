@@ -298,7 +298,14 @@ private:
 		std::array<double, 4> skills{}; ///< attack, defence, spell power, knowledge
 		double magic = 1.0; ///< what the spells we saw it cast add to its strength (noteHeroSpell)
 		std::set<int> damageSpells; ///< the damage spells we saw it cast: a forecast plays them against us (spellForecast)
+		// what else we saw it cast (magicWorth): spells on a whole army, blinding, raising the dead
+		bool massSpeed = false;
+		bool massOther = false;
+		bool blinds = false;
+		bool raises = false;
 	};
+	/// (magicWorth) what the magic we saw of an enemy hero adds to its army, by measurement
+	double magicWorthOf(const HeroIntel & intel, const std::array<double, 4> & skills) const;
 	std::map<int, HeroIntel> heroIntel; ///< hero type -> primary skills the game showed us, and when
 	mutable std::mutex intelMutex;
 	struct Sighting
@@ -306,7 +313,10 @@ private:
 		int day = -1;
 		double strength = 0; ///< army as shown, times the hero factor
 		int3 pos = int3(-1, -1, -1); ///< where
+		double army = 0;     ///< (for the log) the army as shown ...
+		double factor = 0;   ///< ... and the hero factor we gave it
 	};
+	int oppositionHero = -1; ///< the hero type behind oppositionHeroes (for the log)
 	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
 	/// what a battle against an enemy hero left of it (reported by the battle thread, applied in updateThreats)
 	struct BattleOutcome
