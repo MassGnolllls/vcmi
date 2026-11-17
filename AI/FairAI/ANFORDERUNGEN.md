@@ -31,7 +31,7 @@ Letzte Änderung: 17.11.2026
 
 | Nr. | Anforderung | Seit | Stand |
 |---|---|---|---|
-| Z1 | **Zielmarke:** mindestens 95 % aller Partien gegen die Standard-KI gewinnen, möglichst auch 95 % gegen Nullkiller2 mit der Kampf-KI MMAI. | 17.11. | offen (mittlere Landkarten: rund 45 % Siege, 20 % Niederlagen, Rest offen nach 150 Tagen) |
+| Z1 | **Zielmarke:** mindestens 95 % aller Partien gegen die Standard-KI gewinnen, möglichst auch 95 % gegen Nullkiller2 mit der Kampf-KI MMAI. | 17.11. | offen (mittlere Landkarten, beste Einstellungen: 56 % Siege, 16 % Niederlagen, 28 % offen nach 150 Tagen) |
 | Z2 | Alle gewöhnlichen Karten mit dem Ziel „alle Gegner besiegen": winzig bis riesig, Land und Inseln, auch brandneue Zufallskarten. Keine Spezialkarten mit Sonder-Siegbedingung (z. B. Lex) – die kommen danach. | 16.11. | teilweise (läuft überall; gemessen und gut nur auf kleinen und mittleren Landkarten) |
 | Z3 | 1 gegen 1, jeder gegen jeden, mehrere Gegner, Teams. **Verbündete korrekt erkennen.** | 16.11. | teilweise (Verbündete sind keine Ziele; Zusammenspiel im Team fehlt) |
 | Z4 | **Alle Fraktionen einschließlich HotA**: Cove, Factory, Bulwark. | 16.11. | teilweise (alle zwölf spielen ohne Absturz; Stärke je Fraktion sehr verschieden) |
@@ -49,7 +49,7 @@ Letzte Änderung: 17.11.2026
 | K6 | **Tempo:** Wer hat den ersten Zug? Ziehen alle eigenen Einheiten rechtzeitig, damit der Plan aufgeht? | 17.11. | teilweise (Zugreihenfolge im Simulator; kein Plan über mehrere Einheiten) |
 | K7 | **Taktik:** nutzen – und einrechnen, dass der Gegner sie auch haben kann und dann schneller ist. | 17.11. | offen (Aufstellungsphase wird sofort beendet) |
 | K8 | Wirksamkeit der eigenen Armee **gegen die konkrete gegnerische Armee** beurteilen, nicht nur Zahlen vergleichen. | 17.11. | teilweise (Heldenkämpfe nach Armeewert mal Heldenwert; Simulation als Schalter) |
-| K9 | Belagerungen selbst spielen. | 16.11. | offen |
+| K9 | Belagerungen selbst spielen. | 16.11. | offen (17.11. gemessen: Belagerungen kosten die Hauptarmee 88.000 pro Partie; rund 70 % der Verluste machen die Türme, und Läuferarmeen brauchen 7 bis 13 Runden statt 2 bis 3 mit vielen Fliegern, weil sie auf das Katapult warten) |
 | K10 | **Ausnahmen der Fähigkeiten kennen.** Beispiel: Der Lebensraub der Vampirfürsten wirkt nicht gegen Elementare und andere nicht-lebende Kreaturen. | 17.11. | teilweise (im Kampfsimulator erfüllt: Lebensraub nur aus Schaden an Lebenden nach der Regel des Spiels – keine Untoten, Elementare, Golems, Gargoyles, Maschinen. Die Gargoyles fehlten bis 17.11. in dieser Ausnahme und sind nachgetragen. Im Einheiten-Labor geprüft: Vampirfürsten heilen gegen Oger wie vorhergesagt, gegen Erdelementare und Obsidian-Gargoyles gar nicht. Die Entscheidung vor dem Kampf nutzt den Simulator für Kartenwachen noch nicht im Standard, siehe K4) |
 
 ## Armeezusammenstellung
@@ -102,7 +102,7 @@ Letzte Änderung: 17.11.2026
 | Nr. | Anforderung | Seit | Stand |
 |---|---|---|---|
 | E1 | **Laufwege und Reichweite gegnerischer Helden berechnen:** Wer kann mich oder meine Städte wann erreichen, wen kann ich abfangen? | 16.11. | teilweise (Bedrohung über begehbares Land; ohne Stadtportal, Portale, ungesehene Helden) |
-| E2 | Gegnerische Helden nach allem einschätzen, was ein Mensch sehen kann (Kämpfe, Diebesgilde, Klasse, Spezialität, gezeigte Zauber). | 16.11. | erfüllt (Standard seit 17.11.) |
+| E2 | Gegnerische Helden nach allem einschätzen, was ein Mensch sehen kann (Kämpfe, Diebesgilde, Klasse, Spezialität, gezeigte Zauber). | 16.11. | teilweise (Stärke aus Kämpfen, Diebesgilde, Klasse, Spezialität und gezeigten Zaubern ist Standard. 17.11.: Der Wert gezeigter Zauber war geschätzt und viel zu hoch – Massen-Verlangsamen zählte 1,6-fach, gemessen sind 1,05. Die gemessenen Werte aus 1.344 gestellten Kämpfen sind im Test: Schalter `magicWorth`) |
 
 ## Strategie
 
@@ -110,6 +110,8 @@ Letzte Änderung: 17.11.2026
 |---|---|---|---|
 | S1 | **Strategien erfahrener Spieler** kennen und anwenden (Unterlage `homm3-profi-strategien.md` im Projekt). | 16.11. | teilweise |
 | S2 | Früh ausbrechen und ausbreiten wie ein guter Spieler (Grenzwachen, zweite und dritte Stadt). | 17.11. (eigener Befund) | im Test (Schalter `passage` mit `regionValue`) |
+| S3 | **Keine Armeen verschenken.** Wer angreift, gewinnt: FairAI gewinnt jeden Kampf, den es beginnt, und verliert 98 % derer, in die es gezogen wird. Nebenhelden mit echter Armee dürfen nicht im Freien stehen; Garnisonen, die nicht halten können, sind Futter. | 17.11. (eigener Befund) | im Test (Schalter `safeParts`: Nebenhelden mit mehr als 15.000 Truppen beenden jeden Tag in einer eigenen Stadt oder beim Haupthelden; Kurier startet nur, wenn er am selben Tag ankommt. Garnisonen ohne Held: offen) |
+| S4 | **Überlegenheit in einen Sieg verwandeln.** In offenen Partien ist die eigene Hauptarmee an zwei von drei Tagen mindestens 1,5-mal so groß wie die gegnerische, und die Hälfte der eigenen Truppen liegt in Garnisonen. | 17.11. (eigener Befund) | teilweise im Test (`refillShare`: Hauptheld holt die Truppen; `magicWorth`: Gegner nicht überschätzen). Offen: gegnerische Hauptarmee stellen, eroberte Städte halten, zweite starke Armee |
 
 ---
 
