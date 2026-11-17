@@ -286,6 +286,7 @@ void Params::loadOverrides(int playerIndex)
 	read("townWorth", townWorth);
 	read("secondArmy", secondArmy);
 	read("townHeroes", townHeroes);
+	read("townKeep", townKeep);
 	read("lastTowns", lastTowns);
 	read("heroLossPause", heroLossPause);
 	read("evacuateRatio", evacuateRatio);
@@ -4618,7 +4619,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			if(params.townGuard && !onTrip)
 			{
 				// the town cannot hold on its own against what can reach it: the main hero should stand guard
-				value += params.townDefenceValue * townNeed(town, hero);
+				value += (params.townKeep ? 2.0 * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0) : params.townDefenceValue) * townNeed(town, hero);
 			}
 			else if(enemySeenNear(town->visitablePos(), 3, 20))
 				value += 2500; // enemies seen near the town: the main hero should stand guard
