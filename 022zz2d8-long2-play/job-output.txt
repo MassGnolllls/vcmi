@@ -91,3 +91,35 @@ match   16 FairAI as red of 2: victory winner=red day=127 score=1.00 [234.4s]
 match   18 FairAI as red of 2: victory winner=red day=111 score=1.00 [173.4s]
 match   17 FairAI as blue of 2: timeout winner= day=151 score=0.46 [263.2s]
 match   19 FairAI as blue of 2: victory winner=red day=112 score=0.00 [201.0s]
+match   22 FairAI as red of 2: timeout winner= day=151 score=0.55 [292.3s]
+match   21 FairAI as blue of 2: timeout winner= day=151 score=0.73 [311.9s]
+match   20 FairAI as red of 2: timeout winner= day=151 score=0.30 [414.5s]
+match   23 FairAI as blue of 2: victory winner=red day=130 score=0.00 [295.1s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 13 -> FairAI won 9, lost 4  (win rate 69%, 95% CI 42%-87%)
+- day limit reached: 11 (material lead for FairAI in 8)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 122 days
+- cheat flags raised: 0
+# A/B test (3 configs, seeds 42)
+
+Paired against `old`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| old | `{"leaderFocus": 0, "campaignEdge": 2.0, "heroModel": 0, "noChase": 0, "garrisonRoom": 0, "collectorsTakeGarrison": 1}` | 24 | 1 | 6 | 0.450 ± 0.142 | - | 0.280 ± 0.100 | - | 24 |
+| new | `{}` | 24 | 8 | 6 | 0.491 ± 0.170 | +0.041 ± 0.188 | 0.482 ± 0.184 | +0.202 ± 0.203 | 24 |
+| newS | `{"scouts": 2}` | 24 | 9 | 4 | 0.625 ± 0.153 | +0.176 ± 0.166 | 0.681 ± 0.154 | +0.401 ± 0.158 | 24 |
+
+# Matrix test: 1 map categories, configs old, new, newS, seeds 42
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | old (games, score, decided) | new (games, score, decided) | newS (games, score, decided) | new − old | newS − old |
+|---|---|---|---|---|---|
+| m-land-2p-all | 24, 0.450 ± 0.142, 1 won 6 lost | 24, 0.491 ± 0.170, 8 won 6 lost | 24, 0.625 ± 0.153, 9 won 4 lost | +0.041 ± 0.188 (24) | +0.176 ± 0.166 (24) |
+| **mean of categories** | 0.450 | 0.491 | 0.625 | +0.041 (all games: +0.041 ± 0.188) | +0.176 (all games: +0.176 ± 0.166) |
+
