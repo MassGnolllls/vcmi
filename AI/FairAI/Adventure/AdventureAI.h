@@ -387,6 +387,32 @@ private:
 	/// army value the hero really gains from creatures handed to it: a stack of the same kind, a free
 	/// slot, or a weaker stack to send away
 	double armyGain(const CGHeroInstance * hero, const std::vector<CStackBasicDescriptor> & creatures) const;
+	// ---- armies as they fight (parameter armyFit)
+	struct FitStack
+	{
+		CreatureID kind;
+		double value = 0;
+		int slot = -1;
+	};
+	struct FitMove
+	{
+		int take = -1;   ///< index into the offered stacks
+		int drop = -1;   ///< index into the army's stacks that leaves for it (-1: a free slot)
+		double gain = 0; ///< what the army gains in worth
+	};
+	/// expected turns of a troop with this morale against one without (the game's dice)
+	double turnShare(int morale) const;
+	mutable std::array<double, 13> turnTable{};
+	mutable bool turnTableReady = false;
+	/// morale every troop of this hero has from the hero itself - all but the part that follows from the mix of its army
+	int sharedMorale(const CGHeroInstance * hero) const;
+	/// an army's worth as it fights: AI value of each kind times the turns its morale gives it; the
+	/// mix sets the morale all share (one faction +1, each further one -1, undead among them -1)
+	double armyWorth(int shared, const std::vector<std::pair<CreatureID, double>> & kinds) const;
+	/// share of its face value that a troop of this kind really adds to the hero's army (1 without armyFit; can be negative)
+	double fitShare(const CGHeroInstance * hero, CreatureID kind, double value) const;
+	/// the next stack worth taking over, and which one leaves for it when the army is full; false: none
+	bool fitMove(int shared, const std::vector<FitStack> & have, const std::vector<FitStack> & offer, bool full, FitMove & move) const;
 	/// tiles we have not seen that a building would reveal
 	double unexploredAround(const int3 & where, const Rewardable::RewardRevealTiles & reveal) const;
 	/// a creature bank or another guarded building (and tables = 2)

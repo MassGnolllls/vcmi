@@ -271,6 +271,7 @@ void Params::loadOverrides(int playerIndex)
 	read("artifactCare", artifactCare);
 	read("tables", tables);
 	read("sites", sites);
+	read("armyFit", armyFit);
 	read("idleRho", idleRho);
 	read("idleReserve", idleReserve);
 	read("manaValueMain", manaValueMain);
@@ -1789,6 +1790,127 @@ double AdventureAI::artifactPickupValue(const CGHeroInstance * hero, ArtifactID 
 	return main ? value : 0.8 * value;
 }
 
+// ======================================================================= armies as they fight
+
+double AdventureAI::turnShare(int morale) const
+{
+	if(!turnTableReady)
+	{
+		// the game's dice: good morale gives a second action, bad morale takes the action away
+		const auto & rules = cb->getSettings();
+		const double dice = std::max<int64_t>(1, rules.getInteger(EGameSettings::COMBAT_MORALE_DICE_SIZE));
+		const std::vector<int> good = rules.getVector(EGameSettings::COMBAT_GOOD_MORALE_CHANCE);
+		const std::vector<int> bad = rules.getVector(EGameSettings::COMBAT_BAD_MORALE_CHANCE);
+		for(int m = -6; m <= 6; ++m)
+		{
+			double share = 1.0;
+			if(m > 0 && !good.empty())
+				share += good[std::min<size_t>(m, good.size()) - 1] / dice;
+			if(m < 0 && !bad.empty())
+				share -= bad[std::min<size_t>(-m, bad.size()) - 1] / dice;
+			turnTable[m + 6] = share;
+		}
+		turnTableReady = true;
+	}
+	return turnTable[std::clamp(morale, -6, 6) + 6];
+}
+
+int AdventureAI::sharedMorale(const CGHeroInstance * hero) const
+{
+	if(!hero)
+		return 0;
+	// leadership, artifacts, places visited: everything but what the mix of the army adds or takes
+	const int all = hero->valOfBonuses(Selector::type()(BonusType::MORALE));
+	const int mix = hero->valOfBonuses(Selector::type()(BonusType::MORALE).And(Selector::sourceType()(BonusSource::ARMY)));
+	return all - mix;
+}
+
+double AdventureAI::armyWorth(int shared, const std::vector<std::pair<CreatureID, double>> & kinds) const
+{
+	std::set<FactionID> factions;
+	bool undead = false;
+	for(const auto & [kind, value] : kinds)
+	{
+		const CCreature * type = kind.toCreature();
+		if(!type || value <= 0)
+			continue;
+		factions.insert(type->getFactionID());
+		undead = undead || type->hasBonusOfType(BonusType::UNDEAD);
+	}
+	if(factions.empty())
+		return 0;
+	const int mix = (factions.size() == 1 ? 1 : 2 - static_cast<int>(factions.size())) - (undead ? 1 : 0);
+	double worth = 0;
+	for(const auto & [kind, value] : kinds)
+	{
+		const CCreature * type = kind.toCreature();
+		if(!type || value <= 0)
+			continue;
+		// the undead, constructs and machines know no morale
+		const bool unmoved = type->hasBonusOfType(BonusType::UNDEAD) || type->hasBonusOfType(BonusType::NON_LIVING) || type->hasBonusOfType(BonusType::MECHANICAL)
+			|| type->hasBonusOfType(BonusType::SIEGE_WEAPON) || type->hasBonusOfType(BonusType::NO_MORALE);
+		worth += value * (unmoved ? 1.0 : turnShare(shared + mix + type->valOfBonuses(BonusType::MORALE)));
+	}
+	return worth;
+}
+
+double AdventureAI::fitShare(const CGHeroInstance * hero, CreatureID kind, double value) const
+{
+	if(!params.armyFit || !hero || value <= 0 || !kind.hasValue())
+		return 1.0;
+	std::map<CreatureID, double> army;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(stack && stack->getCreature())
+			army[stack->getCreatureID()] += stackValue(stack.get());
+	}
+	if(army.empty())
+		return 1.0;
+	const int shared = sharedMorale(hero);
+	const double before = armyWorth(shared, {army.begin(), army.end()});
+	army[kind] += value;
+	return (armyWorth(shared, {army.begin(), army.end()}) - before) / value;
+}
+
+bool AdventureAI::fitMove(int shared, const std::vector<FitStack> & have, const std::vector<FitStack> & offer, bool full, FitMove & move) const
+{
+	// worth of the army with one of its stacks left out and one of the offered ones added
+	auto worth = [&](int without, const FitStack * with)
+	{
+		std::map<CreatureID, double> kinds;
+		for(int i = 0; i < static_cast<int>(have.size()); ++i)
+		{
+			if(i != without)
+				kinds[have[i].kind] += have[i].value;
+		}
+		if(with)
+			kinds[with->kind] += with->value;
+		return armyWorth(shared, {kinds.begin(), kinds.end()});
+	};
+	const double now = worth(-1, nullptr);
+	move = FitMove{};
+	for(int i = 0; i < static_cast<int>(offer.size()); ++i)
+	{
+		if(offer[i].value <= 0)
+			continue;
+		if(!full)
+		{
+			const double gain = worth(-1, &offer[i]) - now;
+			if(gain > 0.02 * offer[i].value && gain > move.gain)
+				move = FitMove{i, -1, gain};
+			continue;
+		}
+		for(int j = 0; j < static_cast<int>(have.size()); ++j)
+		{
+			// clearly better than what leaves for it
+			const double gain = worth(j, &offer[i]) - now;
+			if(gain > 0.1 * have[j].value && gain > move.gain)
+				move = FitMove{i, j, gain};
+		}
+	}
+	return move.take >= 0;
+}
+
 double AdventureAI::armyGain(const CGHeroInstance * hero, const std::vector<CStackBasicDescriptor> & creatures) const
 {
 	// the kinds in the army (single creatures split off as bait count with their kind: the game merges them)
@@ -1798,6 +1920,11 @@ double AdventureAI::armyGain(const CGHeroInstance * hero, const std::vector<CSta
 		if(stack && stack->getCreature())
 			army[stack->getCreatureID()] += stackValue(stack.get());
 	}
+	// (armyFit) the army as it fights: newcomers of another faction, or undead among the living, cost morale
+	const bool fit = params.armyFit;
+	const int shared = fit ? sharedMorale(hero) : 0;
+	auto fights = [&](const std::map<CreatureID, double> & kinds) { return armyWorth(shared, {kinds.begin(), kinds.end()}); };
+	const double before = fit ? fights(army) : 0.0;
 	double gain = 0;
 	for(const auto & offered : creatures)
 	{
@@ -1811,8 +1938,36 @@ double AdventureAI::armyGain(const CGHeroInstance * hero, const std::vector<CSta
 		}
 		else if(army.size() < GameConstants::ARMY_SIZE)
 		{
+			if(fit)
+			{
+				// troops that would cost the army more than they add are sent away again
+				auto with = army;
+				with[offered.getId()] = worth;
+				if(fights(with) <= fights(army))
+					continue;
+			}
 			army[offered.getId()] = worth;
 			gain += worth;
+		}
+		else if(fit)
+		{
+			// no room: they take the place of the kind whose leaving helps the army most
+			double best = fights(army);
+			std::map<CreatureID, double> chosen;
+			for(const auto & [kind, value] : army)
+			{
+				auto with = army;
+				with.erase(kind);
+				with[offered.getId()] = worth;
+				const double total = fights(with);
+				if(total > best + 0.1 * value)
+				{
+					best = total;
+					chosen = with;
+				}
+			}
+			if(!chosen.empty())
+				army = chosen;
 		}
 		else
 		{
@@ -1826,7 +1981,7 @@ double AdventureAI::armyGain(const CGHeroInstance * hero, const std::vector<CSta
 			}
 		}
 	}
-	return gain;
+	return fit ? std::max(0.0, fights(army) - before) : gain;
 }
 
 double AdventureAI::unexploredAround(const int3 & where, const Rewardable::RewardRevealTiles & reveal) const
@@ -2264,6 +2419,7 @@ void AdventureAI::onGarrisonDialog(const CArmedInstance * up, const CGHeroInstan
 	if(up->ID == Obj::HERO || up->ID == Obj::TOWN || up->ID == Obj::GARRISON || up->ID == Obj::GARRISON2)
 		return;
 	const uint64_t before = down->getArmyStrength();
+	// (with armyFit only what the army gains by: pickBestCreatures judges each stack)
 	pickBestCreatures(down, up, true);
 	if(down->getArmyStrength() != before)
 		logAi->info("FairAI %s: %s takes creatures offered at object %d/%d (army %llu -> %llu)", me.toString(), down->getNameTranslated(), up->ID.getNum(),
@@ -3616,6 +3772,9 @@ double AdventureAI::transferGain(const CArmedInstance * destination, const CArme
 		src.erase(std::min_element(src.begin(), src.end(), [](const Stack & a, const Stack & b) { return a.value < b.value; }));
 	}
 
+	// (armyFit) which stacks, by what they do to the army as it fights - exactly as pickBestCreatures decides
+	const bool fit = params.armyFit && destination->ID == Obj::HERO;
+	const int shared = fit ? sharedMorale(dynamic_cast<const CGHeroInstance *>(destination)) : 0;
 	double gained = 0;
 	for(int guard = 0; guard < 32 && !src.empty(); ++guard)
 	{
@@ -3637,6 +3796,33 @@ double AdventureAI::transferGain(const CArmedInstance * destination, const CArme
 		}
 		if(joined)
 			continue;
+		if(fit)
+		{
+			std::vector<FitStack> have;
+			std::vector<FitStack> offer;
+			for(size_t i = 0; i < dest.size(); ++i)
+				have.push_back({dest[i].type, dest[i].value, static_cast<int>(i)});
+			for(size_t i = 0; i < src.size(); ++i)
+				offer.push_back({src[i].type, src[i].value, static_cast<int>(i)});
+			const bool full = dest.size() >= GameConstants::ARMY_SIZE;
+			FitMove move;
+			if(!fitMove(shared, have, offer, full, move))
+				return gained;
+			if(!full)
+			{
+				if(lastOfHero)
+					return gained + move.gain * std::max(0, src[move.take].count - 1) / std::max(1, src[move.take].count);
+				gained += move.gain;
+				dest.push_back(src[move.take]);
+				src.erase(src.begin() + move.take);
+				continue;
+			}
+			if(lastOfHero)
+				return gained;
+			gained += move.gain;
+			std::swap(src[move.take], dest[move.drop]);
+			continue;
+		}
 		// 2. the strongest remaining stack into a free slot
 		auto best = std::max_element(src.begin(), src.end(), [](const Stack & a, const Stack & b) { return a.value < b.value; });
 		if(dest.size() < GameConstants::ARMY_SIZE)
@@ -3793,7 +3979,11 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 				if(level.second.empty())
 					continue;
 				const CCreature * creature = level.second.back().toCreature();
-				value += creature->getGrowth() * creature->getAIValue() * params.goldPerArmyValue * 0.5 * params.dwellingHorizonWeeks * armyFactor;
+				// (armyFit) what its creatures would really add to the army they are meant for
+				const CGHeroInstance * leader = ownHero(mainHero);
+				const double share = params.armyFit
+					? std::clamp(fitShare(leader ? leader : hero, creature->getId(), 4.0 * creature->getGrowth() * creature->getAIValue()), 0.0, 1.0) : 1.0;
+				value += share * creature->getGrowth() * creature->getAIValue() * params.goldPerArmyValue * 0.5 * params.dwellingHorizonWeeks * armyFactor;
 			}
 		}
 		return enemy ? 1.3 * value : value;
@@ -5403,6 +5593,20 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 		}
 		if(amount <= 0 || !destination->getSlotFor(creature).validSlot())
 			continue;
+		if(params.armyFit && dwelling->ID != Obj::WAR_MACHINE_FACTORY)
+		{
+			// Do they fit the army they are meant for - the leader's, wherever the buyer carries them?
+			// Skeletons for a tower army cost its living troops more turns than the skeletons add.
+			const CGHeroInstance * leader = ownHero(mainHero);
+			const CGHeroInstance * judge = leader ? leader : dynamic_cast<const CGHeroInstance *>(destination);
+			const double share = fitShare(judge, creature, static_cast<double>(amount) * type->getAIValue());
+			if(share < 0.5)
+			{
+				logAi->info("FairAI %s: %d %s at %s not bought: they would add only %.0f%% of their worth to the army of %s", me.toString(), amount,
+					type->getJsonKey(), dwelling->visitablePos().toString(), 100 * share, judge ? judge->getNameTranslated() : std::string("?"));
+				continue;
+			}
+		}
 		if(dwelling->ID == Obj::REFUGEE_CAMP || dwelling->ID == Obj::WAR_MACHINE_FACTORY)
 			logAi->info("FairAI %s: %d %s bought at building %d %s", me.toString(), amount, type->getJsonKey(), dwelling->ID.getNum(), dwelling->visitablePos().toString());
 		cb->recruitCreatures(dwelling, destination, creature, amount, level);
@@ -5470,6 +5674,47 @@ void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CA
 		}
 		if(acted)
 			continue;
+
+		if(params.armyFit && destination->ID == Obj::HERO)
+		{
+			// (armyFit) the next stack by what it does to the army as it fights - the morale of the mix
+			// included -, not by its face value; transferGain counts the same way
+			std::vector<FitStack> have;
+			std::vector<FitStack> offer;
+			for(const auto & [slot, stack] : destination->Slots())
+			{
+				if(stack && stack->getCreature())
+					have.push_back({stack->getCreatureID(), stackValue(stack.get()), slot.getNum()});
+			}
+			for(const auto & [slot, stack] : source->Slots())
+			{
+				if(stack && stack->getCreature() && slot != reserved)
+					offer.push_back({stack->getCreatureID(), stackValue(stack.get()), slot.getNum()});
+			}
+			const SlotID room = destination->getFreeSlot();
+			FitMove move;
+			if(!fitMove(sharedMorale(dynamic_cast<const CGHeroInstance *>(destination)), have, offer, !room.validSlot(), move))
+				return;
+			const SlotID from(offer[move.take].slot);
+			const CStackInstance * taken = source->getStackPtr(from);
+			const bool last = sourceIsHero && source->stacksCount() == 1;
+			if(room.validSlot())
+			{
+				if(last)
+				{
+					if(!taken || taken->getCount() <= 1)
+						return;
+					cb->splitStack(source, destination, from, room, taken->getCount() - 1);
+				}
+				else
+					cb->mergeOrSwapStacks(source, destination, from, room);
+				continue;
+			}
+			if(last || move.drop < 0)
+				return;
+			cb->swapCreatures(source, destination, from, SlotID(have[move.drop].slot));
+			continue;
+		}
 
 		// 2. strongest remaining stack of the source
 		SlotID bestSlot;
@@ -5568,6 +5813,10 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 		if(amount <= 0)
 			continue;
 		const CArmedInstance * target = destination;
+		// (armyFit) troops that do not fit the hero's army stay in the garrison: they hold the town
+		if(params.armyFit && target->ID == Obj::HERO && target != town->getUpperArmy()
+			&& fitShare(dynamic_cast<const CGHeroInstance *>(target), creature, static_cast<double>(amount) * type->getAIValue()) < 0.5)
+			target = town->getUpperArmy();
 		if(!target->getSlotFor(creature).validSlot())
 			target = town->getUpperArmy();
 		if(!target->getSlotFor(creature).validSlot())
