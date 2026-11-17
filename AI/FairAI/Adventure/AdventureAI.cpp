@@ -285,6 +285,8 @@ void Params::loadOverrides(int playerIndex)
 	read("safeParts", safeParts);
 	read("townWorth", townWorth);
 	read("secondArmy", secondArmy);
+	read("townHeroes", townHeroes);
+	read("evacuateRatio", evacuateRatio);
 	read("secondArmyEdge", secondArmyEdge);
 	read("freshHeroes", freshHeroes);
 	read("trappedHome", trappedHome);
@@ -446,6 +448,14 @@ bool AdventureAI::isMain(const CGHeroInstance * hero) const
 bool AdventureAI::leads(const CGHeroInstance * hero) const
 {
 	return hero && (hero->id == mainHero || secondLeaders.count(hero->id) > 0);
+}
+
+bool AdventureAI::heavy(const CGHeroInstance * hero) const
+{
+	if(!hero || leads(hero))
+		return false;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	return static_cast<double>(hero->getArmyStrength()) >= std::max(params.heavyPartValue, params.heavyPartShare * (leader ? static_cast<double>(leader->getArmyStrength()) : 0.0));
 }
 
 double AdventureAI::secondArmyBar() const
@@ -640,6 +650,26 @@ void AdventureAI::playTurn()
 		if(leads(ownHero(id)))
 		{
 			playHero(id);
+			continue;
+		}
+		// (townHeroes) A hero that holds a town's troops is that town's hero. It takes no collector's
+		// or scout's place, makes its sorties on the leash, and spends the night in the garrison: the
+		// gate stays free for the main hero, which takes what it needs from it there.
+		if(params.townHeroes && heavy(ownHero(id)))
+		{
+			// (in the garrison with another hero of ours in the gate - the main hero as a rule: it stays inside)
+			if(const auto * inside = ownHero(id); inside->isGarrisoned() && inside->getVisitedTown() && inside->getVisitedTown()->getVisitingHero())
+				continue;
+			playHero(id);
+			if(const auto * now = ownHero(id))
+			{
+				const auto * town = now->getVisitedTown();
+				if(town && town->tempOwner == me && !now->isGarrisoned() && !town->getGarrisonHero() && now->canBeMergedWith(*town))
+				{
+					cb->swapGarrisonHero(town);
+					gateway.waitTillFree();
+				}
+			}
 			continue;
 		}
 		const int role = roaming++;
@@ -4826,11 +4856,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	// a town of ours it makes trips that end back there today; outside it heads for one. Handing the
 	// troops to the main hero is the one errand that counts as arriving.
 	bool heavyPart = false;
-	if(params.safeParts && !leads(hero) && !perception.ownTowns().empty())
+	bool evacuating = false; // (townHeroes) the town cannot hold: the army leaves for one where it can stand
+	if((params.safeParts || params.townHeroes) && !leads(hero) && !perception.ownTowns().empty())
 	{
-		const CGHeroInstance * leader = ownHero(mainHero);
 		const double carried = static_cast<double>(hero->getArmyStrength());
-		heavyPart = carried >= std::max(params.heavyPartValue, params.heavyPartShare * (leader ? static_cast<double>(leader->getArmyStrength()) : 0.0));
+		heavyPart = heavy(hero);
 		if(heavyPart)
 		{
 			const auto * home = hero->getVisitedTown();
@@ -4843,10 +4873,44 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					fortressOutside ? "heading for a town of ours or the main hero" : "day trips from the town only");
 		}
 	}
+	// (townHeroes) The town cannot hold against what can reach it by tomorrow, not even with this army
+	// behind its walls: the army leaves for a town of ours where it can stand. A garrison that waits is
+	// destroyed for a third of its worth in enemy losses (2,895 defences, 2 % held); the town falls
+	// either way.
+	const CGTownInstance * refuge = nullptr;
+	double refugeCost = 1e9;
+	if(params.townHeroes && heavyPart && roundTripBudget >= 0 && threatAt(heroPos) > params.evacuateRatio * defenceAt(hero, heroPos))
+	{
+		for(const auto * town : perception.ownTowns())
+		{
+			if(town->visitablePos() == heroPos)
+				continue;
+			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+			if(!node || !node->reachable() || node->cost >= refugeCost || failedToday.count({heroNum, town->visitablePos()}))
+				continue;
+			if(const auto * visitor = town->getVisitingHero(); visitor && visitor != hero)
+				continue; // the gate is taken
+			// safe there, and safe on the nights on the way (as a supply courier judges its road)
+			if(threatAt(town->visitablePos(), ObjectInstanceID(), true) > tolerance(hero) * defenceAt(hero, town->visitablePos()))
+				continue;
+			if(node->turns > 0 && supplyRoadThreat(node) > tolerance(hero) * fieldStrength(hero))
+				continue;
+			refuge = town;
+			refugeCost = node->cost;
+		}
+		evacuating = refuge != nullptr;
+		if(heavyPartLog.insert(today * 1000 + heroNum % 1000 + 500000000).second)
+			logAi->info("FairAI %s day %d: %s cannot hold %s (an army of %.0f in reach, we stand at %.0f behind the walls): %s", me.toString(), today,
+				hero->getNameTranslated(), hero->getVisitedTown() ? hero->getVisitedTown()->getNameTranslated() : std::string("the town"),
+				threatAt(heroPos), defenceAt(hero, heroPos),
+				refuge ? (boost::format("leaving for %s, %.1f days away") % refuge->getNameTranslated() % refugeCost).str() : std::string("no town to go to - it stays"));
+	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
 	{
+		if(evacuating && description != "evacuate")
+			return;
 		// (safeParts) the main hero within today's march: delivering the troops is arriving
-		const bool delivery = heavyPart && object.hasValue() && object == mainHero && travel < 1.0;
+		const bool delivery = (heavyPart && object.hasValue() && object == mainHero && travel < 1.0) || description == "evacuate";
 		if(fortressOutside && description != "fortress" && description != "retreat" && description != "flee" && travel > 0.25 && !delivery)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
@@ -4887,6 +4951,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			t.score *= params.stickiness;
 		out.push_back(t);
 	};
+	if(evacuating)
+		addTarget(refuge->visitablePos(), refuge->id, 2000 + 0.5 * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue, 0, refugeCost, "evacuate");
 
 	// value hidden behind guards, credited to the guard that blocks it
 	std::map<ObjectInstanceID, double> unlockValue;
@@ -5435,7 +5501,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
 			if(!node || !node->reachable() || failedToday.count({heroNum, town->visitablePos()}))
 				continue;
-			const double holds = defenceAt(hero, town->visitablePos()) * tolerance(hero) >= outmatched ? 2.0 : 1.0;
+			double holds = defenceAt(hero, town->visitablePos()) * tolerance(hero) >= outmatched ? 2.0 : 1.0;
+			// (townHeroes) an army that left a town it could not hold does not walk back into it
+			if(params.townHeroes && heavyPart && threatAt(town->visitablePos(), ObjectInstanceID(), true) > tolerance(hero) * defenceAt(hero, town->visitablePos()))
+				holds = 0.25;
 			addTarget(town->visitablePos(), town->id, holds * 0.5 * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue, 0, node->cost, "fortress");
 		}
 	}
@@ -7426,6 +7495,48 @@ void AdventureAI::hireHeroes()
 			gateway.waitTillFree();
 			if(const auto * hired = town->getVisitingHero(); hired && hired->tempOwner == me)
 				manageTownVisit(hired, town);
+			break; // one a day
+		}
+	}
+	// (townHeroes) Troops stand in a town without a hero of ours: one is hired to lead them - into the
+	// garrison at once, where the town's troops become its army.
+	if(params.townHeroes && static_cast<int>(perception.ownHeroes().size()) < params.maxHeroes)
+	{
+		const CGHeroInstance * leader = ownHero(mainHero);
+		const double real = std::max(params.heavyPartValue, params.heavyPartShare * (leader ? static_cast<double>(leader->getArmyStrength()) : 0.0));
+		for(const auto * town : perception.ownTowns())
+		{
+			if(!town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero() || town->getGarrisonHero())
+				continue;
+			if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + params.heroGoldReserve)
+				break;
+			double waiting = 0;
+			for(const auto & slot : town->Slots())
+				waiting += stackValue(slot.second.get());
+			if(waiting < real)
+				continue;
+			const CGHeroInstance * best = nullptr;
+			for(const auto * candidate : cb->getAvailableHeroes(town))
+			{
+				if(!best || candidate->level > best->level || (candidate->level == best->level && candidate->getTotalStrength() > best->getTotalStrength()))
+					best = candidate;
+			}
+			if(!best)
+				continue;
+			logAi->info("FairAI %s day %d: hiring %s (level %d) in %s as the hero of the %.0f troops standing there", me.toString(), today,
+				best->getNameTranslated(), static_cast<int>(best->level), town->getNameTranslated(), waiting);
+			cb->recruitHero(town, best);
+			gateway.waitTillFree();
+			if(const auto * hired = town->getVisitingHero(); hired && hired->tempOwner == me)
+			{
+				if(hired->canBeMergedWith(*town))
+				{
+					cb->swapGarrisonHero(town);
+					gateway.waitTillFree();
+				}
+				else
+					pickBestCreatures(hired, town);
+			}
 			break; // one a day
 		}
 	}

@@ -378,6 +378,8 @@ private:
 	bool isMain(const CGHeroInstance * hero) const;
 	/// the main hero, or (secondArmy) another hero strong enough to lead an army of its own
 	bool leads(const CGHeroInstance * hero) const;
+	/// a hero that is no leader and carries a real army (heavyPartValue, heavyPartShare of the main hero's)
+	bool heavy(const CGHeroInstance * hero) const;
 	/// (secondArmy) the field strength a second leader needs; below zero: no second army now
 	double secondArmyBar() const;
 	void updateSecondLeaders();
