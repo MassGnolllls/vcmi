@@ -1,0 +1,19 @@
+== m-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/8fb258c249/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 51 --out /home/alex/fairai/runs/022zz2d92-eight-b/m-land-2p/nEPAH-s51 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"campaignEdge": 2.0, "passage": 1, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "armyFit": 1, "sites": 1, "fastKeeper": 1, "simAfterHit": 1, "spellSearch": 2, "tables": 0}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    0 FairAI as red of 2: victory winner=red day=112 score=1.00 [149.5s]
+match    1 FairAI as blue of 2: victory winner=blue day=121 score=1.00 [164.6s]
+match    4 FairAI as red of 2: victory winner=red day=119 score=1.00 [170.2s]
+match    5 FairAI as blue of 2: timeout winner= day=151 score=0.90 [228.2s]
+match    7 FairAI as blue of 2: victory winner=red day=78 score=0.00 [92.3s]
+match    3 FairAI as blue of 2: timeout winner= day=151 score=0.38 [263.0s]
+match    6 FairAI as red of 2: victory winner=red day=92 score=1.00 [122.9s]
+match    2 FairAI as red of 2: timeout winner= day=151 score=0.62 [284.9s]
+match    9 FairAI as blue of 2: victory winner=blue day=98 score=1.00 [113.6s]
+match    8 FairAI as red of 2: victory winner=blue day=117 score=0.00 [188.2s]
+match   10 FairAI as red of 2: victory winner=red day=108 score=1.00 [154.2s]
+match   13 FairAI as blue of 2: victory winner=red day=150 score=0.00 [234.5s]
+match   12 FairAI as red of 2: victory winner=blue day=142 score=0.00 [252.7s]
+match   11 FairAI as blue of 2: timeout winner= day=151 score=0.02 [271.1s]
+match   16 FairAI as red of 2: victory winner=blue day=120 score=0.00 [173.4s]
+match   14 FairAI as red of 2: timeout winner= day=151 score=0.40 [253.2s]
