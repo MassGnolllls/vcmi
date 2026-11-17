@@ -164,3 +164,26 @@ match   20 FairAI as red of 2: victory winner=red day=110 score=1.00 [163.7s]
 match   18 FairAI as red of 2: victory winner=red day=116 score=1.00 [205.1s]
 match   23 FairAI as blue of 2: victory winner=blue day=60 score=1.00 [102.9s]
 match   21 FairAI as blue of 2: victory winner=red day=121 score=0.00 [284.7s]
+match   22 FairAI as red of 2: timeout winner= day=151 score=0.46 [289.2s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 12 -> FairAI won 9, lost 3  (win rate 75%, 95% CI 47%-91%)
+- day limit reached: 12 (material lead for FairAI in 6)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 105 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/14b69d2068/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 50 --out /home/alex/fairai/runs/022zz2d91-eight-a/m-land-2p/nSETH-s50 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"scouts": 2, "campaignEdge": 2.0, "simAfterHit": 1, "spellSearch": 2}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    2 FairAI as red of 2: victory winner=red day=73 score=1.00 [111.3s]
+match    3 FairAI as blue of 2: victory winner=blue day=117 score=1.00 [203.0s]
+match    1 FairAI as blue of 2: victory winner=blue day=119 score=1.00 [222.3s]
+match    0 FairAI as red of 2: victory winner=red day=112 score=1.00 [224.1s]
+match    4 FairAI as red of 2: timeout winner= day=151 score=0.44 [253.5s]
+match    5 FairAI as blue of 2: timeout winner= day=151 score=0.46 [294.7s]
+match    6 FairAI as red of 2: victory winner=blue day=119 score=0.00 [222.7s]
+match   10 FairAI as red of 2: victory winner=red day=102 score=1.00 [133.4s]
+match    7 FairAI as blue of 2: victory winner=blue day=117 score=1.00 [193.5s]
+match    8 FairAI as red of 2: victory winner=red day=111 score=1.00 [201.0s]
+match    9 FairAI as blue of 2: victory winner=blue day=131 score=1.00 [227.8s]
