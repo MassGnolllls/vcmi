@@ -278,6 +278,8 @@ void Params::loadOverrides(int playerIndex)
 	read("spellSearch", spellSearch);
 	read("simAbilities", simAbilities);
 	read("simMultiHex", simMultiHex);
+	read("simAfterHit", simAfterHit);
+	read("manaShare", manaShare);
 	read("battlePlan", battlePlan);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
@@ -354,6 +356,7 @@ AdventureAI::AdventureAI(FairAIGateway & gateway, std::shared_ptr<CCallback> cb,
 {
 	params.loadOverrides(me.getNum());
 	Combat::setMultiHex(params.simMultiHex != 0); // the forecasts of the adventure AI use the same simulator
+	Combat::setAfterHit(params.simAfterHit != 0);
 }
 
 AdventureAI::~AdventureAI() = default;
@@ -703,6 +706,23 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 
 		perception.refresh();
 		updateThreats();
+		{
+			// What a spell point is worth to this hero where it stands (for the battle AI): next to a
+			// town of ours with a mage guild the next ones cost a visit, on the way to the enemy's
+			// towns the big fight is still to come.
+			double urgency = 1.0;
+			for(const auto * town : perception.ownTowns())
+			{
+				if(town->hasBuilt(BuildingID::MAGES_GUILD_1) && town->visitablePos().z == hero->visitablePos().z
+					&& town->visitablePos().dist2d(hero->visitablePos()) <= 14)
+					urgency = 0.3;
+			}
+			if(campaign(hero))
+				urgency *= 2.0;
+			else if(threatAt(hero->visitablePos(), ObjectInstanceID(), true) > 0)
+				urgency *= 1.5;
+			Combat::setManaUrgency(hero->id.getNum(), urgency);
+		}
 		auto paths = computePaths(hero, false);
 		auto freePaths = computePaths(hero, true);
 		auto targets = supply && supply->courier == heroId ? supplyTargets(hero, *paths) : collectTargets(hero, *paths, *freePaths);

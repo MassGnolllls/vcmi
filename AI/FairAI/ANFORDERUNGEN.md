@@ -43,13 +43,14 @@ Letzte Änderung: 17.11.2026
 |---|---|---|---|
 | K1 | **Jede Einheit einzeln kennen**: Stärken, Schwächen, Werte, Fähigkeiten – nicht nach Stufe urteilen. Beispiel: Vampirfürsten sind viel gefährlicher als Basilisken. | 16.11. | teilweise (Schaden aus der Spielformel; ein Teil der Fähigkeiten im Simulator, siehe K3) |
 | K2 | Das gilt auch für den **Einsatz der eigenen Einheiten**. Beispiel: Champions machen mehr Schaden, je weiter sie vor dem Angriff laufen. | 16.11. | teilweise (Anlauf, Zurückfliegen, Lebensraub, Feuerschild u. a. nachgebildet) |
-| K3 | **Harte Konter berücksichtigen.** Beispiel: Mächtige Gorgonen – Todesblick einrechnen, nicht mit wertvollen Stufe-7-Einheiten in den Nahkampf gehen. | 17.11. | offen (Todesblick, Versteinern, Lähmen, Blenden, Altern, Gift, Fluch, Säureatem, Furcht, zaubernde Einheiten fehlen im Simulator) |
+| K3 | **Harte Konter berücksichtigen.** Beispiel: Mächtige Gorgonen – Todesblick einrechnen, nicht mit wertvollen Stufe-7-Einheiten in den Nahkampf gehen. | 17.11. | im Test (Schalter `simAfterHit`: Todesblick, Versteinern, Lähmen, Blenden, Altern, Gift, Fluch, Schwäche, Säure, Donnerschlag sind im Simulator und im Einheiten-Labor gegen das Spiel bestätigt – Mächtige Gorgonen gegen Erzengel: vorher 4,3-mal so viel Schaden wie vorhergesagt, jetzt 1,15-mal. Offen: Furcht, zaubernde Einheiten, und dass die Kampf-KI danach handelt, ist noch nicht eigens gemessen) |
 | K4 | **Vor jedem Kampf auf der Karte prüfen, ob er sich lohnt** – mit allem, was der Gegner kann. | 17.11. | teilweise (simulierte Prognose für Banken im Test, für Kartenwachen als Schalter; ohne die Fähigkeiten aus K3) |
 | K5 | **Immunitäten gegen die eigenen Zauber.** Beispiel: Ein Held, der nur mit Implosion gewinnen kann, hat gegen Magmaelementare (immun gegen Erdzauber) keine Chance. | 17.11. | offen (die Prognose rechnet eigene Zauber bisher gar nicht mit) |
 | K6 | **Tempo:** Wer hat den ersten Zug? Ziehen alle eigenen Einheiten rechtzeitig, damit der Plan aufgeht? | 17.11. | teilweise (Zugreihenfolge im Simulator; kein Plan über mehrere Einheiten) |
 | K7 | **Taktik:** nutzen – und einrechnen, dass der Gegner sie auch haben kann und dann schneller ist. | 17.11. | offen (Aufstellungsphase wird sofort beendet) |
 | K8 | Wirksamkeit der eigenen Armee **gegen die konkrete gegnerische Armee** beurteilen, nicht nur Zahlen vergleichen. | 17.11. | teilweise (Heldenkämpfe nach Armeewert mal Heldenwert; Simulation als Schalter) |
 | K9 | Belagerungen selbst spielen. | 16.11. | offen |
+| K10 | **Ausnahmen der Fähigkeiten kennen.** Beispiel: Der Lebensraub der Vampirfürsten wirkt nicht gegen Elementare und andere nicht-lebende Kreaturen. | 17.11. | teilweise (im Kampfsimulator erfüllt: Lebensraub nur aus Schaden an Lebenden – keine Untoten, Elementare, Golems, Gargoyles, Maschinen; im Einheiten-Labor gegen das Spiel bestätigt. Die Entscheidung vor dem Kampf nutzt den Simulator für Kartenwachen noch nicht im Standard, siehe K4) |
 
 ## Armeezusammenstellung
 
@@ -72,11 +73,11 @@ Letzte Änderung: 17.11.2026
 
 | Nr. | Anforderung | Seit | Stand |
 |---|---|---|---|
-| M1 | **Kampf: nur ein Zauber pro Runde – die Wahl ist entscheidend.** Jeden möglichen Zauber und „kein Zauber" in derselben Vorausberechnung wie die Einheitenzüge bewerten, samt Zeitpunkt. | 16.11. | teilweise (Schalter `spellSearch`; Standard ist noch VCMIs Zauberlogik) |
+| M1 | **Kampf: nur ein Zauber pro Runde – die Wahl ist entscheidend.** Jeden möglichen Zauber und „kein Zauber" in derselben Vorausberechnung wie die Einheitenzüge bewerten, samt Zeitpunkt. | 16.11. | im Test (Schalter `spellSearch` 2: jeder mögliche Zauber und „kein Zauber" werden bis zum Ende des Kampfes durchgerechnet; Standard ist noch VCMIs Zauberlogik) |
 | M2 | Dabei berücksichtigen: eigenes und **gegnerisches Restmana**; Werte beider Helden (Zauberkraft, Wissen, Schulstufen, Massenzauber, Artefakte); Resistenzen und Immunitäten; schon wirkende Zauber und ihre Restdauer; **bisher vom Gegner gewirkte Zauber** (merken). Vom Gegner nur, was ein Mensch im Kampf sieht. | 16.11. | teilweise (gemerkte Zauber fließen ins Heldenmodell; Rest offen) |
 | M3 | Besser zaubern als die Standard-KI, die manche Zauber gar nicht oder schlecht nutzt. | 16.11. | offen |
 | M4 | **Mana-Management.** Ein Magierheld mit wenig oder ohne Mana ist bedeutend schwächer – das muss in jede Kampfentscheidung eingehen. Vor einem Angriff auf den Gegner prüfen, ob das Mana reicht. | 17.11. | offen |
-| M5 | **Zauber nicht verschwenden.** Immer abwägen, ob ein Zauber sinnvoll und wichtig ist. Keine Schadenszauber auf schwache Helden, die man ohnehin mühelos schlägt; keine Zauber in neutralen Kämpfen, die ohne Verluste zu gewinnen sind. | 17.11. | offen (die Standard-Zauberlogik zaubert, sobald es irgendetwas bringt) |
+| M5 | **Zauber nicht verschwenden.** Immer abwägen, ob ein Zauber sinnvoll und wichtig ist. Keine Schadenszauber auf schwache Helden, die man ohnehin mühelos schlägt; keine Zauber in neutralen Kämpfen, die ohne Verluste zu gewinnen sind. | 17.11. | im Test (`spellSearch` 2: Ein Zauber wird nur gewirkt, wenn er den Ausgang ändert – weniger eigene Verluste oder Sieg statt Niederlage – und das mehr wert ist als die Zauberpunkte. In 80 Heldenkämpfen nicht schwächer als die alte Logik: 74 % statt 70 % Siege. Partientest steht aus) |
 | M6 | **Abenteuerzauber selbst nutzen:** Dimensionstor, Fliegen, Wasserwandeln, Stadtportal, Boot rufen und versenken, Visionen, Luft- und Erdsicht, Täuschung. | 16.11. | teilweise (Fliegen und Wasserwandeln; der Rest offen) |
 | M7 | Bei **feindlichen Helden einplanen**, dass sie solche Zauber haben können. | 16.11. | offen |
 | M8 | **Täuschung (Disguise) erkennen:** Sie verfälscht die angezeigte Armee. Ein Mensch merkt das meist; FairAI soll solche Armeen als verdächtig einstufen. | 16.11. | offen |
@@ -159,6 +160,9 @@ Damit beim Umsetzen nichts verloren geht, hier die Kernsätze im Wortlaut:
 > angreifen und man sinnlos damagespells auf sie zaubert, obwohl man auch so mühelos gewonnen hätte,
 > wäre das eine verschwendung. oder wenn man in neutralen kämpfen, die mühelos ohne verluste gewonnen
 > werden können, zauber verwendet"
+
+> „noch ein hinweis: life leech von vampire lords funktioniert nicht gegen elementals oder non-living
+> creatures. auch soetwas muss berücksichtigt werden"
 
 > „schreibe dir alles, was ich an wichtigen punkten festhalte irgendwo auf github auf, damit du es
 > nicht vergisst und alle punkte bei der fertigen KI dann berücksichtigt werden. auch die sachen, die

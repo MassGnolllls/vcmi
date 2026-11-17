@@ -64,17 +64,19 @@ def cmd_gen(args) -> int:
         made = failed = 0
         def stacks(creature_id, count):
             # up to three stacks: more actions per battle, neighbours for breath and round attacks
-            parts = min(3, count)
+            parts = min(args.parts, count)
             sizes = [count // parts + (1 if i < count % parts else 0) for i in range(parts)]
             return [[creature_id, size] for size in sizes]
 
         for creature in wanted:
             count = max(1, round(args.value / creature["aiValue"]))
             total = count * creature["aiValue"]
-            for ref_id in REFERENCES:
+            for ref_id in (args.refs.split(",") if args.refs else REFERENCES):
                 ref = creatures[ref_id]
                 ref_count = max(1, round(total / ref["aiValue"]))
                 name = f"{safe(creature['id'])}__vs__{safe(ref_id)}"
+                if args.refs or args.value != 8000 or args.parts != 3:
+                    name += f"__v{args.value}p{args.parts}"  # a staged duel: its own map beside the standard ones
                 out = maps_dir / f"{name}.vmap"
                 if out.exists() and not args.force:
                     made += 1
@@ -101,6 +103,11 @@ def cmd_gen(args) -> int:
 def cmd_play(args) -> int:
     maps_dir = rt.vcmi_data_dir() / "Maps" / LAB_SUBDIR
     maps = sorted(p for p in maps_dir.glob("*.vmap") if args.filter in p.name)
+    if args.only:
+        wanted = {safe(name) + "__vs__" for name in args.only.split(",")}
+        maps = [p for p in maps if any(p.name.startswith(w) for w in wanted)]
+    if not args.staged:
+        maps = [p for p in maps if "__v" not in p.stem.split("__vs__")[-1]]  # staged duels only when asked for
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     os.environ["FAI_SIMCHECK"] = "1"
@@ -311,6 +318,9 @@ def main() -> int:
     g.add_argument("--work", default="unitlab-work")
     g.add_argument("--value", type=int, default=8000, help="AI value of each army")
     g.add_argument("--only", default="")
+    g.add_argument("--refs", default="", help="opponents instead of the three plain reference units, e.g. core:archangel "
+                   "(staged duels: what a death stare does to costly creatures shows only against them)")
+    g.add_argument("--parts", type=int, default=3, help="stacks per army")
     g.add_argument("--force", action="store_true")
     p = sub.add_parser("play")
     p.add_argument("--client", required=True)
@@ -318,6 +328,8 @@ def main() -> int:
     p.add_argument("--out", required=True)
     p.add_argument("--jobs", type=int, default=2)
     p.add_argument("--filter", default="")
+    p.add_argument("--only", default="", help="creatures to test, e.g. core:mightyGorgon,core:medusa")
+    p.add_argument("--staged", action="store_true", help="include the staged duels (gen --refs / --value / --parts)")
     p.add_argument("--base-port", type=int, default=8000)
     p.add_argument("--rounds", type=int, default=2, help="how often every duel is played (different random seeds)")
     r = sub.add_parser("report")

@@ -349,8 +349,11 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	Params params;
 	params.loadOverrides(playerID.getNum());
 	spellSearch = params.spellSearch != 0;
+	spellMode = params.spellSearch;
+	manaShare = params.manaShare;
 	simAbilities = params.simAbilities != 0;
 	setMultiHex(params.simMultiHex != 0);
+	setAfterHit(params.simAfterHit != 0);
 	battlePlan = params.battlePlan != 0;
 }
 
@@ -389,6 +392,108 @@ bool FairBattleAI::spellSearchEnabled() const
 	if(const char * flag = std::getenv("FAI_SPELL_SEARCH"))
 		return std::string(flag) != "0";
 	return spellSearch;
+}
+
+double FairBattleAI::outcomeScore(const std::shared_ptr<HypotheticBattle> & battle) const
+{
+	// How the fight ends from here if nobody casts anything more: what is left of our army when we
+	// win, minus what is left of theirs when we lose. Our plan is ours to choose (advance or hold),
+	// the enemy's is not (the worse case counts).
+	std::vector<const battle::Unit *> units;
+	for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
+		units.push_back(u);
+	DamageTable table;
+	table.build(*battle, units, simAbilities);
+	SimState base;
+	base.init(*battle, units, table, simAbilities);
+	const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
+	const int enemySide = 1 - ownSide;
+	double best = -std::numeric_limits<double>::max();
+	for(Stance ownStance : {Stance::CHARGE, Stance::HOLD})
+	{
+		double worst = std::numeric_limits<double>::max();
+		for(Stance enemyStance : {Stance::CHARGE, Stance::STALK})
+		{
+			SimState sim = base;
+			sim.stance[ownSide] = ownStance;
+			sim.stance[enemySide] = enemyStance;
+			sim.playout(base.round + 40);
+			worst = std::min(worst, sim.evaluate(side));
+		}
+		best = std::max(best, worst);
+	}
+	return best;
+}
+
+bool FairBattleAI::trySpellByOutcome(const BattleID & battleID, const CStack * stack)
+{
+	// One spell per round, and spell points are not free: a spell is cast when it changes how the
+	// fight ENDS - fewer of our troops lost, or a fight won that would be lost - by more than the
+	// spell points are worth. A bolt into guards we beat without a scratch changes nothing and is
+	// not cast; the same bolt is cast at once when it saves a stack.
+	auto battle = cb->getBattle(battleID);
+	const CGHeroInstance * hero = battle->battleGetMyHero();
+	if(!hero || battle->battleCanCastSpell(hero, spells::Mode::HERO) != ESpellCastProblem::OK)
+		return false;
+
+	double ourValue = 0;
+	for(const auto * unit : battle->battleGetAllStacks(false))
+	{
+		if(unit->alive() && !unit->isTurret() && unit->unitSide() == side)
+			ourValue += static_cast<double>(unit->getCount()) * unit->creatureId().toCreature()->getAIValue();
+	}
+	const double baseline = outcomeScore(std::make_shared<HypotheticBattle>(env.get(), battle));
+	// What a spell point is worth: a full store about manaShare of the army it fights for. Nothing
+	// when the fight is lost anyway - then every point that hurts the enemy is well spent.
+	const double manaPrice = baseline > 0 ? manaShare * manaUrgency(hero->id.getNum()) * ourValue / std::max<double>(30.0, hero->manaLimit()) : 0.0;
+	const double threshold = baseline > 0 ? 0.003 * ourValue : 0.0;
+
+	struct Cast
+	{
+		const CSpell * spell;
+		spells::Target target;
+	};
+	int tried = 0;
+	std::optional<Cast> best;
+	double bestGain = threshold;
+	std::string bestWhat;
+	for(const auto & spell : LIBRARY->spellh->objects)
+	{
+		if(!spell->isCombat() || spell->isCreatureAbility() || !spell->canBeCast(battle.get(), spells::Mode::HERO, hero))
+			continue;
+		const double cost = battle->battleGetSpellCost(spell.get(), hero);
+		spells::BattleCast probe(battle.get(), hero, spells::Mode::HERO, spell.get());
+		for(const auto & target : SpellTargetEvaluator::getViableTargets(spell->battleMechanics(&probe).get()))
+		{
+			if(++tried > 250)
+				break;
+			auto state = std::make_shared<HypotheticBattle>(env.get(), battle);
+			spells::BattleCast apply(state.get(), hero, spells::Mode::HERO, spell.get());
+			apply.castEval(state->getServerCallback(), target);
+			const double gain = outcomeScore(state) - baseline - manaPrice * cost;
+			if(gain > bestGain)
+			{
+				bestGain = gain;
+				best = Cast{spell.get(), target};
+				bestWhat = spell->getNameTranslated();
+				if(!target.empty() && target.front().unitValue)
+					bestWhat += " on " + target.front().unitValue->getDescription();
+			}
+		}
+	}
+	logAi->debug("FairBattleAI: spell by outcome for %s: %d casts tried, fight ends at %.0f without, best %s (gain %.0f beyond the price, a spell point costs %.1f, mana %d)",
+		stack->getDescription(), tried, baseline, best ? bestWhat : std::string("none"), best ? bestGain : 0.0, manaPrice, hero->mana);
+	if(!best)
+		return false;
+
+	BattleAction spellcast;
+	spellcast.actionType = EActionType::HERO_SPELL;
+	spellcast.spell = best->spell->id;
+	spellcast.setTarget(best->target);
+	spellcast.side = side;
+	spellcast.stackNumber = -1;
+	cb->battleMakeSpellAction(battleID, spellcast);
+	return true;
 }
 
 bool FairBattleAI::trySpellSearch(const BattleID & battleID, const CStack * stack)
@@ -474,6 +579,8 @@ bool FairBattleAI::tryHeroSpell(const BattleID & battleID, const CStack * stack)
 {
 	if(!preferences.enableSpellsUsage)
 		return false;
+	if(spellMode >= 2)
+		return trySpellByOutcome(battleID, stack);
 	if(spellSearchEnabled())
 		return trySpellSearch(battleID, stack);
 

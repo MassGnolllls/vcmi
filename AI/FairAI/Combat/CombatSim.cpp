@@ -8,6 +8,7 @@
 #include "../StdInc.h"
 #include "CombatSim.h"
 
+#include "../../../lib/CBonusTypeHandler.h"
 #include "../../../lib/CCreatureHandler.h"
 #include "../../../lib/battle/AccessibilityInfo.h"
 #include "../../../lib/battle/BattleAttackInfo.h"
@@ -38,6 +39,40 @@ double average(const DamageRange & range)
 }
 
 constexpr int MAX_SIM_STEPS = 600;
+
+/// Death stare, the game's rule: every creature of the stack kills one creature of the target with
+/// that chance, but never more than the stack's size times the chance, rounded up. The expected
+/// number of kills.
+double stareKills(int count, double chance)
+{
+	if(count <= 0 || chance <= 0)
+		return 0;
+	const int cap = static_cast<int>(std::ceil(count * std::min(1.0, chance) - 1e-9));
+	if(chance >= 1.0)
+		return cap;
+	if(count <= 40)
+	{
+		double expected = 0;
+		double p = std::pow(1.0 - chance, count); // exactly no kill
+		for(int k = 0; k <= count; ++k)
+		{
+			expected += std::min(k, cap) * p;
+			p *= static_cast<double>(count - k) / (k + 1) * chance / (1.0 - chance);
+		}
+		return expected;
+	}
+	// large stacks: the bell curve, cut off at the cap
+	const double mean = count * chance;
+	const double sigma = std::sqrt(mean * (1.0 - chance));
+	const double z = (cap - mean) / sigma;
+	const double density = std::exp(-0.5 * z * z) / std::sqrt(2.0 * 3.14159265358979323846);
+	const double tail = 0.5 * std::erfc(z / std::sqrt(2.0));
+	return mean - sigma * (density - z * tail);
+}
+
+/// how much a point of attack or defence changes damage, between the game's 5 % (attack above
+/// defence) and 2.5 % (below)
+constexpr double SKILL_POINT = 0.035;
 }
 
 // ------------------------------------------------------------------ DamageTable
@@ -45,6 +80,33 @@ constexpr int MAX_SIM_STEPS = 600;
 namespace
 {
 std::atomic<bool> multiHexEnabled{false};
+std::atomic<bool> abilitiesBeyondDamage{false};
+
+/// a kind of bonus that the game's files define (not one of the built-in ones), by its name
+BonusType bonusNamed(const std::string & name)
+{
+	for(BonusType type : LIBRARY->bth->getAllObjets())
+	{
+		if(LIBRARY->bth->bonusToString(type) == name)
+			return type;
+	}
+	return BonusType::NONE;
+}
+
+/// the lasting bonuses a spell gives, by the few kinds the simulator knows
+std::string effectKind(BonusType type)
+{
+	switch(type)
+	{
+	case BonusType::NOT_ACTIVE: return "NOT_ACTIVE";
+	case BonusType::HYPNOTIZED: return "HYPNOTIZED";
+	case BonusType::ALWAYS_MINIMUM_DAMAGE: return "ALWAYS_MINIMUM_DAMAGE";
+	case BonusType::POISON: return "POISON";
+	case BonusType::STACK_HEALTH: return "STACK_HEALTH";
+	case BonusType::PRIMARY_SKILL: return "PRIMARY_SKILL";
+	default: return std::string();
+	}
+}
 
 /// attacks that reach beyond the target do not spare the attacker's own side
 bool canHitOwn(const IBonusBearer & unit)
@@ -286,6 +348,7 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 
 	s.creature = type ? type->getId() : CreatureID();
 	s.maxHP = std::max(1, static_cast<int>(creature.getMaxHealth()));
+	s.fullHP = s.maxHP;
 	s.firstHP = s.maxHP;
 	s.value = type ? std::max(1, type->getAIValue()) : 1;
 	s.speed = static_cast<int>(creature.getMovementRange());
@@ -374,6 +437,114 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	}
 	}
 	s.magicImmune = u.valOfBonuses(BonusType::LEVEL_SPELL_IMMUNITY) >= 5;
+
+	// --- what its attacks do beyond their damage. Nothing here names a creature: death stare and
+	// acid are bonuses of their own, everything else is a spell the unit casts after an attack, read
+	// by what that spell does to its target (so creatures of mods are covered as far as their spells
+	// are built from the same parts).
+	static const BonusType gargoyle = bonusNamed("GARGOYLE");
+	s.flesh = s.living && (gargoyle == BonusType::NONE || !u.hasBonusOfType(gargoyle));
+	s.mindImmune = !s.living || u.hasBonusOfType(BonusType::MIND_IMMUNITY);
+	s.lowDamage = 1.0;
+	if(type && type->getBaseDamageMin() + type->getBaseDamageMax() > 0)
+		s.lowDamage = 2.0 * type->getBaseDamageMin() / (type->getBaseDamageMin() + type->getBaseDamageMax());
+	s.stare = {};
+	s.stun = {};
+	s.stunMind = {};
+	s.bolt = {};
+	s.ageing = {};
+	s.ageDepth = 0;
+	s.sapAttack = {};
+	s.sapDefence = {};
+	s.curse = {};
+	s.acid = 0;
+	if(abilitiesBeyondDamage)
+	{
+		s.stare[0] = std::clamp(u.valOfBonuses(BonusType::DEATH_STARE, BonusCustomSubtype::deathStareGorgon) / 100.0, 0.0, 1.0);
+		s.stare[1] = std::clamp(u.valOfBonuses(BonusType::DEATH_STARE, BonusCustomSubtype::deathStareNoRangePenalty) / 100.0, 0.0, 1.0);
+		for(const auto & breath : *u.getBonusesOfType(BonusType::ACID_BREATH))
+			s.acid += breath->val * (breath->parameters ? std::clamp(breath->parameters->toNumber() / 100.0, 0.0, 1.0) : 1.0);
+
+		std::set<SpellID> seen;
+		for(const auto & bonus : *u.getBonusesOfType(BonusType::SPELL_AFTER_ATTACK))
+		{
+			const SpellID id = bonus->subtype.as<SpellID>();
+			const CSpell * spell = id.hasValue() ? id.toSpell() : nullptr;
+			if(!spell || !seen.insert(id).second)
+				continue;
+			const double chance = std::clamp(u.valOfBonuses(Selector::typeSubtype(BonusType::SPELL_AFTER_ATTACK, BonusSubtypeID(id))) / 100.0, 0.0, 1.0);
+			int level = 0;
+			int mode = 0; // 0 every attack, 1 shots only, 2 melee only
+			if(bonus->parameters)
+			{
+				const auto & numbers = bonus->parameters->toVector();
+				if(!numbers.empty())
+					level = numbers[0];
+				if(numbers.size() > 1)
+					mode = numbers[1];
+			}
+			bool disables = false;
+			bool lowest = false;
+			bool poison = false;
+			double health = 0;
+			double attack = 0;
+			double defence = 0;
+			auto note = [&](const std::string & what, bool onAttack, bool onDefence, double val)
+			{
+				if(what == "NOT_ACTIVE" || what == "HYPNOTIZED")
+					disables = true;
+				else if(what == "ALWAYS_MINIMUM_DAMAGE")
+					lowest = true;
+				else if(what == "POISON")
+					poison = true;
+				else if(what == "STACK_HEALTH")
+					health += val;
+				else if(what == "PRIMARY_SKILL" && onAttack)
+					attack -= val;
+				else if(what == "PRIMARY_SKILL" && onDefence)
+					defence -= val;
+			};
+			const auto & info = spell->getLevelInfo(std::clamp(level, 0, 3));
+			for(const auto & effect : info.effects)
+			{
+				const bool skill = effect->type == BonusType::PRIMARY_SKILL;
+				note(effectKind(effect->type), skill && effect->subtype.as<PrimarySkill>() == PrimarySkill::ATTACK,
+					skill && effect->subtype.as<PrimarySkill>() == PrimarySkill::DEFENSE, effect->val);
+			}
+			// spells built the newer way list their lasting bonuses as text
+			for(const auto & [name, effect] : info.battleEffects.Struct())
+			{
+				if(effect["type"].String() != "core:timed")
+					continue;
+				for(const auto & [bonusName, node] : effect["bonus"].Struct())
+				{
+					const std::string & subtype = node["subtype"].String();
+					note(node["type"].String(), subtype.find("attack") != std::string::npos, subtype.find("defence") != std::string::npos, node["val"].Float());
+				}
+			}
+			const double power = spell->isDamage() ? u.valOfBonuses(BonusType::SPECIFIC_SPELL_POWER, BonusSubtypeID(id)) : 0.0;
+			const std::string key = spell->getJsonKey();
+			const bool mind = key.find("blind") != std::string::npos || key.find("hypno") != std::string::npos;
+			for(int kind = 0; kind < 2; ++kind)
+			{
+				if((kind == 0 && mode == 1) || (kind == 1 && mode == 2))
+					continue;
+				if(disables)
+					(mind ? s.stunMind : s.stun)[kind] = 1.0 - (1.0 - (mind ? s.stunMind : s.stun)[kind]) * (1.0 - chance);
+				if(lowest)
+					s.curse[kind] = 1.0 - (1.0 - s.curse[kind]) * (1.0 - chance);
+				// ageing halves the health of every creature; poison takes a tenth more every round, half at most - about a quarter over a fight
+				if(health < 0)
+				{
+					s.ageing[kind] = 1.0 - (1.0 - s.ageing[kind]) * (1.0 - chance);
+					s.ageDepth = std::max(s.ageDepth, std::min(0.5, poison ? 0.25 : -health / 100.0));
+				}
+				s.sapAttack[kind] += chance * std::max(0.0, attack);
+				s.sapDefence[kind] += chance * std::max(0.0, defence);
+				s.bolt[kind] += chance * power;
+			}
+		}
+	}
 
 	// expected values instead of dice: luck doubles a hit, a death blow too; morale gives or takes turns
 	const auto & settings = *LIBRARY->engineSettings();
@@ -723,6 +894,12 @@ void SimState::lift(int unit)
 
 int64_t SimState::dealDamage(int target, double amount)
 {
+	// a target that has lost defence (acid, disease) suffers more
+	return removeHealth(target, amount * (1.0 + SKILL_POINT * units[target].defenceLost));
+}
+
+int64_t SimState::removeHealth(int target, double amount)
+{
 	auto & t = units[target];
 	const int64_t before = t.totalHP();
 	int64_t total = before - static_cast<int64_t>(std::llround(amount));
@@ -753,7 +930,11 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 {
 	const SimUnit a = units[attacker]; // copy: fire shield may hurt the attacker while we still need its numbers
 	units[target].active = true; // blindness, paralysis and petrification end when the unit is attacked
-	const double turns = ownTurn ? a.turnFactor : 1.0;
+	units[target].stunned = 0;
+	// what the attacker itself suffers: put out of action in part (it strikes less, also back), cursed, weakened
+	const double able = 1.0 - std::min(1.0, a.stunned);
+	const double sapped = std::max(0.3, 1.0 - SKILL_POINT * a.attackLost) * (1.0 - a.cursed * (1.0 - a.lowDamage));
+	const double turns = (ownTurn ? a.turnFactor : 1.0) * able * sapped;
 	if(ranged)
 	{
 		const bool far = shotIsFar(attacker, target);
@@ -770,6 +951,7 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 			}
 		}
 		dealDamage(target, damage->ranged(attacker, target, far) * a.count * a.rangedFactor * turns);
+		afterHit(attacker, target, true, able);
 		return;
 	}
 
@@ -810,7 +992,46 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 	if(a.lifeDrain > 0 && dealtToLiving > 0)
 		heal(attacker, a.lifeDrain * dealtToLiving);
 	if(burn > 0 && !a.fireImmune && units[attacker].alive())
-		dealDamage(attacker, burn);
+		removeHealth(attacker, burn);
+	afterHit(attacker, target, false, able);
+}
+
+void SimState::afterHit(int attacker, int target, bool ranged, double share)
+{
+	const SimUnit a = units[attacker];
+	if(!a.alive() || !units[target].alive() || share <= 0)
+		return;
+	const int kind = ranged ? 1 : 0;
+	// death stare: whole creatures, whatever they are worth - the reason not to walk an archangel into gorgons
+	if(a.stare[kind] > 0 && units[target].flesh)
+		removeHealth(target, share * stareKills(a.count, a.stare[kind]) * units[target].maxHP);
+	if(units[target].alive() && a.bolt[kind] > 0 && !units[target].magicImmune)
+		removeHealth(target, share * a.bolt[kind] * a.count);
+	if(units[target].alive() && !ranged && a.acid > 0)
+		removeHealth(target, share * a.acid * a.count);
+	auto & t = units[target];
+	if(!t.alive())
+		return;
+	// what the target suffers from now on
+	if(!t.magicImmune)
+	{
+		const double stun = 1.0 - (1.0 - a.stun[kind]) * (1.0 - (t.mindImmune ? 0.0 : a.stunMind[kind]));
+		t.stunned = std::min(1.0, t.stunned + share * stun);
+		t.cursed = t.living ? 1.0 - (1.0 - t.cursed) * (1.0 - share * a.curse[kind]) : t.cursed;
+		t.attackLost = std::min(12.0, t.attackLost + share * a.sapAttack[kind]);
+		if(t.flesh && a.ageing[kind] > 0)
+		{
+			// aged or poisoned: the creatures stay, each has less health - the stack dies sooner, its worth is unchanged
+			t.afflicted = 1.0 - (1.0 - t.afflicted) * (1.0 - share * a.ageing[kind]);
+			const int left = std::max(1, static_cast<int>(std::lround(t.fullHP * (1.0 - a.ageDepth * t.afflicted))));
+			if(left < t.maxHP)
+			{
+				t.maxHP = left;
+				t.firstHP = std::min(t.firstHP, left);
+			}
+		}
+	}
+	t.defenceLost = std::min(15.0, t.defenceLost + share * a.sapDefence[kind]);
 }
 
 void SimState::extraVictims(int attacker, int target, std::array<int, 8> & out, int & count) const
@@ -906,7 +1127,10 @@ void SimState::finishTurn(int unit, bool waited)
 	if(waited && !u.waited)
 		u.waited = true;
 	else
+	{
 		u.acted = true;
+		u.stunned = 0; // the action it lost (in part) is this one
+	}
 	lastMoved = u.side;
 }
 
@@ -1025,7 +1249,15 @@ void SimState::applyOutcome(int unit, const AttackOutcome & outcome)
 		if(u.lifeDrain > 0 && t.living)
 			heal(unit, u.lifeDrain * dealt);
 		if(t.fireShield > 0 && !u.fireImmune)
-			dealDamage(unit, t.fireShield * dealt);
+			removeHealth(unit, t.fireShield * dealt);
+	}
+	if(outcome.target >= 0 && u.alive() && units[outcome.target].alive())
+	{
+		// what the hit does beyond its damage - and what the blow struck back does to us
+		const bool struckBack = !outcome.shooting && u.totalHP() < hpBefore;
+		afterHit(unit, outcome.target, outcome.shooting, 1.0);
+		if(struckBack && units[unit].alive() && units[outcome.target].alive())
+			afterHit(outcome.target, unit, false, 1.0);
 	}
 
 	if(outcome.shooting)
@@ -1282,6 +1514,30 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 		++plan;
 	}
 	return result;
+}
+
+namespace
+{
+std::mutex urgencyMutex;
+std::map<int, double> urgencyByHero;
+}
+
+void setManaUrgency(int hero, double urgency)
+{
+	std::lock_guard lock(urgencyMutex);
+	urgencyByHero[hero] = urgency;
+}
+
+double manaUrgency(int hero)
+{
+	std::lock_guard lock(urgencyMutex);
+	auto known = urgencyByHero.find(hero);
+	return known != urgencyByHero.end() ? known->second : 1.0;
+}
+
+void setAfterHit(bool enabled)
+{
+	abilitiesBeyondDamage = enabled;
 }
 
 void setMultiHex(bool enabled)

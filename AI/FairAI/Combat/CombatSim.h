@@ -90,6 +90,28 @@ struct SimUnit
 	bool areaLivingOnly = false;     ///< ... and harms only the living (death cloud)
 	bool areaFire = false;           ///< ... and is fire (fireball): the fire-immune stay unharmed
 	bool magicImmune = false;        ///< immune to all spells: spell-like shots do nothing to it
+	// --- what an attack does beyond its damage: read from the unit's bonuses and the spells they
+	// name, as expected values (every chance is per attack). Index 0 = melee, 1 = shot.
+	std::array<double, 2> stare{};   ///< death stare: chance per attacking creature to kill one creature of the target (mighty gorgons; accurate shot)
+	std::array<double, 2> stun{};    ///< chance to put the target out of action (petrify, paralyse, freeze)
+	std::array<double, 2> stunMind{}; ///< the same by a spell on the mind (blind, hypnotise): the mindless are immune
+	std::array<double, 2> bolt{};    ///< expected spell damage per attacking creature (thunderbolt)
+	std::array<double, 2> ageing{};  ///< chance to cut the health of the target's creatures (ageing, poison)
+	double ageDepth = 0;             ///< ... by this share: half when aged, about a quarter over a fight when poisoned
+	std::array<double, 2> sapAttack{};  ///< expected attack points taken from the target (weakness, disease)
+	std::array<double, 2> sapDefence{}; ///< expected defence points taken (disease, acid breath)
+	std::array<double, 2> curse{};   ///< chance to curse the target: it deals its lowest damage
+	double acid = 0;                 ///< expected acid damage per attacking creature (rust dragons)
+	bool flesh = true;               ///< can be stared to death, aged, poisoned: neither undead nor construct, machine or gargoyle
+	bool mindImmune = false;         ///< cannot be blinded
+	double lowDamage = 1.0;          ///< its lowest damage as a share of its average damage (what a curse leaves)
+	// --- what the unit suffers from such attacks at the moment (expected values)
+	double stunned = 0;              ///< share of its next action that is lost
+	double afflicted = 0;            ///< probability that its creatures are aged or poisoned
+	int fullHP = 1;                  ///< health of one creature before that (maxHP shrinks with it: the creatures stay, each dies sooner)
+	double attackLost = 0;
+	double defenceLost = 0;
+	double cursed = 0;
 	double meleeFactor = 1.0;        ///< expected multiplier of melee damage dealt: luck, death blow
 	double rangedFactor = 1.0;       ///< expected multiplier of ranged damage dealt: luck
 	double turnFactor = 1.0;         ///< expected number of own actions per turn: good morale > 1, bad morale < 1
@@ -233,10 +255,14 @@ private:
 	void lift(int unit);
 	/// returns the health actually removed
 	int64_t dealDamage(int target, double damage);
+	/// health taken as it is (dealDamage: after what the target's weakened state adds)
+	int64_t removeHealth(int target, double amount);
 	/// health back to a stack, fallen creatures return up to the size the stack had at the start
 	void heal(int unit, double amount);
 	/// chargeHexes: hexes walked before a melee attack; ownTurn: the unit's own action (not a retaliation)
 	void strike(int attacker, int target, bool ranged, int chargeHexes = 0, bool ownTurn = false);
+	/// what an attack does beyond its damage: death stare, bolts, acid, and what the target suffers from then on
+	void afterHit(int attacker, int target, bool ranged, double share);
 	/// units on the further hexes a melee attack of `attacker` on `target` reaches (not the target itself)
 	void extraVictims(int attacker, int target, std::array<int, 8> & out, int & count) const;
 	/// units next to the target that a bursting shot of `attacker` also hits
@@ -267,6 +293,15 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 /// Attacks that reach several hexes (breath, further heads, bursting shots) in the simulator: on or off.
 /// One switch for the whole process (parameter simMultiHex; off until the unit lab and a benchmark confirm it).
 void setMultiHex(bool enabled);
+/// What a spell point is worth to a hero right now, as a factor on the plain price: told by the
+/// adventure AI (a town with a mage guild within a day: cheap; on the way to the enemy: dear),
+/// read by the battle AI when it weighs a spell. 1 when nothing is known about the hero.
+void setManaUrgency(int hero, double urgency);
+double manaUrgency(int hero);
+
+/// What attacks do beyond their damage (death stare, petrifying and the like, ageing, poison, curse,
+/// weakness, acid, thunderbolt) - off until the unit lab has confirmed it against the game
+void setAfterHit(bool enabled);
 bool multiHex();
 
 }

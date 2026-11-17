@@ -73,6 +73,8 @@ private:
 	BattleSide side = BattleSide::NONE;
 	bool wasWaitingForRealize = false;
 	bool spellSearch = false; ///< from the player's FairAI parameters (or FAI_SPELL_SEARCH)
+	int spellMode = 0;        ///< 2: a spell is cast when it changes how the fight ends by more than its spell points are worth
+	double manaShare = 0.15;  ///< what a full store of spell points is worth, as a share of the army
 	bool simAbilities = true; ///< from the player's FairAI parameters: the look-ahead knows special abilities
 	bool battlePlan = false;  ///< from the player's FairAI parameters: candidates are judged by playing several rounds ahead, holding or advancing
 
@@ -100,6 +102,8 @@ private:
 	/// hypothetical copy of the battle (the game's own spell mechanics) and the active unit's best
 	/// continuation is compared with not casting; mana is priced by how scarce it is
 	bool trySpellSearch(const BattleID & battleID, const CStack * stack);
+	bool trySpellByOutcome(const BattleID & battleID, const CStack * stack);
+	double outcomeScore(const std::shared_ptr<HypotheticBattle> & battle) const;
 	bool spellSearchEnabled() const;
 };
 

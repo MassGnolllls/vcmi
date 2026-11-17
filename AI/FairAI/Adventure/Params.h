@@ -136,9 +136,11 @@ struct Params
 	double moveValueMain = 0.4;        ///< tables: gold per movement point a building gives the main hero today (a third of it for the others)
 
 	// --- combat (read by the battle AI of the same player)
-	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)
+	int spellSearch = 0;               ///< hero spells in battle. 0: VCMI's BattleAI evaluator (casts whenever a spell gains anything). 1: chosen by two rounds of look-ahead. 2: a spell is cast when it changes how the fight ENDS (troops saved, or a lost fight won) by more than its spell points are worth - no bolts into guards we beat without a loss
+	double manaShare = 0.15;           ///< spellSearch 2: what a full store of spell points is worth, as a share of the army it fights for
 	int simAbilities = 1;              ///< battle look-ahead knows special abilities: life drain, regeneration, fire shield, charge bonus, strike and return, luck, morale (0: plain damage only)
 	int simMultiHex = 0;               ///< battle look-ahead knows attacks that reach several hexes: breath behind the target (dragons, phoenix), further heads (cerberus), bursting shots (lich, magog) - our own troops in the way included. Off until the unit lab and the guard benchmark confirm it
+	int simAfterHit = 0;               ///< battle look-ahead and forecasts know what attacks do beyond their damage: death stare (mighty gorgons, accurate shot), petrifying, paralysing, blinding and freezing, ageing, poison, curse, weakness, disease, acid breath, thunderbolt - as expected values, read from the units' bonuses and the spells they name. Off until the unit lab confirms it
 	int battlePlan = 0;                ///< battle AI judges every action by playing several rounds ahead with two plans for our side, hold or advance (0: rest of the current round only). Off until a test shows a gain
 	int fightForecast = 0;             ///< fights against map guards are judged by simulating the battle (unit against unit, FairAI's battle simulator) instead of comparing army values. Off until a test shows a gain
 	double maxLossShare = 0.35;        ///< with fightForecast: the main hero does not start a fight that is forecast to cost more than this share of its army ...
