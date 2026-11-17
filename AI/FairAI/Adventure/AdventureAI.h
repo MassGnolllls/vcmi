@@ -317,6 +317,7 @@ private:
 		double factor = 0;   ///< ... and the hero factor we gave it
 	};
 	int oppositionHero = -1; ///< the hero type behind oppositionHeroes (for the log)
+	mutable std::set<int> heavyPartLog; ///< (safeParts) day and hero already logged
 	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
 	/// what a battle against an enemy hero left of it (reported by the battle thread, applied in updateThreats)
 	struct BattleOutcome

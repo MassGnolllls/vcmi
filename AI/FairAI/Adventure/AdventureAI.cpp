@@ -282,6 +282,9 @@ void Params::loadOverrides(int playerIndex)
 	read("manaShare", manaShare);
 	read("spellForecast", spellForecast);
 	read("magicWorth", magicWorth);
+	read("safeParts", safeParts);
+	read("heavyPartValue", heavyPartValue);
+	read("heavyPartShare", heavyPartShare);
 	read("battlePlan", battlePlan);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
@@ -3812,7 +3815,8 @@ void AdventureAI::planSupplyRun()
 	// is the leader within reach, and the road safe for what the courier will carry?
 	auto paths = computePaths(carrier, false);
 	const CGPathNode * node = paths->getPathInfo(leader->visitablePos());
-	if(!node || !node->reachable() || node->turns > params.supplyDays)
+	// (safeParts) the courier must arrive the same day: nothing of weight spends a night on the road
+	if(!node || !node->reachable() || node->turns > (params.safeParts ? 0 : params.supplyDays))
 	{
 		logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s, the leader is out of reach (%s)", me.toString(), today, bestStock,
 			bestTown->getNameTranslated(), node && node->reachable() ? (boost::format("%d days") % static_cast<int>(node->turns)).str() : "no way");
@@ -3893,7 +3897,11 @@ std::vector<Target> AdventureAI::supplyTargets(const CGHeroInstance * hero, cons
 	if(!supply->returning)
 	{
 		const CGPathNode * node = paths.getPathInfo(leader->visitablePos());
-		const int step = stepToday(leader->visitablePos());
+		int step = stepToday(leader->visitablePos());
+		// (safeParts) the load does not spend a night on the road: the courier sets out only when it
+		// arrives today, and waits in a town of ours otherwise
+		if(params.safeParts && step >= 0 && node && node->turns > 0)
+			step = -1;
 		const bool unsafe = step >= 0 && node && supplyRoadThreat(node) > static_cast<double>(hero->getArmyStrength());
 		if(step == 1 && !unsafe)
 		{
@@ -4612,9 +4620,33 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hero->getNameTranslated(), fieldStrength(hero), outmatched, fortressOutside ? "heading for a town of ours" : "day trips from the town only");
 		fortressLog = today;
 	}
+	// (safeParts) A real army in the hands of a hero that is not our main hero does not spend the
+	// night in the open: whatever attacks it there wins, and it is attacked only by what wins. From
+	// a town of ours it makes trips that end back there today; outside it heads for one. Handing the
+	// troops to the main hero is the one errand that counts as arriving.
+	bool heavyPart = false;
+	if(params.safeParts && !isMain(hero) && !perception.ownTowns().empty())
+	{
+		const CGHeroInstance * leader = ownHero(mainHero);
+		const double carried = static_cast<double>(hero->getArmyStrength());
+		heavyPart = carried >= std::max(params.heavyPartValue, params.heavyPartShare * (leader ? static_cast<double>(leader->getArmyStrength()) : 0.0));
+		if(heavyPart)
+		{
+			const auto * home = hero->getVisitedTown();
+			if(home && home->tempOwner == me && home->visitablePos() == heroPos)
+				roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
+			else
+				fortressOutside = true;
+			if(heavyPartLog.insert(today * 1000 + heroNum % 1000).second)
+				logAi->debug("FairAI %s day %d: %s carries %.0f - %s", me.toString(), today, hero->getNameTranslated(), carried,
+					fortressOutside ? "heading for a town of ours or the main hero" : "day trips from the town only");
+		}
+	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
 	{
-		if(fortressOutside && description != "fortress" && description != "retreat" && description != "flee" && travel > 0.25)
+		// (safeParts) the main hero within today's march: delivering the troops is arriving
+		const bool delivery = heavyPart && object.hasValue() && object == mainHero && travel < 1.0;
+		if(fortressOutside && description != "fortress" && description != "retreat" && description != "flee" && travel > 0.25 && !delivery)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool ownTown = it != known.end() && it->second.type == Obj::TOWN && it->second.owner == me;
@@ -4622,12 +4654,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			if(!ownTown && !enemyHeroToday)
 				return;
 		}
-		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget)
+		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner);
+			// (safeParts) another town of ours within today's march is as good a place to end the day
+			const bool otherTownToday = heavyPart && it != known.end() && it->second.type == Obj::TOWN && it->second.owner == me && travel < 1.0;
 			// the threat itself may be attacked, but only today: walking off towards it leaves the town open
-			if(!enemyHero || (params.antiOscillation && travel > roundTripBudget))
+			if(!otherTownToday && (!enemyHero || (params.antiOscillation && travel > roundTripBudget)))
 				return;
 		}
 		if(params.antiOscillation && description != "retreat" && description != "flee")
@@ -5191,6 +5225,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	if(fortressOutside)
 	{
 		// the town of ours where the hero stands strongest against that army, by the days it takes to get there
+		// (safeParts: a heavy part outside a town - any town of ours, the nearest first)
 		for(const auto * town : perception.ownTowns())
 		{
 			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
