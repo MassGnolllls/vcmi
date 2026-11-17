@@ -335,3 +335,26 @@ match   19 FairAI as blue of 2: victory winner=red day=59 score=0.00 [74.2s]
 match   15 FairAI as blue of 2: timeout winner= day=151 score=1.00 [260.8s]
 match   17 FairAI as blue of 2: victory winner=blue day=139 score=1.00 [208.9s]
 match   18 FairAI as red of 2: victory winner=red day=111 score=1.00 [205.1s]
+match   16 FairAI as red of 2: timeout winner= day=151 score=0.58 [286.7s]
+match   20 FairAI as red of 2: victory winner=red day=83 score=1.00 [133.3s]
+match   21 FairAI as blue of 2: victory winner=red day=142 score=0.00 [234.0s]
+match   22 FairAI as red of 2: victory winner=blue day=101 score=0.00 [241.0s]
+match   23 FairAI as blue of 2: timeout winner= day=151 score=0.90 [324.1s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 13 -> FairAI won 10, lost 3  (win rate 77%, 95% CI 50%-92%)
+- day limit reached: 11 (material lead for FairAI in 8)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 105 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 56 --out /home/alex/fairai/runs/022zz2d925-towns-b/m-land-2p/nSCEH-s56 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"scouts": 2, "supplyRuns": 1, "campaignEdge": 2.0, "townHop": 1}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    3 FairAI as blue of 2: victory winner=blue day=92 score=1.00 [159.5s]
+match    4 FairAI as red of 2: victory winner=red day=144 score=1.00 [227.5s]
+match    2 FairAI as red of 2: timeout winner= day=151 score=0.54 [259.0s]
+match    5 FairAI as blue of 2: timeout winner= day=151 score=0.39 [260.1s]
+match    0 FairAI as red of 2: victory winner=red day=140 score=1.00 [267.2s]
+match    1 FairAI as blue of 2: timeout winner= day=151 score=0.34 [285.3s]
+match    6 FairAI as red of 2: victory winner=red day=99 score=1.00 [147.2s]
