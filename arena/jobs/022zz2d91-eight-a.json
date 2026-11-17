@@ -1,0 +1,22 @@
+{
+ "note": "block 1 of 2: eight switches on medium land maps, long games, 24 per config: S = two scouts; E = campaign from twice the strongest enemy hero seen; C = supply runs; T = buildings and creature banks valued by their table (the standard since 17.11. - off means tables 0); P = the way out of the home region (passage: a guard in a gap counts with the region behind it, with regionValue 8000, troops fetched by their share, land behind a guard counted from the guard, main hero looks 12 days ahead); W = simulated fights against map guards (fightForecast); A = troops judged by what they do to the army, buildings with rules of their own, the fastest creature stays with a hero that hands over its army (armyFit, sites, fastKeeper); H = battle knowledge: what attacks do beyond their damage (death stare, petrifying, ageing ...) and spells cast by how the fight ends (simAfterHit, spellSearch 2). Design 2^(8-4), resolution IV: P = E*C*T, W = S*C*T, A = S*E*C, H = S*E*T; two blocks by S*E. Evaluate both blocks together with arena/effects.py. Why: in logged games of the standard the main hero never leaves its corner of the map (24 centaur captains unbeaten for 93 days, army 443,000, 20 % explored, lost); the first half of the seven-switch test showed S, C and E each a little ahead and magicFocus clearly behind; banks gained +0.157 +- 0.125 on the set with all factions.",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "50",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"old\": {\"tables\": 0}, \"nTPWH\": {\"passage\": 1, \"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"fightForecast\": 1, \"simAfterHit\": 1, \"spellSearch\": 2}, \"nCPWA\": {\"supplyRuns\": 1, \"passage\": 1, \"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"fightForecast\": 1, \"armyFit\": 1, \"sites\": 1, \"fastKeeper\": 1, \"tables\": 0}, \"nCTAH\": {\"supplyRuns\": 1, \"armyFit\": 1, \"sites\": 1, \"fastKeeper\": 1, \"simAfterHit\": 1, \"spellSearch\": 2}, \"nSEPW\": {\"scouts\": 2, \"campaignEdge\": 2.0, \"passage\": 1, \"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"fightForecast\": 1, \"tables\": 0}, \"nSETH\": {\"scouts\": 2, \"campaignEdge\": 2.0, \"simAfterHit\": 1, \"spellSearch\": 2}, \"nSECA\": {\"scouts\": 2, \"campaignEdge\": 2.0, \"supplyRuns\": 1, \"armyFit\": 1, \"sites\": 1, \"fastKeeper\": 1, \"tables\": 0}, \"nSECTPWAH\": {\"scouts\": 2, \"campaignEdge\": 2.0, \"supplyRuns\": 1, \"passage\": 1, \"fetchByShare\": 1, \"unlockDirect\": 1, \"regionValue\": 8000, \"mainHorizon\": 12, \"fightForecast\": 1, \"armyFit\": 1, \"sites\": 1, \"fastKeeper\": 1, \"simAfterHit\": 1, \"spellSearch\": 2}}"
+ ],
+ "jobs": 6
+}
