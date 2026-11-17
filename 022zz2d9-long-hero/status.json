@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d9-long-hero",
+ "state": "running",
+ "commit": "301cd3df1657bbb414933150e0f391c3b0174e79",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-17T11:08:33",
+ "note": "seven further switches on top of the new standard (since 17.11.: campaign with pursuit, hero model, garrisons make room and keep their troops), long games on medium land maps, 24 games per config. Where the new standard still loses its armies (96 games): as the attacker 213k per game for 777k destroyed; as the defender 406k for 123k - 206k in towns (garrisons of 30k and more that nobody fetched) and 197k in the open (three quarters of it armies of 30k and more under heroes hired after the leader fell). And the third town comes on day 44, in won and lost games alike (Nullkiller2: day 33): in the logged games the main hero walks between its two towns for two weeks, the border guard two days away is worth 1000 to it. S = two scouts; U = surrender against gold when a hero would lose its army in the open, hire it back with its army (plus veterans); M = magic (all five mage guild levels for the leader, visits to learn them, secondary skills by role); C = supply runs: a hero standing in a town brings its troops to the main hero when the road is safe; F = fortress: a main hero outmatched by an army seen near us ends every day in a town of ours; E = campaign from twice the strongest enemy hero seen instead of three times; X = expansion (troops fetched by share, guards at region borders count, main hero looks 12 days ahead). Design: 2^(7-4), generators C = S*U, F = S*M, E = U*M, X = S*U*M - first fraction (seed 44); the second (022zz2d9b, seed 45) reverses every sign, together the main effects are free of two-switch interactions. Evaluate both with arena/effects.py"
+}
