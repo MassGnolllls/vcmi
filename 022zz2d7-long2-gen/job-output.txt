@@ -1,0 +1,1 @@
+m-land-2p-all: 12/12 maps ready in /home/alex/.local/share/vcmi/Maps/long2-m-land-2p-all
