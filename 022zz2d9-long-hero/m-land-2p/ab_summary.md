@@ -11,5 +11,5 @@ Paired against `new`: mean difference over the games both played (95% CI). score
 | nUME | `{"surrender": 1, "veterans": 1, "magicFocus": 1, "skillChoice": 1, "campaignEdge": 2.0}` | 24 | 4 | 6 | 0.446 ± 0.160 | -0.152 ± 0.206 | 0.423 ± 0.173 | -0.173 ± 0.225 | 24 |
 | nSEX | `{"scouts": 2, "campaignEdge": 2.0, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12}` | 24 | 15 | 3 | 0.757 ± 0.150 | +0.159 ± 0.174 | 0.738 ± 0.153 | +0.143 ± 0.170 | 24 |
 | nSMF | `{"scouts": 2, "magicFocus": 1, "skillChoice": 1, "fortress": 1}` | 24 | 4 | 7 | 0.460 ± 0.154 | -0.139 ± 0.159 | 0.424 ± 0.157 | -0.172 ± 0.167 | 24 |
-| nSUC | `{"scouts": 2, "surrender": 1, "veterans": 1, "supplyRuns": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nSUC | `{"scouts": 2, "surrender": 1, "veterans": 1, "supplyRuns": 1}` | 23 | 12 | 3 | 0.691 ± 0.156 | +0.110 ± 0.203 | 0.681 ± 0.172 | +0.104 ± 0.232 | 23 |
 | nSUMCFEX | `{"scouts": 2, "surrender": 1, "veterans": 1, "magicFocus": 1, "skillChoice": 1, "supplyRuns": 1, "fortress": 1, "campaignEdge": 2.0, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
