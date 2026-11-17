@@ -380,6 +380,12 @@ private:
 	// ---- buildings valued by the public table of their kind (parameter tables)
 	/// what one reward of a table is worth to this hero, in gold; what the building takes is subtracted
 	double rewardValue(const CGHeroInstance * hero, const Rewardable::Reward & reward, const int3 & where) const;
+	/// what luck or morale for the next battle is worth to this hero's army
+	double battleEdgeValue(const CGHeroInstance * hero, bool luck, int points) const;
+	mutable std::set<std::tuple<int, int, int>> moveLossLog; ///< diagnostics: day, hero, building
+	std::set<int3> sanctuaries; ///< where the Sanctuaries we know stand
+	/// the share of the movement a hero has left that a visit to such a building takes
+	double moveLossShare(const CGHeroInstance * hero, const RewardTable & table) const;
 	/// what a visit brings on average over the buildings the table can produce (`only`: these samples)
 	double tableValue(const CGHeroInstance * hero, const RewardTable & table, const std::vector<int> * only, const int3 & where) const;
 	/// an artifact to pick up: by its class, or by what it does for our heroes (parameter artifactCare)

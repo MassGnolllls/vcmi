@@ -480,6 +480,13 @@ void AdventureAI::playTurn()
 	forecastCache.clear();
 	perception.refresh();
 	updateQuests();
+	// sanctuaries we know: a hero standing in one cannot be attacked
+	sanctuaries.clear();
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type == Obj::SANCTUARY)
+			sanctuaries.insert(object.visitablePos);
+	}
 	{
 		// heroes killed during the enemy's turn
 		std::set<ObjectInstanceID> current;
@@ -2062,6 +2069,73 @@ double AdventureAI::unexploredAround(const int3 & where, const Rewardable::Rewar
 	return count;
 }
 
+double AdventureAI::battleEdgeValue(const CGHeroInstance * hero, bool luck, int points) const
+{
+	// Luck or morale for the next battle is worth what it adds to the army that fights it: nothing to
+	// a hero that carries a handful of troops, nothing beyond +3, nothing to troops that know no
+	// morale - and much to a large army. Luck: the chance of a double blow; morale: turns gained or
+	// lost, by the game's own dice.
+	if(!hero || points == 0)
+		return 0;
+	const double army = static_cast<double>(hero->getArmyStrength());
+	double edge = 0; // the army's strength in that battle, as a share
+	if(luck)
+	{
+		const auto & rules = cb->getSettings();
+		const double dice = std::max<int64_t>(1, rules.getInteger(EGameSettings::COMBAT_LUCK_DICE_SIZE));
+		const std::vector<int> good = rules.getVector(EGameSettings::COMBAT_GOOD_LUCK_CHANCE);
+		const std::vector<int> bad = rules.getVector(EGameSettings::COMBAT_BAD_LUCK_CHANCE);
+		auto damage = [&](int l)
+		{
+			if(l > 0 && !good.empty())
+				return 1.0 + good[std::min<size_t>(l, good.size()) - 1] / dice;
+			if(l < 0 && !bad.empty())
+				return 1.0 - 0.5 * bad[std::min<size_t>(-l, bad.size()) - 1] / dice;
+			return 1.0;
+		};
+		const int now = hero->valOfBonuses(Selector::type()(BonusType::LUCK));
+		edge = damage(now + points) - damage(now);
+	}
+	else
+	{
+		std::vector<std::pair<CreatureID, double>> kinds;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(stack && stack->getCreatureID().hasValue())
+				kinds.emplace_back(stack->getCreatureID(), stackValue(stack.get()));
+		}
+		const int shared = sharedMorale(hero);
+		edge = army > 0 ? (armyWorth(shared + points, kinds) - armyWorth(shared, kinds)) / army : 0.0;
+	}
+	// one battle, not the war: about the tenth of the army that a fight worth the name costs
+	return edge * army * params.goldPerArmyValue * 0.1 * (isMain(hero) ? 1.0 : 0.3);
+}
+
+double AdventureAI::moveLossShare(const CGHeroInstance * hero, const RewardTable & table) const
+{
+	// The share of the movement a hero has left that a visit takes. A Swan Pond takes all of it for
+	// two points of luck in the next battle: with a day's march left that is a day lost, with two
+	// steps left it costs nothing.
+	double total = 0;
+	int weight = 0;
+	for(const RewardSample & sample : table.samples)
+	{
+		double worst = 0;
+		for(const auto & visit : sample.visits)
+		{
+			if(!visit.limiter.heroAllowed(hero))
+				continue;
+			if(visit.reward.movePercentage >= 0 && visit.reward.movePercentage < 100)
+				worst = std::max(worst, 1.0 - visit.reward.movePercentage / 100.0);
+			if(table.selectMode == Rewardable::SELECT_FIRST)
+				break;
+		}
+		total += worst * sample.weight;
+		weight += sample.weight;
+	}
+	return weight > 0 ? total / weight : 0.0;
+}
+
 double AdventureAI::rewardValue(const CGHeroInstance * hero, const Rewardable::Reward & reward, const int3 & where) const
 {
 	const bool main = isMain(hero);
@@ -2100,8 +2174,10 @@ double AdventureAI::rewardValue(const CGHeroInstance * hero, const Rewardable::R
 	// spell points and movement: what the hero would have afterwards against what it has now
 	if(hero->hasSpellbook() && (reward.manaDiff != 0 || reward.manaPercentage >= 0))
 		value += (reward.calculateManaPoints(hero) - hero->mana) * (main ? params.manaValueMain : 0.25 * params.manaValueMain);
+	// (movement a visit takes is not a sum of gold: it is the rest of the day, and counted as time
+	// on the way there - see moveLossShare)
 	if(reward.movePoints != 0 || reward.movePercentage >= 0)
-		value += (reward.calculateMovePoints(hero) - hero->movementPointsRemaining()) * (main ? params.moveValueMain : 0.33 * params.moveValueMain);
+		value += std::max(0, reward.calculateMovePoints(hero) - hero->movementPointsRemaining()) * (main ? params.moveValueMain : 0.33 * params.moveValueMain);
 
 	// skills
 	const double primary = main ? params.primarySkillValueMain : params.primarySkillValueOther;
@@ -2165,7 +2241,7 @@ double AdventureAI::rewardValue(const CGHeroInstance * hero, const Rewardable::R
 		{
 		case BonusType::MORALE:
 		case BonusType::LUCK:
-			value += (main ? 150.0 : 0.0) * bonus->val;
+			value += battleEdgeValue(hero, bonus->type == BonusType::LUCK, bonus->val);
 			break;
 		case BonusType::MOVEMENT:
 			value += bonus->val * (main ? 1.0 : 0.3);
@@ -3416,6 +3492,10 @@ double AdventureAI::tolerance(const CGHeroInstance * hero) const
 
 double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) const
 {
+	// in a Sanctuary nobody can attack: worth nothing while no enemy is near, the place to be when a
+	// stronger hero would catch us tomorrow
+	if(sanctuaries.count(tile))
+		return 1e12;
 	double strength = fieldStrength(hero);
 	for(const auto * town : perception.ownTowns())
 	{
@@ -4065,6 +4145,12 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		return (!hero->hasSpellbook() || visitedByHero()) ? 0 : 900;
 	case Obj::STABLES:
 		return visitedByHero() ? 0 : 400;
+	case Obj::SWAN_POND:
+		// two points of luck for the next battle - by what they add to this army (nothing if luck
+		// stands at +3 already); the movement the visit takes is counted as time on the way
+		if(!main || visitedByHero())
+			return 0;
+		return object.table ? std::max(0.0, tableValue(hero, *object.table, nullptr, object.visitablePos)) : 150.0;
 	case Obj::FOUNTAIN_OF_FORTUNE:
 	case Obj::FAERIE_RING:
 	case Obj::IDOL_OF_FORTUNE:
@@ -4073,8 +4159,12 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 	case Obj::OASIS:
 	case Obj::WATERING_HOLE:
 	case Obj::FOUNTAIN_OF_YOUTH:
-	case Obj::SWAN_POND:
-		return (!main || visitedByHero()) ? 0 : 150;
+		if(visitedByHero())
+			return 0;
+		// (tables) by what the building gives this hero now: luck and morale by its army, movement by what is missing
+		if(params.tables && object.table)
+			return std::max(0.0, tableValue(hero, *object.table, nullptr, object.visitablePos));
+		return main ? 150 : 0;
 	case Obj::MONOLITH_TWO_WAY:
 	case Obj::MONOLITH_ONE_WAY_ENTRANCE:
 	case Obj::SUBTERRANEAN_GATE:
@@ -4573,8 +4663,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				if(town && townNeed(town, hero) <= 0.2)
 					value *= (node->cost + params.travelOffset) / (2.0 * node->cost + params.travelOffset);
 			}
+			// A visit that takes the movement the hero has left (Swan Pond; Watering Place and Grave
+			// of Horn of the Abyss): the rest of that day is its price, as time on top of the way.
+			double travel = node->cost;
+			if(object.table)
+			{
+				const double share = moveLossShare(hero, *object.table);
+				if(share > 0)
+				{
+					travel += share * std::max(0, node->moveRemains) / std::max(1, hero->movementPointsLimit(true));
+					if(logAi->isDebugEnabled() && moveLossLog.insert({today, heroNum, id.getNum()}).second)
+						logAi->debug("FairAI %s day %d: %s and the building %d/%d at %s that takes the movement left: worth %.0f, %.2f days away, %d movement points left on arrival -> counted as %.2f days",
+							me.toString(), today, hero->getNameTranslated(), object.type.getNum(), object.subtype.getNum(), object.visitablePos.toString(),
+							value, node->cost, node->moveRemains, travel);
+				}
+			}
 			// (heroes: whose - walking up to our own hero hands over troops, an enemy's is a hunt)
-			addTarget(object.visitablePos, id, value, loss, node->cost, (bank ? "bank " : "object ") + std::to_string(object.type.getNum())
+			addTarget(object.visitablePos, id, value, loss, travel, (bank ? "bank " : "object ") + std::to_string(object.type.getNum())
 				+ (object.type == Obj::HERO ? (object.owner == me ? " own" : " enemy") : ""));
 		}
 		else if(const CGPathNode * free = reachable(freePaths, object.visitablePos))
@@ -4925,7 +5030,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					bool ownTown = false;
 					for(const auto * town : perception.ownTowns())
 						ownTown = ownTown || town->visitablePos() == tile;
-					if(node->action != EPathNodeAction::NORMAL && !ownTown)
+					const bool haven = sanctuaries.count(tile) > 0 && (node->action == EPathNodeAction::VISIT || node->action == EPathNodeAction::NORMAL);
+					if(node->action != EPathNodeAction::NORMAL && !ownTown && !haven)
 						continue;
 					double margin = defenceAt(hero, tile) * tolerance(hero) - threatAt(tile, ObjectInstanceID(), cautious);
 					if(margin <= 0)
@@ -4941,7 +5047,12 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					}
 				}
 		if(bestRetreat.score > 0)
+		{
+			if(sanctuaries.count(bestRetreat.tile))
+				logAi->info("FairAI %s day %d: %s (strength %.0f) takes shelter in the Sanctuary at %s from an army of %.0f", me.toString(), today,
+					hero->getNameTranslated(), ownStrength, bestRetreat.tile.toString(), threatAt(heroPos, ObjectInstanceID(), cautious));
 			addTarget(bestRetreat.tile, ObjectInstanceID(), bestRetreat.value, 0, bestRetreat.travel, "retreat");
+		}
 		else
 		{
 			// nowhere is safe: get as far away from the threats as we can today

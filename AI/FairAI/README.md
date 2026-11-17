@@ -2,6 +2,8 @@
 
 Eine KI für VCMI (Heroes of Might and Magic III), die ohne Schummeln spielt: kein Aufdecken der Karte, keine Extraboni, kein Wissen, das ein Mensch auf demselben Platz nicht hätte.
 
+**Was die fertige KI können muss**, steht in [`ANFORDERUNGEN.md`](ANFORDERUNGEN.md): alle Anforderungen des Nutzers mit Stand je Punkt. Diese Liste wird bei jeder neuen Anmerkung ergänzt und vor der Fertigstellung Punkt für Punkt geprüft.
+
 ## Aufbau
 
 ```
