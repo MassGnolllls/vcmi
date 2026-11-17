@@ -12,7 +12,7 @@ Paired against `nETHK`: mean difference over the games both played (95% CI). sco
 | nYRTK | `{"safeParts": 1, "refillShare": 1.0, "townWorth": 1, "freshHeroes": 1}` | 24 | 7 | 6 | 0.535 ± 0.170 | -0.030 ± 0.233 | 0.512 ± 0.166 | -0.083 ± 0.229 | 24 |
 | nYCET | `{"safeParts": 1, "supplyRuns": 1, "campaignEdge": 2.0, "townWorth": 1}` | 23 | 5 | 2 | 0.619 ± 0.139 | +0.029 ± 0.212 | 0.596 ± 0.150 | -0.025 ± 0.211 | 23 |
 | nYCREHK | `{"safeParts": 1, "supplyRuns": 1, "refillShare": 1.0, "campaignEdge": 2.0, "townHop": 1, "freshHeroes": 1}` | 24 | 10 | 3 | 0.712 ± 0.147 | +0.147 ± 0.194 | 0.649 ± 0.163 | +0.054 ± 0.216 | 24 |
-| nST | `{"scouts": 2, "townWorth": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nST | `{"scouts": 2, "townWorth": 1}` | 22 | 11 | 5 | 0.592 ± 0.189 | +0.021 ± 0.243 | 0.617 ± 0.187 | +0.013 ± 0.229 | 22 |
 | nSRHK | `{"scouts": 2, "refillShare": 1.0, "townHop": 1, "freshHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nSCEH | `{"scouts": 2, "supplyRuns": 1, "campaignEdge": 2.0, "townHop": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nSCRETK | `{"scouts": 2, "supplyRuns": 1, "refillShare": 1.0, "campaignEdge": 2.0, "townWorth": 1, "freshHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |

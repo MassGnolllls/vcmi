@@ -292,3 +292,26 @@ match    6 FairAI as red of 2: victory winner=red day=99 score=1.00 [160.9s]
 match   11 FairAI as blue of 2: victory winner=blue day=68 score=1.00 [94.7s]
 match    8 FairAI as red of 2: victory winner=blue day=144 score=0.00 [230.1s]
 match   10 FairAI as red of 2: victory winner=blue day=133 score=0.00 [210.8s]
+match   14 FairAI as red of 2: victory winner=red day=100 score=1.00 [134.8s]
+match    7 FairAI as blue of 2: timeout winner= day=151 score=0.11 [297.8s]
+match   17 FairAI as blue of 2: no result file winner=- day=- score=- [21.7s]
+match   13 FairAI as blue of 2: no result file winner=- day=- score=- [175.8s]
+match   12 FairAI as red of 2: timeout winner= day=151 score=0.00 [276.3s]
+match   15 FairAI as blue of 2: victory winner=blue day=91 score=1.00 [173.1s]
+match   20 FairAI as red of 2: victory winner=red day=88 score=1.00 [151.1s]
+match   16 FairAI as red of 2: timeout winner= day=151 score=0.58 [260.1s]
+match   21 FairAI as blue of 2: victory winner=blue day=146 score=1.00 [239.6s]
+match   19 FairAI as blue of 2: victory winner=red day=130 score=0.00 [308.8s]
+match   18 FairAI as red of 2: timeout winner= day=151 score=0.43 [362.6s]
+match   22 FairAI as red of 2: victory winner=blue day=146 score=0.00 [309.4s]
+match   23 FairAI as blue of 2: victory winner=red day=125 score=0.00 [305.6s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 2)
+- decided: 16 -> FairAI won 11, lost 5  (win rate 69%, 95% CI 44%-86%)
+- day limit reached: 6 (material lead for FairAI in 2)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 114 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 56 --out /home/alex/fairai/runs/022zz2d925-towns-b/m-land-2p/nSRHK-s56 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"scouts": 2, "refillShare": 1.0, "townHop": 1, "freshHeroes": 1}
