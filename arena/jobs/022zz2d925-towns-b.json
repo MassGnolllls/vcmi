@@ -1,0 +1,22 @@
+{
+ "note": "block 2 of 2 (block 1 runs on the workspace, seed 55): eight switches against the standstill of the middle game, long games on medium land maps, 24 per config. N = enemy magic by measurement (magicWorth); Y = real armies outside the main hero end the day in a town (safeParts); C = supply runs; R = troops waiting at home worth the main hero's army interrupt it (refillShare 1.0); E = campaign from twice the strongest enemy hero seen; T = a foreign town is worth what it yields on any day (townWorth); H = a town taken today is a safe place for the night (townHop); K = unknown heroes that show up late are fresh ones (freshHeroes). Design 2^(8-4), resolution IV; this block: E = -N*Y*C, T = -Y*C*R, H = -N*C*R, K = -N*Y*R (block 1 with + signs). Why: 518 long games - 43 % won, 39 % undecided, 19 % lost. Undecided: three towns against four from day 56 to day 150, armies level, 419,000 of ours in garrisons and 143,000 gold unspent on day 126; off campaign an enemy town counted 20,000 (a gold mine in enemy hands: 42,000) and the main hero hunted lesser heroes for 65 days. Evaluate both blocks together with arena/effects.py: --factors '{\"N\": {\"magicWorth\": 1}, \"Y\": {\"safeParts\": 1}, \"C\": {\"supplyRuns\": 1}, \"R\": {\"refillShare\": 1.0}, \"E\": {\"campaignEdge\": 2.0}, \"T\": {\"townWorth\": 1}, \"H\": {\"townHop\": 1}, \"K\": {\"freshHeroes\": 1}}'",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "56",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"nETHK\": {\"campaignEdge\": 2.0, \"townWorth\": 1, \"townHop\": 1, \"freshHeroes\": 1}, \"nRE\": {\"refillShare\": 1.0, \"campaignEdge\": 2.0}, \"nCK\": {\"supplyRuns\": 1, \"freshHeroes\": 1}, \"nCRTH\": {\"supplyRuns\": 1, \"refillShare\": 1.0, \"townWorth\": 1, \"townHop\": 1}, \"nYH\": {\"safeParts\": 1, \"townHop\": 1}, \"nYRTK\": {\"safeParts\": 1, \"refillShare\": 1.0, \"townWorth\": 1, \"freshHeroes\": 1}, \"nYCET\": {\"safeParts\": 1, \"supplyRuns\": 1, \"campaignEdge\": 2.0, \"townWorth\": 1}, \"nYCREHK\": {\"safeParts\": 1, \"supplyRuns\": 1, \"refillShare\": 1.0, \"campaignEdge\": 2.0, \"townHop\": 1, \"freshHeroes\": 1}, \"nNT\": {\"magicWorth\": 1, \"townWorth\": 1}, \"nNRHK\": {\"magicWorth\": 1, \"refillShare\": 1.0, \"townHop\": 1, \"freshHeroes\": 1}, \"nNCEH\": {\"magicWorth\": 1, \"supplyRuns\": 1, \"campaignEdge\": 2.0, \"townHop\": 1}, \"nNCRETK\": {\"magicWorth\": 1, \"supplyRuns\": 1, \"refillShare\": 1.0, \"campaignEdge\": 2.0, \"townWorth\": 1, \"freshHeroes\": 1}, \"nNYEK\": {\"magicWorth\": 1, \"safeParts\": 1, \"campaignEdge\": 2.0, \"freshHeroes\": 1}, \"nNYRETH\": {\"magicWorth\": 1, \"safeParts\": 1, \"refillShare\": 1.0, \"campaignEdge\": 2.0, \"townWorth\": 1, \"townHop\": 1}, \"nNYCTHK\": {\"magicWorth\": 1, \"safeParts\": 1, \"supplyRuns\": 1, \"townWorth\": 1, \"townHop\": 1, \"freshHeroes\": 1}, \"nNYCR\": {\"magicWorth\": 1, \"safeParts\": 1, \"supplyRuns\": 1, \"refillShare\": 1.0}}"
+ ],
+ "jobs": 6
+}
