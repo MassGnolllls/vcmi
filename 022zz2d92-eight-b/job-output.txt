@@ -225,3 +225,26 @@ match   11 FairAI as blue of 2: victory winner=blue day=114 score=1.00 [182.7s]
 match   10 FairAI as red of 2: timeout winner= day=151 score=0.28 [317.3s]
 match   13 FairAI as blue of 2: victory winner=blue day=126 score=1.00 [197.9s]
 match   12 FairAI as red of 2: victory winner=blue day=129 score=0.00 [250.4s]
+match   14 FairAI as red of 2: victory winner=red day=129 score=1.00 [243.0s]
+match   15 FairAI as blue of 2: victory winner=blue day=128 score=1.00 [245.7s]
+match   17 FairAI as blue of 2: victory winner=blue day=109 score=1.00 [155.0s]
+match   16 FairAI as red of 2: timeout winner= day=151 score=0.82 [236.4s]
+match   20 FairAI as red of 2: victory winner=red day=64 score=1.00 [92.8s]
+match   19 FairAI as blue of 2: victory winner=blue day=105 score=1.00 [197.6s]
+match   18 FairAI as red of 2: victory winner=red day=107 score=1.00 [218.5s]
+match   21 FairAI as blue of 2: victory winner=blue day=125 score=1.00 [250.4s]
+match   22 FairAI as red of 2: victory winner=red day=146 score=1.00 [310.7s]
+match   23 FairAI as blue of 2: timeout winner= day=151 score=0.93 [302.1s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 20 -> FairAI won 15, lost 5  (win rate 75%, 95% CI 53%-89%)
+- day limit reached: 4 (material lead for FairAI in 3)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 111 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/8fb258c249/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 51 --out /home/alex/fairai/runs/022zz2d92-eight-b/m-land-2p/nSCTW-s51 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"scouts": 2, "supplyRuns": 1, "fightForecast": 1}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    3 FairAI as blue of 2: victory winner=blue day=98 score=1.00 [130.6s]
+match    4 FairAI as red of 2: victory winner=red day=112 score=1.00 [194.4s]
