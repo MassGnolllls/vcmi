@@ -284,6 +284,7 @@ void Params::loadOverrides(int playerIndex)
 	read("magicWorth", magicWorth);
 	read("safeParts", safeParts);
 	read("townWorth", townWorth);
+	read("freshHeroes", freshHeroes);
 	read("trappedHome", trappedHome);
 	read("townHop", townHop);
 	read("heavyPartValue", heavyPartValue);
@@ -2719,7 +2720,11 @@ void AdventureAI::updateThreats()
 		const double factor = heroFactor(object);
 		t.strength = observedDanger(object) * factor * (1.0 + params.threatGrowth * age);
 		if(age == 0)
+		{
 			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor, object.visitablePos, observedDanger(object), factor};
+			std::unique_lock lock(intelMutex);
+			heroFirstSeen.emplace(object.subtype.getNum(), today);
+		}
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
@@ -2755,6 +2760,11 @@ void AdventureAI::updateThreats()
 			++townsKnown[object.owner];
 		if(contactDay < 0 && (object.type == Obj::TOWN || object.type == Obj::HERO) && isEnemy(object.owner))
 			contactDay = today; // the first enemy hero or town we get to see
+		if((object.type == Obj::TOWN || object.type == Obj::HERO) && isEnemy(object.owner))
+		{
+			std::unique_lock lock(intelMutex);
+			playerContact.emplace(object.owner.getNum(), today);
+		}
 	}
 	// Campaign: our main hero is clearly the strongest force we know of - time to end the game. On at
 	// campaignEdge times the strongest enemy hero seen in the last three weeks, off again well below
@@ -2837,7 +2847,8 @@ void AdventureAI::updateThreats()
 		// part of its own army is what decides the war (a campaign fought with half of our troops,
 		// the other half waiting in the towns, was how games were lost): fetch it, then march again.
 		const bool refillBefore = refillMode;
-		if(campaignMode && leader && params.refillShare > 0)
+		// (townWorth: the main hero goes for towns on any day, so the troops at home interrupt it on any day)
+		if((campaignMode || (params.townWorth && today >= 21)) && leader && params.refillShare > 0)
 		{
 			double stock = 0;
 			for(const auto * town : perception.ownTowns())
@@ -2972,7 +2983,24 @@ std::array<double, 4> AdventureAI::heroSkillsEstimate(const ObservedObject & her
 	if(heroClass && heroClass->primarySkillInitial.size() >= 4)
 		for(size_t i = 0; i < 4; ++i)
 			skills[i] = heroClass->primarySkillInitial[i];
-	grow(skills, 1.0, std::min(25.0, weight * today / 5.5));
+	// (freshHeroes) Since when has it been growing? A hero that shows up long after we met its owner
+	// is one hired lately - the enemy hands the armies of its fallen leaders to new heroes. Not so the
+	// one the thieves' guild names as the owner's best, and not the heroes of the first two weeks of
+	// contact: those may have been at it since day 1.
+	int since = 1;
+	if(params.freshHeroes)
+	{
+		std::unique_lock lock(intelMutex);
+		auto first = heroFirstSeen.find(hero.subtype.getNum());
+		auto contact = playerContact.find(hero.owner.getNum());
+		const int firstDay = first != heroFirstSeen.end() ? first->second : today;
+		const int contactDay = contact != playerContact.end() ? contact->second : today;
+		auto best = guildBestHero.find(hero.owner);
+		const bool named = best != guildBestHero.end() && best->second == hero.subtype.getNum();
+		if(firstDay - contactDay > 14 && !named)
+			since = std::max(1, firstDay - 14);
+	}
+	grow(skills, 1.0, std::min(25.0, weight * (today - since + 1) / 5.5));
 	return skills;
 }
 
@@ -4462,7 +4490,8 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		// without a town the game is lost after seven days: any town is worth everything
 		if(perception.ownTowns().empty())
 			return 100000;
-		if(!campaign(hero) && !params.townWorth)
+		// (while the main hero fetches the troops waiting at home - refillShare - towns count little to it)
+		if(!campaign(hero) && (!params.townWorth || (refillMode && isMain(hero))))
 			return enemy ? params.enemyTownValue : params.neutralTownValue;
 		// On campaign: the enemy's towns are how the game is won, and a town taken late is a built-up one
 		// (townWorth: that is what a town is worth on any day and to any hero - gold and growth for
