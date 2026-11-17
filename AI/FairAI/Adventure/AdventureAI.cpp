@@ -284,6 +284,8 @@ void Params::loadOverrides(int playerIndex)
 	read("magicWorth", magicWorth);
 	read("safeParts", safeParts);
 	read("townWorth", townWorth);
+	read("secondArmy", secondArmy);
+	read("secondArmyEdge", secondArmyEdge);
 	read("freshHeroes", freshHeroes);
 	read("trappedHome", trappedHome);
 	read("townHop", townHop);
@@ -441,6 +443,54 @@ bool AdventureAI::isMain(const CGHeroInstance * hero) const
 	return hero && hero->id == mainHero;
 }
 
+bool AdventureAI::leads(const CGHeroInstance * hero) const
+{
+	return hero && (hero->id == mainHero || secondLeaders.count(hero->id) > 0);
+}
+
+double AdventureAI::secondArmyBar() const
+{
+	// What a second army must be able to beat on its own: the strongest enemy hero seen in the last
+	// three weeks, in the measure of the hero model. Only while we know the enemies' best heroes -
+	// an army that beats the scouts we happened to see is no match for the one we did not.
+	if(!params.secondArmy || !params.heroModel || !oppositionKnown || oppositionHeroes <= 0)
+		return -1;
+	return std::max(params.secondArmyEdge * oppositionHeroes, params.heavyPartValue);
+}
+
+void AdventureAI::updateSecondLeaders()
+{
+	const double bar = secondArmyBar();
+	std::set<ObjectInstanceID> now;
+	if(bar > 0)
+	{
+		for(const auto * hero : perception.ownHeroes())
+		{
+			if(hero->id == mainHero || (supply && supply->courier == hero->id))
+				continue;
+			const double strength = fieldStrength(hero);
+			// (a leader keeps its role down to three quarters of the bar: no change of rules after every fight)
+			if(strength >= bar || (secondLeaders.count(hero->id) && strength >= 0.75 * bar))
+				now.insert(hero->id);
+		}
+	}
+	for(const auto & id : now)
+	{
+		if(!secondLeaders.count(id))
+			if(const auto * hero = ownHero(id))
+				logAi->info("FairAI %s day %d: %s leads a second army (in the field %.0f; needed %.0f, the strongest enemy hero seen lately %.0f)", me.toString(), today,
+					hero->getNameTranslated(), fieldStrength(hero), bar, oppositionHeroes);
+	}
+	for(const auto & id : secondLeaders)
+	{
+		if(!now.count(id))
+			if(const auto * hero = ownHero(id); hero && hero->id != mainHero)
+				logAi->info("FairAI %s day %d: %s no longer leads a second army (in the field %.0f; needed %.0f)", me.toString(), today,
+					hero->getNameTranslated(), fieldStrength(hero), bar);
+	}
+	secondLeaders = now;
+}
+
 std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * hero, bool ignoreGuards) const
 {
 	auto result = std::make_shared<CPathsInfo>(cb->getMapSize(), hero);
@@ -527,11 +577,13 @@ void AdventureAI::playTurn()
 	manageTowns(false);
 	hireHeroes();
 	chooseMainHero();
+	updateSecondLeaders();
 	for(const auto * hero : perception.ownHeroes())
 	{
 		if(const auto * town = hero->getVisitedTown())
 			manageTownVisit(hero, town);
 	}
+	updateSecondLeaders();
 
 	auto timeLeft = [&turnStart]()
 	{
@@ -554,6 +606,7 @@ void AdventureAI::playTurn()
 
 	hireHeroes();
 	chooseMainHero();
+	updateSecondLeaders();
 
 	scoutsToday.clear();
 	std::vector<ObjectInstanceID> others;
@@ -579,6 +632,12 @@ void AdventureAI::playTurn()
 			break;
 		}
 		if(supply && supply->courier == id)
+		{
+			playHero(id);
+			continue;
+		}
+		// (secondArmy) a second leader is no collector, scout or town guard: it takes none of their places
+		if(leads(ownHero(id)))
 		{
 			playHero(id);
 			continue;
@@ -711,6 +770,32 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			hero = ownHero(heroId);
 			if(!hero || hero->isGarrisoned())
 				return;
+			// (secondArmy) A second leader that walks out of the garrison takes all of it along: its
+			// weakest stack stays behind as a token guard - raiders take empty towns for free.
+			if(params.secondArmy && params.keepGarrison && leads(hero) && !isMain(hero) && town->stacksCount() == 0 && hero->stacksCount() > 1)
+			{
+				SlotID weakest;
+				double weakestValue = std::numeric_limits<double>::max();
+				for(const auto & [slot, stack] : hero->Slots())
+				{
+					const double v = stackValue(stack.get());
+					if(v < weakestValue)
+					{
+						weakestValue = v;
+						weakest = slot;
+					}
+				}
+				const CStackInstance * stack = weakest.validSlot() ? hero->getStackPtr(weakest) : nullptr;
+				const SlotID target = stack ? town->getSlotFor(stack->getCreatureID()) : SlotID();
+				if(stack && target.validSlot())
+				{
+					cb->mergeOrSwapStacks(hero, town, weakest, target);
+					gateway.waitTillFree();
+					hero = ownHero(heroId);
+					if(!hero)
+						return;
+				}
+			}
 		}
 
 		if(isMain(hero) && !hero->getVisitedTown())
@@ -1263,7 +1348,7 @@ double AdventureAI::resourceValue(GameResID resource) const
 
 double AdventureAI::expValue(const CGHeroInstance * hero) const
 {
-	return isMain(hero) ? params.expValueMain : params.expValueOther;
+	return leads(hero) ? params.expValueMain : params.expValueOther;
 }
 
 double AdventureAI::observedDanger(const ObservedObject & object) const
@@ -1303,7 +1388,7 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 	// measure that told winner from loser in the logged battles; `danger` is given in the same measure.
 	const bool model = params.heroModel && versusHero;
 	const double strength = model ? fieldStrength(hero) : static_cast<double>(hero->getTotalStrength());
-	double ratio = isMain(hero) ? (versusHero ? (model ? params.heroEdge : params.safetyRatioHero) : params.safetyRatio) : params.safetyRatioSecondary;
+	double ratio = leads(hero) ? (versusHero ? (model ? params.heroEdge : params.safetyRatioHero) : params.safetyRatio) : params.safetyRatioSecondary;
 	// a main hero that has been stuck for days accepts riskier fights against guards
 	if(isMain(hero) && !versusHero)
 		ratio = std::max(params.minSafetyRatio, ratio - params.patienceStep * idleDays);
@@ -1448,7 +1533,7 @@ double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObjec
 		share = 0.7 * likely.lossShare + 0.3 * worst.lossShare;
 		mana = 0.7 * likely.manaShare + 0.3 * worst.manaShare;
 	}
-	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : params.maxLossShareSecondary;
+	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : (leads(hero) ? params.maxLossShare : params.maxLossShareSecondary);
 	if(share > limit)
 		return -1;
 	return (share + mana) * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
@@ -2470,7 +2555,7 @@ AdventureAI::GuardedPlan AdventureAI::guardedPlan(const CGHeroInstance * hero, c
 		return plan;
 	const RewardTable & table = *object.table;
 	const double army = static_cast<double>(hero->getArmyStrength());
-	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : params.maxLossShareSecondary;
+	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : (leads(hero) ? params.maxLossShare : params.maxLossShareSecondary);
 
 	// the states the building can be in, as far as we know
 	struct Possible
@@ -2793,6 +2878,7 @@ void AdventureAI::updateThreats()
 		// no tavern, no guild: at least something of weight must have shown itself
 		if(!guildKnown && leader && oppositionHeroes < 0.25 * fieldStrength(leader))
 			mainsSeen = false;
+		oppositionKnown = mainsSeen || pursuit; // (secondArmy asks the same question)
 		// (campaignPrior) The strongest enemy hero we happened to see is a poor measure of what the
 		// enemy has: its main army may never have shown itself (a campaign begun at 3.6 times the
 		// strongest hero seen ran into an army twice that size). Until proven otherwise the enemy is
@@ -3746,7 +3832,7 @@ double AdventureAI::tolerance(const CGHeroInstance * hero) const
 {
 	// with the hero model strengths are comparable: an enemy as strong as we are is one to avoid
 	if(params.heroModel)
-		return isMain(hero) ? params.heroTolerance : 0.9 * params.heroTolerance;
+		return leads(hero) ? params.heroTolerance : 0.9 * params.heroTolerance;
 	return isMain(hero) ? params.threatTolerance : params.threatToleranceSecondary;
 }
 
@@ -4256,7 +4342,10 @@ double AdventureAI::reinforcementBoost(double troops) const
 
 double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const
 {
-	const bool main = isMain(hero);
+	// (a second leader counts skill points, artifacts and the like as the main hero does; towns and
+	// heroes of ours have rules for it below)
+	const bool main = leads(hero);
+	const bool second = main && !isMain(hero);
 	const bool own = object.owner == me;
 	const bool enemy = isEnemy(object.owner);
 	// towns, heroes, mines and dwellings of team mates are neither targets nor ours to take
@@ -4444,6 +4533,18 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			const auto * town = dynamic_cast<const CGTownInstance *>(instance);
 			if(!town)
 				return 0;
+			if(second)
+			{
+				// (secondArmy) more troops for the second army - what the main hero leaves in our towns
+				// and what has grown since; a trickle is not worth the way
+				const CGHeroInstance * leader = ownHero(mainHero);
+				if(leader && leader->getVisitedTown() == town)
+					return 0;
+				const double troops = townTroops(town, hero);
+				if(troops < std::max(800.0, 0.1 * static_cast<double>(hero->getArmyStrength())))
+					return 0;
+				return troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor;
+			}
 			if(!main)
 			{
 				// couriers: troops waiting in a town are worth bringing to the main hero
@@ -4515,13 +4616,29 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 					return 0;
 			}
 			// meeting the main hero hands over troops - as far as its army can take them
-			const double gain = main ? transferGain(hero, other) : (other->id == mainHero ? transferGain(other, hero) : 0.0);
+			double gain = 0;
+			if(second)
+			{
+				// (secondArmy) a second leader keeps its army: it goes to the main hero only when that
+				// would add half the main hero's army (the leader's army is spent), and takes over what
+				// the heroes without an army of their own carry
+				if(other->id == mainHero)
+				{
+					gain = transferGain(other, hero);
+					if(gain < 0.5 * static_cast<double>(other->getArmyStrength()))
+						gain = 0;
+				}
+				else if(!leads(other))
+					gain = transferGain(hero, other);
+			}
+			else
+				gain = main ? transferGain(hero, other) : (other->id == mainHero ? transferGain(other, hero) : 0.0);
 			if(gain < 1)
 				return 0;
 			// the main hero walks back for troops only as far as it needs them; the others bring them anyway
 			// - but a courier on its supply run is met halfway: both walking, the gap closes twice as fast
 			const bool courier = supply && supply->courier == other->id && !supply->returning;
-			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain) * (main && !courier ? fetchFactor(hero) : 1.0);
+			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain) * (main && !second && !courier ? fetchFactor(hero) : 1.0);
 		}
 		if(!enemy || !object.visibleNow || !object.army)
 			return 0;
@@ -4644,7 +4761,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			node = node->theNodeBefore;
 		return node ? node->coord : int3(-1);
 	};
-	const bool cautious = !isMain(hero);
+	const bool cautious = !leads(hero);
 	const bool scout = scoutsToday.count(hero->id) > 0;
 	// meeting another of our heroes: at the meeting point both armies stand together
 	auto ownHeroAt = [&](ObjectInstanceID object) -> const CGHeroInstance *
@@ -4709,7 +4826,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	// a town of ours it makes trips that end back there today; outside it heads for one. Handing the
 	// troops to the main hero is the one errand that counts as arriving.
 	bool heavyPart = false;
-	if(params.safeParts && !isMain(hero) && !perception.ownTowns().empty())
+	if(params.safeParts && !leads(hero) && !perception.ownTowns().empty())
 	{
 		const CGHeroInstance * leader = ownHero(mainHero);
 		const double carried = static_cast<double>(hero->getArmyStrength());
@@ -5249,7 +5366,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hp += unit.creature.toCreature()->getMaxHealth() * 0.5 * (unit.minCount + unit.maxCount);
 		}
 		double value = hp * expValue(hero);
-		if(isMain(hero))
+		if(leads(hero))
 			value += params.guardKillValue * danger * params.goldPerArmyValue;
 		// a guard next to unexplored land probably blocks a way into it
 		value += params.guardFogFactor * tileValue * revealGrid.count(object.visitablePos, hero->getSightRadius());
@@ -6647,6 +6764,33 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 			recruitInTown(town, hero, economy.rho > 1.5 ? 0 : 1000);
 		pickBestCreatures(hero, town);
 	}
+	else if(params.secondArmy && !(supply && supply->courier == hero->id))
+	{
+		// (secondArmy) What waits in this town makes this hero the leader of a second army, or keeps
+		// it one: it takes the best of it. Not while the main hero stands here - that one chooses first.
+		const double bar = secondArmyBar();
+		const CGHeroInstance * leader = ownHero(mainHero);
+		if(bar > 0 && !(leader && leader->getVisitedTown() == town))
+		{
+			const ObjectInstanceID heroId = hero->id;
+			const double army = std::max(1.0, static_cast<double>(hero->getArmyStrength()));
+			const double potential = fieldStrength(hero) * (army + townTroops(town, hero)) / army;
+			if(leads(hero) || potential >= bar)
+			{
+				recruitInTown(town, hero, economy.rho > 1.5 ? 0 : 1000);
+				if(const auto * now = ownHero(heroId))
+					pickBestCreatures(now, town);
+				if(const auto * now = ownHero(heroId); now && !now->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1)
+					&& spendable()[GameResID::GOLD] >= GameConstants::SPELLBOOK_GOLD_COST + 500)
+				{
+					cb->buyArtifact(now, ArtifactID::SPELLBOOK);
+				}
+				if(const auto * now = ownHero(heroId))
+					upgradeArmy(now);
+				updateSecondLeaders();
+			}
+		}
+	}
 }
 
 void AdventureAI::updateResourcePlan()
@@ -7248,6 +7392,43 @@ void AdventureAI::manageTowns(bool endOfTurn)
 
 void AdventureAI::hireHeroes()
 {
+	// (secondArmy) Troops enough for a second army wait in a town where no hero of ours stands: one is
+	// hired there to lead them (the most experienced on offer) - gold that lies idle anyway.
+	if(const double bar = secondArmyBar(); bar > 0 && static_cast<int>(perception.ownHeroes().size()) < params.maxHeroes)
+	{
+		for(const auto * town : perception.ownTowns())
+		{
+			if(!town->hasBuilt(BuildingID::TAVERN) || town->getVisitingHero() || town->getGarrisonHero())
+				continue;
+			if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + params.heroGoldReserve)
+				break;
+			// the seven best stacks of what stands in the town and what is for sale there
+			std::vector<double> stacks;
+			for(const auto & slot : town->Slots())
+				stacks.push_back(stackValue(slot.second.get()));
+			std::sort(stacks.begin(), stacks.end(), std::greater<double>());
+			double waiting = static_cast<double>(recruitableValue(town, spendable()[GameResID::GOLD] - GameConstants::HERO_GOLD_COST));
+			for(size_t i = 0; i < stacks.size() && i < 7; ++i)
+				waiting += stacks[i];
+			if(waiting < bar)
+				continue;
+			const CGHeroInstance * best = nullptr;
+			for(const auto * candidate : cb->getAvailableHeroes(town))
+			{
+				if(!best || candidate->level > best->level || (candidate->level == best->level && candidate->getTotalStrength() > best->getTotalStrength()))
+					best = candidate;
+			}
+			if(!best)
+				continue;
+			logAi->info("FairAI %s day %d: hiring %s (level %d) in %s to lead the troops waiting there (%.0f; a second army needs %.0f)", me.toString(), today,
+				best->getNameTranslated(), static_cast<int>(best->level), town->getNameTranslated(), waiting, bar);
+			cb->recruitHero(town, best);
+			gateway.waitTillFree();
+			if(const auto * hired = town->getVisitingHero(); hired && hired->tempOwner == me)
+				manageTownVisit(hired, town);
+			break; // one a day
+		}
+	}
 	int wanted = (today <= 7 ? params.heroesWeek1 : (today <= 21 ? params.heroesWeek3 : params.heroesLater)) + params.scouts;
 	if(economy.rho > 2 && spendable()[GameResID::GOLD] > 8000)
 		wanted += 2;

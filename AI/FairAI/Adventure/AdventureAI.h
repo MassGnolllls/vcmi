@@ -322,6 +322,8 @@ private:
 	int oppositionHero = -1; ///< the hero type behind oppositionHeroes (for the log)
 	mutable std::set<int> heavyPartLog; ///< (safeParts) day and hero already logged
 	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
+	std::set<ObjectInstanceID> secondLeaders; ///< (secondArmy) heroes beside the main hero that lead an army of their own
+	bool oppositionKnown = false;             ///< the enemies' best heroes have been seen lately (what the campaign asks for, too)
 	std::map<int, int> heroFirstSeen;       ///< hero type -> the day we first saw it on the map (guarded by intelMutex)
 	std::map<int, int> playerContact;       ///< player colour -> the day we first saw one of its heroes or towns (guarded by intelMutex)
 	/// what a battle against an enemy hero left of it (reported by the battle thread, applied in updateThreats)
@@ -374,6 +376,11 @@ private:
 	const CGHeroInstance * ownHero(ObjectInstanceID id) const;
 	void chooseMainHero();
 	bool isMain(const CGHeroInstance * hero) const;
+	/// the main hero, or (secondArmy) another hero strong enough to lead an army of its own
+	bool leads(const CGHeroInstance * hero) const;
+	/// (secondArmy) the field strength a second leader needs; below zero: no second army now
+	double secondArmyBar() const;
+	void updateSecondLeaders();
 	std::shared_ptr<CPathsInfo> computePaths(const CGHeroInstance * hero, bool ignoreGuards) const;
 
 	std::vector<Target> collectTargets(const CGHeroInstance * hero, const CPathsInfo & paths, const CPathsInfo & freePaths);
