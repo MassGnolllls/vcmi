@@ -272,6 +272,7 @@ void Params::loadOverrides(int playerIndex)
 	read("tables", tables);
 	read("sites", sites);
 	read("armyFit", armyFit);
+	read("fastKeeper", fastKeeper);
 	read("idleRho", idleRho);
 	read("idleReserve", idleReserve);
 	read("manaValueMain", manaValueMain);
@@ -5644,6 +5645,39 @@ void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CA
 			{
 				weakest = v;
 				reserved = slot;
+			}
+		}
+	}
+
+	// (fastKeeper) A hero that hands over its army keeps one creature - and marches as fast as that
+	// creature. One of its fastest kind gets a slot of its own and stays; everything else may go.
+	if(sourceIsHero && params.fastKeeper && source->id != mainHero && source->stacksCount() >= 1)
+	{
+		SlotID fastSlot;
+		int fastSpeed = -1;
+		double cheapest = std::numeric_limits<double>::max();
+		for(const auto & [slot, stack] : source->Slots())
+		{
+			if(!stack || !stack->getCreature())
+				continue;
+			const int speed = stack->getInitiative();
+			const double unit = stack->getCreature()->getAIValue();
+			if(speed > fastSpeed || (speed == fastSpeed && unit < cheapest))
+			{
+				fastSpeed = speed;
+				cheapest = unit;
+				fastSlot = slot;
+			}
+		}
+		if(fastSlot.validSlot())
+		{
+			if(source->getStackCount(fastSlot) == 1)
+				reserved = fastSlot;
+			else if(const SlotID spare = source->getFreeSlot(); spare.validSlot())
+			{
+				cb->splitStack(source, source, fastSlot, spare, 1);
+				if(source->hasStackAtSlot(spare))
+					reserved = spare;
 			}
 		}
 	}
