@@ -33,6 +33,9 @@
 #include "../../../lib/entities/hero/CHeroClass.h"
 #include "../../../lib/json/JsonNode.h"
 #include "../../../lib/mapObjects/CGDwelling.h"
+#include "../../../lib/mapObjects/CGMarket.h"
+#include "../../../lib/mapObjects/CQuest.h"
+#include "../../../lib/mapObjects/FlaggableMapObject.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
 #include "../../../lib/mapObjects/IMarket.h"
@@ -266,6 +269,7 @@ void Params::loadOverrides(int playerIndex)
 	read("resourcePlan", resourcePlan);
 	read("artifactCare", artifactCare);
 	read("tables", tables);
+	read("sites", sites);
 	read("manaValueMain", manaValueMain);
 	read("moveValueMain", moveValueMain);
 	read("patienceStep", patienceStep);
@@ -932,6 +936,14 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			continue;
 		}
 		failures = 0;
+		// arrived at a building with rules of its own: do what there is to do there
+		if(params.sites && best.object.hasValue() && !meetingOwnHero && hero->visitablePos() == best.tile && !hero->getVisitedTown())
+		{
+			useSite(hero, best.object);
+			hero = ownHero(heroId);
+			if(!hero)
+				return;
+		}
 		if(best.object.hasValue() && !meetingOwnHero && hero->visitablePos() == best.tile)
 		{
 			// Visited, and the object offers the same as before (an emptied lean-to, a hut that teaches
@@ -1305,6 +1317,238 @@ double AdventureAI::guardLoss(const CGHeroInstance * hero, const int3 & tile) co
 		total += loss;
 	}
 	return total;
+}
+
+// ======================================================================= buildings with rules of their own
+
+double AdventureAI::universitySkillValue(const CGHeroInstance * hero, SecondarySkill skill) const
+{
+	if(!hero->canLearnSkill(skill))
+		return 0; // it knows the skill, cannot have it, or has no room
+	if(params.skillChoice)
+		return skillValue(hero, skill, 1);
+	// only what we would pick first on a level-up is worth a slot
+	const int index = skill.getNum();
+	const double priority = index >= 0 && index < static_cast<int>(SKILL_PRIORITY.size()) ? SKILL_PRIORITY[index] : 3.0;
+	return priority >= 6 ? 300.0 * priority : 0.0;
+}
+
+double AdventureAI::siteValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const
+{
+	if(!instance)
+		return 0; // judged by what we see of the building now
+	const bool main = isMain(hero);
+	const double goldFactor = 0.4 + 0.6 * economy.goldWeight;
+	const double armyFactor = std::sqrt(economy.armyPremium);
+	const int64_t reserve = economy.rho > 1.5 ? 0 : 2000; // while gold is the bottleneck the towns come first
+	const int64_t gold = spendable()[GameResID::GOLD] - reserve;
+
+	// Hill Fort and its relatives: upgrades for the army the main hero carries - as far as we can
+	// pay them and the troops gained are worth the price
+	if(const auto * fort = dynamic_cast<const HillFort *>(instance))
+	{
+		if(!main)
+			return 0;
+		const ICreatureUpgrader * upgrader = fort;
+		ResourceSet have = spendable();
+		have[GameResID::GOLD] -= reserve;
+		double value = 0;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(!stack || !stack->getCreature())
+				continue;
+			UpgradeInfo info(stack->getCreatureID());
+			upgrader->fillUpgradeInfo(info, *stack);
+			if(!info.canUpgrade())
+				continue;
+			const ResourceSet cost = info.getUpgradeCosts() * stack->getCount();
+			if(!have.canAfford(cost))
+				continue;
+			double price = 0;
+			for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+				price += cost[res] * resourceValue(res) * (res == GameResID::GOLD ? goldFactor : 1.0);
+			const double gain = static_cast<double>(info.getUpgrade().toCreature()->getAIValue() - stack->getCreature()->getAIValue()) * stack->getCount()
+				* params.goldPerArmyValue * armyFactor;
+			if(gain > price)
+			{
+				value += gain - price;
+				have -= cost;
+			}
+		}
+		return value;
+	}
+
+	// University: a skill for the main hero, for gold
+	if(dynamic_cast<const CGUniversity *>(instance))
+	{
+		if(!main)
+			return 0;
+		const double price = cb->getSettings().getInteger(EGameSettings::MARKETS_UNIVERSITY_GOLD_COST);
+		if(gold < price)
+			return 0;
+		if(object.shownSkills.empty())
+			return hero->canLearnSkill() ? 600 : 0; // we do not know yet what it teaches: worth a look
+		double best = 0;
+		for(const SecondarySkill & skill : object.shownSkills)
+			best = std::max(best, universitySkillValue(hero, skill));
+		return std::max(0.0, best - price * goldFactor);
+	}
+
+	switch(object.type.toEnum())
+	{
+	case Obj::REFUGEE_CAMP:
+	{
+		// new guests every week, which ones shows only at the door
+		auto used = siteWeek.find(object.id);
+		if(gold < 3000 || (used != siteWeek.end() && used->second == (today - 1) / 7))
+			return 0;
+		return (main ? 900.0 : 400.0) * armyFactor;
+	}
+	case Obj::WAR_MACHINE_FACTORY:
+	{
+		// war machines for the main hero, once gold lies idle
+		if(!main || economy.rho < 1.5 || gold < 6000)
+			return 0;
+		auto used = siteWeek.find(object.id);
+		if(used != siteWeek.end() && used->second == (today - 1) / 7)
+			return 0;
+		int missing = 0;
+		for(ArtifactPosition slot : {ArtifactPosition::MACH1, ArtifactPosition::MACH2, ArtifactPosition::MACH3})
+			missing += hero->getArt(slot) ? 0 : 1;
+		return 250.0 * missing;
+	}
+	case Obj::OBELISK:
+		// a piece of the puzzle that shows where the grail lies
+		return instance->wasVisited(me) ? 0 : 200;
+	case Obj::KEYMASTER:
+		// the password opens every border guard and gate of this colour
+		return instance->wasVisited(me) ? 0 : 2000;
+	case Obj::BORDERGUARD:
+	{
+		// with the password the guard steps aside for good: the way behind it is open
+		const auto * guard = dynamic_cast<const CGKeys *>(instance);
+		return guard && guard->wasMyColorVisited(me) ? 2500 : 0;
+	}
+	case Obj::HUT_OF_MAGI:
+		// shows the land around every eye of the magi
+		return sitesDone.count(object.id) ? 0 : 400;
+	case Obj::GARRISON:
+	case Obj::GARRISON2:
+	{
+		// somebody else's gate in a passage: beyond it lies land we cannot reach otherwise
+		if(object.owner == me)
+			return 0;
+		double value = isEnemy(object.owner) ? 1500 : 800;
+		if(object.army)
+		{
+			for(const auto & unit : object.army->units)
+			{
+				if(unit.creature.hasValue())
+					value += unit.creature.toCreature()->getMaxHealth() * 0.5 * (unit.minCount + unit.maxCount) * expValue(hero);
+			}
+		}
+		Rewardable::RewardRevealTiles around{};
+		around.radius = 9;
+		around.scoreSurface = around.scoreSubterra = around.scoreWater = around.scoreRock = 1;
+		around.hide = false;
+		return value + 0.3 * params.explorationTileValue * unexploredAround(object.visitablePos, around);
+	}
+	case Obj::ABANDONED_MINE:
+	{
+		// behind the troglodytes: a mine - which resource shows when it is ours (never wood)
+		if(object.owner == me)
+			return 0;
+		double perDay = 1000 * goldFactor + 2 * resourceValue(GameResID::ORE);
+		for(GameResID res : {GameResID::MERCURY, GameResID::SULFUR, GameResID::CRYSTAL, GameResID::GEMS})
+			perDay += resourceValue(res);
+		return perDay / 6.0 * params.incomeHorizonDays;
+	}
+	default:
+		break;
+	}
+
+	// lighthouses and other buildings one flags for a standing bonus
+	if(dynamic_cast<const FlaggableMapObject *>(instance))
+		return object.owner == me ? 0 : (isEnemy(object.owner) ? 600 : 300);
+	return 0;
+}
+
+double AdventureAI::siteLoss(const CGHeroInstance * hero, const ObservedObject & object) const
+{
+	if(object.owner == me || isAlly(object.owner))
+		return 0;
+	if(object.type == Obj::GARRISON || object.type == Obj::GARRISON2)
+		return object.army && !object.army->units.empty() ? monsterLoss(hero, object) : 0.0;
+	if(object.type == Obj::ABANDONED_MINE)
+	{
+		// the rule every player knows: 100 to 199 troglodytes live in an abandoned mine
+		ObservedObject dwellers;
+		dwellers.id = object.id;
+		dwellers.type = Obj::MONSTER;
+		ObservedArmy army;
+		army.known = true;
+		ObservedStack stack;
+		stack.creature = CreatureID(CreatureID::TROGLODYTES);
+		stack.minCount = 100;
+		stack.maxCount = 199;
+		army.units.push_back(stack);
+		dwellers.army = army;
+		return monsterLoss(hero, dwellers);
+	}
+	return 0;
+}
+
+void AdventureAI::useSite(const CGHeroInstance * hero, ObjectInstanceID site)
+{
+	const CGObjectInstance * instance = perception.visibleObject(site);
+	if(!instance || !hero || !params.sites)
+		return;
+	if(dynamic_cast<const HillFort *>(instance))
+	{
+		const uint64_t before = hero->getArmyStrength();
+		upgradeArmy(hero);
+		if(const CGHeroInstance * now = ownHero(hero->id); now && now->getArmyStrength() != before)
+			logAi->info("FairAI %s: %s upgrades its army at a hill fort (army %llu -> %llu)", me.toString(), now->getNameTranslated(),
+				static_cast<unsigned long long>(before), static_cast<unsigned long long>(now->getArmyStrength()));
+	}
+	if(instance->ID == Obj::REFUGEE_CAMP || instance->ID == Obj::WAR_MACHINE_FACTORY)
+		siteWeek[site] = (today - 1) / 7;
+	if(instance->ID == Obj::HUT_OF_MAGI)
+		sitesDone.insert(site);
+}
+
+void AdventureAI::onUniversity(const IMarket * market, const CGHeroInstance * visitor)
+{
+	if(!params.sites || !market || !visitor || visitor->tempOwner != me || !isMain(visitor))
+		return;
+	// what it teaches is on the board now: the best skill, if it is worth the fee - and the next one
+	const double price = cb->getSettings().getInteger(EGameSettings::MARKETS_UNIVERSITY_GOLD_COST);
+	const double goldFactor = 0.4 + 0.6 * economy.goldWeight;
+	for(int round = 0; round < 4; ++round)
+	{
+		const CGHeroInstance * hero = ownHero(visitor->id);
+		if(!hero)
+			return;
+		const int64_t gold = spendable()[GameResID::GOLD] - (economy.rho > 1.5 ? 0 : 2000);
+		if(gold < price)
+			return;
+		SecondarySkill best(SecondarySkill::NONE);
+		double bestValue = price * goldFactor;
+		for(const auto & item : market->availableItemsIds(EMarketMode::RESOURCE_SKILL))
+		{
+			const SecondarySkill skill = item.as<SecondarySkill>();
+			const double value = universitySkillValue(hero, skill);
+			if(value > bestValue)
+			{
+				bestValue = value;
+				best = skill;
+			}
+		}
+		if(best == SecondarySkill::NONE)
+			return;
+		logAi->info("FairAI %s: %s learns %s at a university", me.toString(), hero->getNameTranslated(), best.toEntity(LIBRARY)->getJsonKey());
+		cb->trade(market->getObjInstanceID(), EMarketMode::RESOURCE_SKILL, GameResID(GameResID::GOLD), best, 1, hero);
+	}
 }
 
 // ======================================================================= buildings by their public table
@@ -3488,6 +3732,17 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		break;
 	}
 
+	// buildings with rules of their own (parameter sites)
+	if(params.sites)
+	{
+		const double site = siteValue(hero, object, instance);
+		if(tableDebug && (site > 0 || dynamic_cast<const HillFort *>(instance) || dynamic_cast<const CGUniversity *>(instance)
+			|| object.type == Obj::REFUGEE_CAMP || object.type == Obj::WAR_MACHINE_FACTORY || object.type == Obj::ABANDONED_MINE))
+			*tableDebug += boost::str(boost::format(" [site %d/%d at %s: %.0f]") % object.type.getNum() % object.subtype.getNum() % object.visitablePos.toString() % site);
+		if(site > 0)
+			return site;
+	}
+
 	// Every other building: the public table of its kind tells what a visit can bring (parameter
 	// tables). No building is worth nothing as such - it depends on the hero and the day.
 	if(!params.tables || !object.table)
@@ -3704,7 +3959,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	std::vector<Seek> seek;
 	std::map<std::string, int> rejected; // diagnostics
-	const bool bankLog = params.tables && isMain(hero) && logAi->isDebugEnabled() && tableLogDay != today;
+	const bool bankLog = (params.tables || params.sites) && isMain(hero) && logAi->isDebugEnabled() && tableLogDay != today;
 	std::string bankLines;
 	std::string tableLines;
 	tableDebug = bankLog ? &tableLines : nullptr;
@@ -3825,6 +4080,17 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 				value = plan.value;
 				loss += plan.loss;
+			}
+			if(params.sites)
+			{
+				// the fight a visit means: somebody's garrison, the troglodytes of an abandoned mine
+				const double fight = siteLoss(hero, object);
+				if(fight < 0)
+				{
+					++rejected["site too strong"];
+					continue;
+				}
+				loss += fight;
 			}
 			if(siegedTown.hasValue() && !desperate && defenders > 0)
 			{
@@ -4931,6 +5197,8 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 		}
 		if(amount <= 0 || !destination->getSlotFor(creature).validSlot())
 			continue;
+		if(dwelling->ID == Obj::REFUGEE_CAMP || dwelling->ID == Obj::WAR_MACHINE_FACTORY)
+			logAi->info("FairAI %s: %d %s bought at building %d %s", me.toString(), amount, type->getJsonKey(), dwelling->ID.getNum(), dwelling->visitablePos().toString());
 		cb->recruitCreatures(dwelling, destination, creature, amount, level);
 	}
 }

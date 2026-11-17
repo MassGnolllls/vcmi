@@ -42,6 +42,7 @@ class CGTownInstance;
 class CGObjectInstance;
 class CGDwelling;
 class CArmedInstance;
+class IMarket;
 struct CPathsInfo;
 struct CGPathNode;
 struct Component;
@@ -135,6 +136,8 @@ public:
 	bool confirmVisit(const std::vector<Component> & components);
 	/// A building hands over creatures and the army has no free slot: the exchange window is open
 	void onGarrisonDialog(const CArmedInstance * up, const CGHeroInstance * down);
+	/// A hero stands in a university: buy the skill that is worth its price (parameter sites)
+	void onUniversity(const IMarket * market, const CGHeroInstance * visitor);
 
 	const Params & parameters() const { return params; }
 
@@ -397,6 +400,18 @@ private:
 	GuardedPlan guardedPlan(const CGHeroInstance * hero, const ObservedObject & object, bool useCache = true) const;
 	/// the fight against these guards in this battle layout as the battle simulator expects it to go
 	FightForecast forecastGuards(const CGHeroInstance * hero, const std::vector<std::pair<CreatureID, int>> & guards, const std::string & layout, bool useCache) const;
+	// ---- buildings with rules of their own (parameter sites)
+	/// what a visit to such a building is worth to this hero now; 0: nothing, or not such a building
+	double siteValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const;
+	/// the fight a visit means (a garrison of somebody else, the troglodytes of an abandoned mine):
+	/// expected loss in gold, 0 without a fight, -1 if it is too risky
+	double siteLoss(const CGHeroInstance * hero, const ObservedObject & object) const;
+	/// the hero stands on the building it went for: what there is to do there
+	void useSite(const CGHeroInstance * hero, ObjectInstanceID site);
+	/// what a skill bought at a university is worth to this hero, in gold
+	double universitySkillValue(const CGHeroInstance * hero, SecondarySkill skill) const;
+	std::map<ObjectInstanceID, int> siteWeek;  ///< building -> week we last used it (a refugee camp has new guests every week)
+	std::set<ObjectInstanceID> sitesDone;      ///< buildings that have nothing more for us (a hut of the magi shows the same again)
 	std::atomic<int> guardedTarget{-1};   ///< guarded building the moving hero is heading for (for the game's question at its door)
 	std::atomic<int> guardAnswer{-1};     ///< what we answered there: 1 fight, 0 turn back, -1 not asked
 	std::atomic<int> guardForecast{0};    ///< loss forecast for that fight, in thousandths of our army

@@ -22,6 +22,7 @@
 #include "../../../lib/gameState/InfoAboutArmy.h"
 #include "../../../lib/gameState/SThievesGuildInfo.h"
 #include "../../../lib/mapObjects/CGCreature.h"
+#include "../../../lib/mapObjects/CGMarket.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
 #include "../../../lib/mapObjects/MiscObjects.h"
@@ -522,6 +523,15 @@ void Perception::refresh()
 					if(shown.type == ComponentType::CREATURE && shown.value && *shown.value > 0)
 						observed.shownGuards.emplace_back(shown.subType.as<CreatureID>(), *shown.value);
 				}
+			}
+		}
+		if(dynamic_cast<const CGUniversity *>(obj))
+		{
+			// a university we have been to: a right click lists what it teaches
+			for(const Component & shown : obj->getPopupComponents(me))
+			{
+				if(shown.type == ComponentType::SEC_SKILL)
+					observed.shownSkills.push_back(shown.subType.as<SecondarySkill>());
 			}
 		}
 		if(obj->ID == Obj::HERO && !isOwn(obj) && cb->isVisible(obj->visitablePos()))

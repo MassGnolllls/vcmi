@@ -250,7 +250,12 @@ void FairAIGateway::showMarketWindow(const IMarket * market, const CGHeroInstanc
 void FairAIGateway::showUniversityWindow(const IMarket * market, const CGHeroInstance * visitor, QueryID queryID)
 {
 	status.addQuery(queryID, "UniversityWindow");
-	executeActionAsync("showUniversityWindow", [this, queryID]() { answerQuery(queryID, 0); });
+	executeActionAsync("showUniversityWindow", [this, queryID, market, visitor]()
+	{
+		if(adventure)
+			adventure->onUniversity(market, visitor);
+		answerQuery(queryID, 0);
+	});
 }
 
 void FairAIGateway::showRecruitmentDialog(const CGDwelling * dwelling, const CArmedInstance * dst, int level, QueryID queryID)

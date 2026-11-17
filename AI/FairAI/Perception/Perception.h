@@ -123,6 +123,8 @@ struct ObservedObject
 	/// click from then on (game setting; on by default). Listed and none shown: nobody guards it any more
 	bool guardsShown = false;
 	std::vector<std::pair<CreatureID, int>> shownGuards; ///< creature and number, as listed
+	/// universities one of our heroes has been to: the skills taught there (a right click lists them)
+	std::vector<SecondarySkill> shownSkills;
 };
 
 /// The best hero of another player as our thieves' guild shows it (tavern window)
