@@ -1,0 +1,22 @@
+{
+ "note": "buildings valued by the public table of their kind (parameter tables, new on 17.11.): until now about half of the kinds of visitable buildings were worth nothing to FairAI, creature banks among them - the test maps hold 11 to 26 banks each. T = tables 2: every building without a rule of its own is valued by what a visit can bring this hero now; creature banks are fought when the simulated battle against the possible guards is worth it, and the hero turns back at the door if the guards shown there are too strong. S = two scouts (they find the banks; S alone looked good twice). 2x2 design, long games on medium land maps, 24 games per config, seed 46. Evaluate with arena/effects.py --factors '{\"T\":{\"tables\":2},\"S\":{\"scouts\":2}}'",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "46",
+  "--only",
+  "m-land-2p",
+  "--configs",
+  "{\"new\": {}, \"nT\": {\"tables\": 2}, \"nS\": {\"scouts\": 2}, \"nST\": {\"scouts\": 2, \"tables\": 2}}"
+ ],
+ "jobs": 6
+}
