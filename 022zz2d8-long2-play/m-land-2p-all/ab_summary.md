@@ -5,5 +5,5 @@ Paired against `old`: mean difference over the games both played (95% CI). score
 | config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|---|---|
 | old | `{"leaderFocus": 0, "campaignEdge": 2.0, "heroModel": 0, "noChase": 0, "garrisonRoom": 0, "collectorsTakeGarrison": 1}` | 24 | 1 | 6 | 0.450 ± 0.142 | - | 0.280 ± 0.100 | - | 24 |
-| new | `{}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| new | `{}` | 24 | 8 | 6 | 0.491 ± 0.170 | +0.041 ± 0.188 | 0.482 ± 0.184 | +0.202 ± 0.203 | 24 |
 | newS | `{"scouts": 2}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
