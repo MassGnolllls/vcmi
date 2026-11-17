@@ -2,14 +2,9 @@ name: FairAI Windows build
 
 # Builds only the Windows x64 package of the FairAI fork (VCMI 1.7.5 + FairAI).
 # The resulting zip is available as an artifact of the workflow run.
+# Only on request (Actions tab > FairAI Windows build > Run workflow, or `gh workflow run`):
+# a build on every push meant some forty builds a day, most of them cancelled by the next push.
 on:
-  push:
-    branches:
-      - fairai
-    paths-ignore:
-      - 'arena/jobs/**'
-      - 'arena/worker/**'
-      - '**.md'
   workflow_dispatch:
 
 concurrency:
