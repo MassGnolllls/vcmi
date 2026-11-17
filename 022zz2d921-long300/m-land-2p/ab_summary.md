@@ -5,4 +5,4 @@ Paired against `new`: mean difference over the games both played (95% CI). score
 | config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|---|---|
 | new | `{}` | 24 | 13 | 11 | 0.542 ± 0.204 | - | 0.542 ± 0.204 | - | 24 |
-| nTE | `{"townWorth": 1, "campaignEdge": 2.0}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTE | `{"townWorth": 1, "campaignEdge": 2.0}` | 24 | 12 | 12 | 0.500 ± 0.204 | -0.042 ± 0.300 | 0.500 ± 0.204 | -0.042 ± 0.300 | 24 |

@@ -1,9 +1,12 @@
 {
  "job": "022zz2d921-long300",
- "state": "running",
+ "state": "done",
  "commit": "870bc27ee37a37fd00435bca5a2d2fb2a6a24333",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-17T19:41:33",
- "note": "Who wins the games that are undecided on day 150? The same twelve medium land maps, both seats, with a day limit of 300: the standard, and the standard with townWorth and the campaign from twice the strongest enemy hero. In 549 long games 38 % stood undecided on day 150 - three towns against four, armies level, the enemy's income higher, our garrisons full. The target is games won, not games not lost: this shows how many of the undecided ones are won or lost in the end. Read the timeline for the state on day 150 (arena/timeline.py, arena/metrics.py)."
+ "note": "Who wins the games that are undecided on day 150? The same twelve medium land maps, both seats, with a day limit of 300: the standard, and the standard with townWorth and the campaign from twice the strongest enemy hero. In 549 long games 38 % stood undecided on day 150 - three towns against four, armies level, the enemy's income higher, our garrisons full. The target is games won, not games not lost: this shows how many of the undecided ones are won or lost in the end. Read the timeline for the state on day 150 (arena/timeline.py, arena/metrics.py).",
+ "returncode": 0,
+ "finished": "2026-11-17T20:15:37",
+ "minutes": 34.0
 }
