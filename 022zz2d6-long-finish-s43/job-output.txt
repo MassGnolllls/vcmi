@@ -175,3 +175,19 @@ match   22 FairAI as red of 2: timeout winner= day=151 score=0.00 [323.1s]
 - average length of decided games: 108 days
 - cheat flags raised: 0
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/9795b3689a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 43 --out /home/alex/fairai/runs/022zz2d6-long-finish-s43/m-land-2p/fNR-s43 --pool long1-m-land-2p --max-days 150 --timeout 3600 --stall-seconds 300 --base-port 7000 --ai-params {"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 1, "garrisonRoom": 1, "collectorsTakeGarrison": 0}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    5 FairAI as blue of 2: victory winner=blue day=132 score=1.00 [201.9s]
+match    4 FairAI as red of 2: victory winner=red day=139 score=1.00 [204.6s]
+match    1 FairAI as blue of 2: victory winner=blue day=134 score=1.00 [207.4s]
+match    3 FairAI as blue of 2: timeout winner= day=151 score=0.45 [215.9s]
+match    2 FairAI as red of 2: timeout winner= day=151 score=0.69 [226.6s]
+match    0 FairAI as red of 2: timeout winner= day=151 score=0.39 [244.2s]
+match    9 FairAI as blue of 2: victory winner=blue day=104 score=1.00 [148.8s]
+match    7 FairAI as blue of 2: victory winner=red day=101 score=0.00 [164.2s]
+match    8 FairAI as red of 2: victory winner=red day=117 score=1.00 [165.8s]
+match   10 FairAI as red of 2: victory winner=red day=133 score=1.00 [182.4s]
+match   11 FairAI as blue of 2: victory winner=red day=120 score=0.00 [171.8s]
+match    6 FairAI as red of 2: timeout winner= day=151 score=0.44 [261.8s]
+match   13 FairAI as blue of 2: victory winner=red day=91 score=0.00 [134.8s]
+match   15 FairAI as blue of 2: victory winner=blue day=111 score=1.00 [171.6s]
+match   12 FairAI as red of 2: timeout winner= day=151 score=0.54 [225.4s]
