@@ -261,3 +261,45 @@ match    8 FairAI as red of 2: timeout winner= day=151 score=0.51 [297.1s]
 match   15 FairAI as blue of 2: victory winner=blue day=103 score=1.00 [214.5s]
 match   13 FairAI as blue of 2: victory winner=blue day=132 score=1.00 [276.2s]
 match   12 FairAI as red of 2: timeout winner= day=151 score=0.44 [307.6s]
+match   14 FairAI as red of 2: victory winner=blue day=149 score=0.00 [314.0s]
+match   16 FairAI as red of 2: victory winner=red day=143 score=1.00 [258.2s]
+match   17 FairAI as blue of 2: timeout winner= day=151 score=0.08 [279.2s]
+match   18 FairAI as red of 2: victory winner=red day=125 score=1.00 [252.5s]
+match   19 FairAI as blue of 2: victory winner=red day=123 score=0.00 [238.3s]
+match   23 FairAI as blue of 2: victory winner=blue day=88 score=1.00 [161.6s]
+match   21 FairAI as blue of 2: victory winner=red day=131 score=0.00 [244.9s]
+match   20 FairAI as red of 2: timeout winner= day=151 score=0.58 [284.3s]
+match   22 FairAI as red of 2: victory winner=red day=133 score=1.00 [264.0s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 18 -> FairAI won 14, lost 4  (win rate 78%, 95% CI 55%-91%)
+- day limit reached: 6 (material lead for FairAI in 2)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 120 days
+- cheat flags raised: 0
+# A/B test (8 configs, seeds 50)
+
+Paired against `old`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| old | `{"tables": 0}` | 24 | 11 | 3 | 0.629 ± 0.166 | - | 0.619 ± 0.172 | - | 24 |
+| nTPWH | `{"passage": 1, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "fightForecast": 1, "simAfterHit": 1, "spellSearch": 2}` | 24 | 11 | 2 | 0.748 ± 0.136 | +0.118 ± 0.192 | 0.750 ± 0.147 | +0.131 ± 0.212 | 24 |
+| nCPWA | `{"supplyRuns": 1, "passage": 1, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "fightForecast": 1, "armyFit": 1, "sites": 1, "fastKeeper": 1, "tables": 0}` | 24 | 13 | 3 | 0.809 ± 0.135 | +0.180 ± 0.236 | 0.798 ± 0.141 | +0.179 ± 0.247 | 24 |
+| nCTAH | `{"supplyRuns": 1, "armyFit": 1, "sites": 1, "fastKeeper": 1, "simAfterHit": 1, "spellSearch": 2}` | 24 | 12 | 2 | 0.709 ± 0.143 | +0.079 ± 0.152 | 0.667 ± 0.161 | +0.048 ± 0.167 | 24 |
+| nSEPW | `{"scouts": 2, "campaignEdge": 2.0, "passage": 1, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "fightForecast": 1, "tables": 0}` | 24 | 9 | 3 | 0.599 ± 0.158 | -0.031 ± 0.203 | 0.589 ± 0.157 | -0.030 ± 0.211 | 24 |
+| nSETH | `{"scouts": 2, "campaignEdge": 2.0, "simAfterHit": 1, "spellSearch": 2}` | 24 | 14 | 2 | 0.759 ± 0.139 | +0.129 ± 0.166 | 0.732 ± 0.155 | +0.113 ± 0.182 | 24 |
+| nSECA | `{"scouts": 2, "campaignEdge": 2.0, "supplyRuns": 1, "armyFit": 1, "sites": 1, "fastKeeper": 1, "tables": 0}` | 24 | 9 | 1 | 0.688 ± 0.123 | +0.058 ± 0.197 | 0.631 ± 0.146 | +0.012 ± 0.228 | 24 |
+| nSECTPWAH | `{"scouts": 2, "campaignEdge": 2.0, "supplyRuns": 1, "passage": 1, "fetchByShare": 1, "unlockDirect": 1, "regionValue": 8000, "mainHorizon": 12, "fightForecast": 1, "armyFit": 1, "sites": 1, "fastKeeper": 1, "simAfterHit": 1, "spellSearch": 2}` | 24 | 14 | 4 | 0.668 ± 0.172 | +0.039 ± 0.200 | 0.649 ± 0.176 | +0.030 ± 0.207 | 24 |
+
+# Matrix test: 6 map categories, configs old, nTPWH, nCPWA, nCTAH, nSEPW, nSETH, nSECA, nSECTPWAH, seeds 50
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | old (games, score, decided) | nTPWH (games, score, decided) | nCPWA (games, score, decided) | nCTAH (games, score, decided) | nSEPW (games, score, decided) | nSETH (games, score, decided) | nSECA (games, score, decided) | nSECTPWAH (games, score, decided) | nTPWH − old | nCPWA − old | nCTAH − old | nSEPW − old | nSETH − old | nSECA − old | nSECTPWAH − old |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-land-2p | 24, 0.629 ± 0.166, 11 won 3 lost | 24, 0.748 ± 0.136, 11 won 2 lost | 24, 0.809 ± 0.135, 13 won 3 lost | 24, 0.709 ± 0.143, 12 won 2 lost | 24, 0.599 ± 0.158, 9 won 4 lost | 24, 0.759 ± 0.139, 14 won 2 lost | 24, 0.688 ± 0.123, 9 won 1 lost | 24, 0.668 ± 0.172, 14 won 4 lost | +0.118 ± 0.192 (24) | +0.180 ± 0.236 (24) | +0.079 ± 0.152 (24) | -0.031 ± 0.203 (24) | +0.129 ± 0.166 (24) | +0.058 ± 0.197 (24) | +0.039 ± 0.200 (24) |
+| **mean of categories** | 0.629 | 0.748 | 0.809 | 0.709 | 0.599 | 0.759 | 0.688 | 0.668 | +0.118 (all games: +0.118 ± 0.192) | +0.180 (all games: +0.180 ± 0.236) | +0.079 (all games: +0.079 ± 0.152) | -0.031 (all games: -0.031 ± 0.203) | +0.129 (all games: +0.129 ± 0.166) | +0.058 (all games: +0.058 ± 0.197) | +0.039 (all games: +0.039 ± 0.200) |
+
