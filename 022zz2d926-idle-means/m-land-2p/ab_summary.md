@@ -1,0 +1,22 @@
+# A/B test (16 configs, seeds 57)
+
+Paired against `nB`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| nB | `{"secondArmy": 1}` | 24 | 10 | 5 | 0.596 ± 0.169 | - | 0.560 ± 0.178 | - | 24 |
+| nL | `{"garrisonShare": 0.12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nQ | `{"townHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nQLB | `{"townHeroes": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nC | `{"supplyRuns": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nCLB | `{"supplyRuns": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nCQB | `{"supplyRuns": 1, "townHeroes": 1, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nCQL | `{"supplyRuns": 1, "townHeroes": 1, "garrisonShare": 0.12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nT | `{"townWorth": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTLB | `{"townWorth": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTQB | `{"townWorth": 1, "townHeroes": 1, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTQL | `{"townWorth": 1, "townHeroes": 1, "garrisonShare": 0.12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTCB | `{"townWorth": 1, "supplyRuns": 1, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTCL | `{"townWorth": 1, "supplyRuns": 1, "garrisonShare": 0.12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTCQ | `{"townWorth": 1, "supplyRuns": 1, "townHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTCQLB | `{"townWorth": 1, "supplyRuns": 1, "townHeroes": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
