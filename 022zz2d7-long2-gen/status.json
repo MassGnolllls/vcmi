@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d7-long2-gen",
+ "state": "running",
+ "commit": "f1214690e3941c76838dd9785f30906e956063f1",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-17T10:13:42",
+ "note": "maps for long games in which every faction starts equally often (pool long2): twelve medium land maps, each of the twelve factions - Cove, Factory and Bulwark included - starts on two of them"
+}
