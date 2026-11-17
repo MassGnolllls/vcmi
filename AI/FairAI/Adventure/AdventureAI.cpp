@@ -4651,15 +4651,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool ownTown = it != known.end() && it->second.type == Obj::TOWN && it->second.owner == me;
 			const bool enemyHeroToday = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner) && travel < 1.0;
-			if(!ownTown && !enemyHeroToday)
+			const bool townToday = heavyPart && it != known.end() && it->second.type == Obj::TOWN && travel < 1.0; // (safeParts) taken today, it is ours tonight
+			if(!ownTown && !enemyHeroToday && !townToday)
 				return;
 		}
 		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner);
-			// (safeParts) another town of ours within today's march is as good a place to end the day
-			const bool otherTownToday = heavyPart && it != known.end() && it->second.type == Obj::TOWN && it->second.owner == me && travel < 1.0;
+			// (safeParts) another town within today's march is as good a place to end the day - one of
+			// ours, or one we take today (the fight is judged like any other): what waits in a town
+			// with a real army wins back the towns around it and meets the raiders that come in reach
+			const bool otherTownToday = heavyPart && it != known.end() && it->second.type == Obj::TOWN && travel < 1.0;
 			// the threat itself may be attacked, but only today: walking off towards it leaves the town open
 			if(!otherTownToday && (!enemyHero || (params.antiOscillation && travel > roundTripBudget)))
 				return;
