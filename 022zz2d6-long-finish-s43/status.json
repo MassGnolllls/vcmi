@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d6-long-finish-s43",
+ "state": "running",
+ "commit": "9795b3689a862b1173ae7f6435ec0378dee62777",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-17T01:55:38",
+ "note": "second seed (43) of the finisher test 022zz2d5 (see there for N, D, S, R), with a fifth switch added: U = a hero that is about to lose its army in the open surrenders when gold is plentiful, and is hired back from the tavern with its army (plus veterans: experienced heroes are hired back). Logged: the enemy's main hero beats our secondary heroes one by one - 570k of army in one game, its hero rising from level 15 to 26 on them - while 100k to 250k gold lie unused. Design: N, D, S in all eight combinations, R = N*D*S as in 022zz2d5, U = N*S; four configs are the same as there (a second seed for them), four have U added. Evaluate both jobs together with arena/effects.py"
+}
