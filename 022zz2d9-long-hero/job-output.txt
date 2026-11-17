@@ -1,0 +1,19 @@
+== m-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/301cd3df16/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 44 --out /home/alex/fairai/runs/022zz2d9-long-hero/m-land-2p/new-s44 --pool long1-m-land-2p --max-days 150 --timeout 3600 --stall-seconds 300 --base-port 7000
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    5 FairAI as blue of 2: victory winner=blue day=116 score=1.00 [106.6s]
+match    2 FairAI as red of 2: victory winner=red day=108 score=1.00 [150.6s]
+match    0 FairAI as red of 2: victory winner=red day=132 score=1.00 [182.8s]
+match    1 FairAI as blue of 2: timeout winner= day=151 score=0.53 [208.4s]
+match    4 FairAI as red of 2: victory winner=blue day=129 score=0.00 [210.0s]
+match    3 FairAI as blue of 2: victory winner=red day=145 score=0.00 [228.2s]
+match    7 FairAI as blue of 2: victory winner=blue day=134 score=1.00 [166.4s]
+match    6 FairAI as red of 2: timeout winner= day=151 score=0.57 [218.3s]
+match   10 FairAI as red of 2: victory winner=red day=96 score=1.00 [136.4s]
+match    8 FairAI as red of 2: timeout winner= day=151 score=0.45 [235.0s]
+match    9 FairAI as blue of 2: timeout winner= day=151 score=0.84 [231.5s]
+match   11 FairAI as blue of 2: timeout winner= day=151 score=0.32 [248.0s]
+match   12 FairAI as red of 2: timeout winner= day=151 score=0.60 [180.3s]
+match   13 FairAI as blue of 2: victory winner=red day=136 score=0.00 [201.0s]
+match   15 FairAI as blue of 2: victory winner=blue day=121 score=1.00 [153.9s]
+match   14 FairAI as red of 2: timeout winner= day=151 score=0.45 [236.8s]
