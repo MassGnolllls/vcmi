@@ -9,6 +9,7 @@
 #include "FairBattleAI.h"
 #include "../../../lib/battle/BattleStateInfoForRetreat.h"
 #include "CombatSim.h"
+#include "SpellSim.h"
 #include "../Adventure/Params.h"
 #include "../Status.h"
 
@@ -351,6 +352,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	spellSearch = params.spellSearch != 0;
 	spellMode = params.spellSearch;
 	manaShare = params.manaShare;
+	spellForecast = params.spellForecast != 0;
 	simAbilities = params.simAbilities != 0;
 	setMultiHex(params.simMultiHex != 0);
 	setAfterHit(params.simAfterHit != 0);
@@ -368,6 +370,7 @@ void FairBattleAI::battleStart(const BattleID & battleID, const CCreatureSet * a
 	side = Side;
 	quietDecisions = 0;
 	forecastLogged = false;
+	spellCheckDone = false;
 	lastHealth.clear();
 	if(fallback)
 		fallback->battleStart(battleID, army1, army2, tile, hero1, hero2, Side, replayAllowed);
@@ -637,8 +640,113 @@ std::optional<BattleAction> FairBattleAI::siegeWalkerAction(const BattleID & bat
 	return BattleAction::makeDefend(stack);
 }
 
+void FairBattleAI::spellCheck(const BattleID & battleID)
+{
+	// Forecasts on the adventure map have no battle to ask what a spell does to a unit, so FairAI
+	// carries its own copy of the game's rules (SpellSim). Here, in a battle, both can be asked:
+	// every combat spell of the game against every unit on the field, and - if we have a hero - the
+	// damage of each of its spells on each unit. Differences are logged.
+	const auto battle = cb->getBattle(battleID);
+	std::vector<const battle::Unit *> units;
+	for(const auto * unit : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
+		units.push_back(unit);
+	if(units.empty())
+		return;
+	const battle::Unit * anyCaster = nullptr;
+	for(const auto * unit : units)
+	{
+		if(unit->unitSide() == side)
+			anyCaster = unit;
+	}
+	if(!anyCaster)
+		return;
+
+	int pairs = 0;
+	int differ = 0;
+	for(const auto & spell : LIBRARY->spellh->objects)
+	{
+		if(!spell || !spell->isCombat())
+			continue;
+		try
+		{
+			spells::BattleCast event(battle.get(), anyCaster, spells::Mode::HERO, spell.get());
+			const auto mechanics = spell->battleMechanics(&event);
+			for(const auto * unit : units)
+			{
+				const IBonusBearer & bearer = *unit->getBonusBearer();
+				const bool mine = spellWorksOn(*spell, bearer, unit->creatureId());
+				const bool game = mechanics->isReceptive(unit);
+				double mineShare = 1.0;
+				double gameShare = 1.0;
+				if(spell->isDamage() && game)
+				{
+					mineShare = spellDamageShare(*spell, bearer, unit->creatureId());
+					gameShare = spell->adjustRawDamage(anyCaster, unit, 1000000) / 1000000.0;
+				}
+				++pairs;
+				if(mine != game || std::abs(mineShare - gameShare) > 0.001)
+				{
+					++differ;
+					logAi->info("FairAI spellcheck|rule|%s|%s|%d|%d|%.3f|%.3f", spell->getJsonKey(), unit->creatureId().toCreature()->getJsonKey(), mine ? 1 : 0, game ? 1 : 0, mineShare, gameShare);
+				}
+			}
+		}
+		catch(const std::exception & e)
+		{
+			logAi->info("FairAI spellcheck|error|%s|%s", spell->getJsonKey(), e.what());
+		}
+	}
+
+	// our hero's damage spells: the number a forecast would use against the game's
+	int casts = 0;
+	int castsDiffer = 0;
+	if(const CGHeroInstance * hero = battle->battleGetMyHero())
+	{
+		std::vector<StackSpec> stacks;
+		for(const auto * unit : units)
+			stacks.push_back({unit, unit->unitType(), unit->getCount(), unit->unitSide()});
+		HeroSpec spec;
+		spec.hero = hero;
+		int mana = 0;
+		for(const SimSpell & entry : describeSpells(spec, side, stacks, mana))
+		{
+			const CSpell * spell = SpellID(entry.id).toSpell();
+			spells::BattleCast event(battle.get(), hero, spells::Mode::HERO, spell);
+			const auto mechanics = spell->battleMechanics(&event);
+			const int cost = battle->battleGetSpellCost(spell, hero);
+			for(size_t i = 0; i < units.size(); ++i)
+			{
+				const double game = mechanics->isReceptive(units[i]) ? static_cast<double>(mechanics->adjustEffectValue(units[i])) : 0.0;
+				++casts;
+				if(std::abs(entry.damage[i] - game) > std::max(1.0, 0.005 * game) || entry.cost != cost)
+				{
+					++castsDiffer;
+					logAi->info("FairAI spellcheck|damage|%s|%s|%.0f|%.0f|%d|%d", spell->getJsonKey(), units[i]->creatureId().toCreature()->getJsonKey(), entry.damage[i], game, entry.cost, cost);
+				}
+			}
+		}
+	}
+	logAi->info("FairAI spellcheck|sum|%d|%d|%d|%d", pairs, differ, casts, castsDiffer);
+}
+
 void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 {
+	if(!spellCheckDone)
+	{
+		spellCheckDone = true;
+		static const bool wanted = std::getenv("FAI_SPELLCHECK") != nullptr;
+		if(wanted)
+		{
+			try
+			{
+				spellCheck(battleID);
+			}
+			catch(const std::exception & e)
+			{
+				logAi->info("FairAI spellcheck|error|-|%s", e.what());
+			}
+		}
+	}
 	try
 	{
 		// sieges: our simulator knows no walls, moat or towers - VCMI's BattleAI handles them until FairAI
@@ -801,8 +909,14 @@ void FairBattleAI::logForecast(const BattleID & battleID)
 				stacks.push_back({type, type, unit->getCount(), unit->unitSide()});
 		}
 		const JsonNode & layout = LIBRARY->engineSettings()->getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
-		const Forecast map = forecastBattle(stacks, side, layout, 30, searchSettings().enemyModel == 1 ? Stance::STALK : Stance::CHARGE);
+		// (spellForecast) with our hero's damage spells: two more plans, and the spell points each uses
+		HeroSpec spec;
+		spec.hero = spellForecast ? battle->battleGetMyHero() : nullptr;
+		const Forecast map = forecastBattle(stacks, side, layout, 30, searchSettings().enemyModel == 1 ? Stance::STALK : Stance::CHARGE,
+			spec.hero && spec.hero->hasSpellbook() ? &spec : nullptr);
 		text += boost::str(boost::format("|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f") % map.ownBefore % map.enemyBefore % map.ownAfter[0] % map.enemyAfter[0] % map.ownAfter[1] % map.enemyAfter[1]);
+		if(map.plans > 2)
+			text += boost::str(boost::format("|%.0f|%.0f|%d|%.0f|%.0f|%d") % map.ownAfter[2] % map.enemyAfter[2] % map.manaSpent[2] % map.ownAfter[3] % map.enemyAfter[3] % map.manaSpent[3]);
 	}
 	catch(const std::exception & e)
 	{

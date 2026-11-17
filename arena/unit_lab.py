@@ -126,6 +126,8 @@ def cmd_play(args) -> int:
                 at = line.find("FairAI sim")
                 if at < 0:
                     at = line.find("FairAI dmgcheck")
+                if at < 0:
+                    at = line.find("FairAI spellcheck")  # FAI_SPELLCHECK=1: spell rules against the game's
                 if at >= 0:
                     lines.append(path.stem + "|" + line[at + 7:].strip())
         if not record.get("error"):  # failed duels keep their logs

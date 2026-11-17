@@ -1,8 +1,8 @@
 # What creatures can do, and what FairAI knows of it
 
-199 creatures of the installed game (mods: none), 90 kinds of ability.
+199 creatures of the installed game (mods: hota), 90 kinds of ability.
 
-open: 29 | switch: 10 | simulated: 33 | formula: 9 | no effect: 9
+open: 22 | switch: 17 | simulated: 33 | formula: 9 | no effect: 9
 
 ## open
 
@@ -10,22 +10,15 @@ open: 29 | switch: 10 | simulated: 33 | formula: 9 | no effect: 9
 |---|---|---|---|
 | CASTS | 30 | archangel, masterGenie, pitLord, ogreMage, iceElemental ... | how often the unit can cast. |
 | SPELLCASTER | 25 | archangel, pitLord, ogreMage, iceElemental, magmaElemental ... | casts a spell instead of attacking. Spells: airShield, bloodlust, chainLightning, detonates01, detonates02, fireball, fortune, frostRing, heatStrokeDreadnought, heatStrokeJuggernaut, iceBolt, inferno, lightningBolt, magicArrow, meditation01, meditation02, meteorShower, mirth, protectAir, protectEarth, protectFire, protectWater, quicksand, resurrection, sandVigour, summonDemons, summonLarva, teleport. |
-| SPELL_IMMUNITY | 20 | troglodyte, infernalTroglodyte, airElemental, earthElemental, waterElemental ... | immune to a spell (the hero's spells are not part of the forecast yet). |
 | CREATURE_ENCHANT_POWER | 15 | masterGenie, ogreMage, iceElemental, magmaElemental, stormElemental ... | how long the unit's spells last. |
 | ENCHANTED | 10 | bountyHunter, gunslinger, halflingGrenadier, hotaEngineer, hotaMechanic ... | under a lasting spell from the start. |
-| SPELL_DAMAGE_REDUCTION | 10 | ironGolem, stoneGolem, goldGolem, diamondGolem, firebird ... | takes less damage from spells. |
-| MORE_DAMAGE_FROM_SPELL | 8 | airElemental, earthElemental, fireElemental, waterElemental, iceElemental ... | takes more damage from a spell. |
-| MAGIC_RESISTANCE | 7 | dwarf, battleDwarf, crystalDragon, jotunn, jotunnWarlord ... | chance to resist hostile spells. |
 | CREATURE_SPELL_POWER | 5 | fairieDragon, blackbeard, fangarm, cowboy, grandshaman | strength of the unit's spells. |
 | NO_WALL_PENALTY | 5 | archMage, enchanter, sharpshooter, arrowTower, snowElf | matters in sieges, which the simulator does not play. |
 | CATAPULT | 4 | cyclop, cyclopKing, catapult, cannon | sieges. |
 | BLOCKS_RANGED_RETALIATION | 3 | ballista, arrowTower, cannon | is not shot back at (matters against the two units that shoot back). |
 | ADJACENT_SPELLCASTER | 2 | hotaEngineer, hotaMechanic | casts on a neighbour instead of attacking. |
-| CHANGES_SPELL_COST_FOR_ALLY | 2 | mage, archMage | our hero's spells cost less (the price of spell points does not know it). |
-| CHANGES_SPELL_COST_FOR_ENEMY | 2 | pegasus, silverPegasus | the enemy hero's spells cost more. |
 | FIRST_STRIKE | 2 | bountyHunter, gunslinger | retaliates before it is struck. |
 | RANGED_RETALIATION | 2 | bountyHunter, gunslinger | shoots back at shooters. |
-| SPELL_RESISTANCE_AURA | 2 | unicorn, warUnicorn | neighbours resist spells. |
 | CATAPULT_EXTRA_SHOTS | 1 | cyclopKing | sieges. |
 | ENCHANTER | 1 | enchanter | casts a mass spell every few rounds. Spells: airShield, bless, haste, slow, stoneSkin, weakness. |
 | FEROCITY | 1 | ayssid | strikes again when it has killed. |
@@ -43,13 +36,20 @@ open: 29 | switch: 10 | simulated: 33 | formula: 9 | no effect: 9
 | ability | creatures | examples | what FairAI does with it |
 |---|---|---|---|
 | SPELL_AFTER_ATTACK | 27 | dendroidGuard, dendroidSoldier, unicorn, warUnicorn, zombieLord ... | by what the spell does: puts out of action, ages, poisons, curses, weakens, bolts [simAfterHit]. Spells: acidBreath, age, bind, blind, curse, disease, dispelHelpful, disruptingRay, freezingShot, hypnotize, paralyze, poison, stoneGaze, thunderbolt, weakness. |
+| SPELL_IMMUNITY | 20 | troglodyte, infernalTroglodyte, airElemental, earthElemental, waterElemental ... | immune to a spell: a hero's damage spell does nothing to it in a forecast - the game's own rule, compared with the game in real battles [spellForecast]. |
 | MIND_IMMUNITY | 13 | giant, titan, airElemental, earthElemental, fireElemental ... | cannot be blinded or hypnotised [simAfterHit]. |
 | SPELL_LIKE_ATTACK | 12 | monk, zealot, titan, magog, lich ... | shot bursts on the hexes around the target, friend and foe [simMultiHex]. Spells: deathCloud, fireballAbility, hotaEnchanterArrow, hotaGrenade, hotaIce, hotaLightGlobe, hotaLightning, hotaRay, hotaStorm. |
+| SPELL_DAMAGE_REDUCTION | 10 | ironGolem, stoneGolem, goldGolem, diamondGolem, firebird ... | takes less damage from a hero's spells, none at full protection - the game's own rule, compared with the game in real battles [spellForecast]. |
 | TWO_HEX_ATTACK_BREATH | 10 | greenDragon, goldDragon, redDragon, blackDragon, firebird ... | breath reaches the hex behind the target [simMultiHex]. |
+| MORE_DAMAGE_FROM_SPELL | 8 | airElemental, earthElemental, fireElemental, waterElemental, iceElemental ... | takes more damage from a spell (elementals and their opposite element) [spellForecast]. |
+| MAGIC_RESISTANCE | 7 | dwarf, battleDwarf, crystalDragon, jotunn, jotunnWarlord ... | chance to resist a hero's damage spell, as an expected value [spellForecast]. |
 | SPECIFIC_SPELL_POWER | 7 | archangel, pitLord, thunderbird, automaton, hotaEngineer ... | strength of the unit's own spell [simAfterHit, for spells after an attack]. Spells: detonates01, detonates02, hotaRepair, resurrection, summonDemons, thunderbolt. |
 | FEARFUL | 4 | azureDragon, bountyHunter, gunslinger, halflingGrenadier | fear: enemies of azure dragons may lose their turn, the fearless do not [simAfterHit]. |
+| CHANGES_SPELL_COST_FOR_ALLY | 2 | mage, archMage | its hero's spells cost less spell points in a forecast [spellForecast]. |
+| CHANGES_SPELL_COST_FOR_ENEMY | 2 | pegasus, silverPegasus | the enemy hero's spells cost more spell points in a forecast [spellForecast]. |
 | DEATH_STARE | 2 | mightyGorgon, seadog | kills whole creatures of the target, whatever they are worth [simAfterHit]. |
 | MULTIHEX_UNIT_ATTACK | 2 | hotaDreadnought, hotaJuggernaut | attack reaches further hexes, own troops included [simMultiHex]. |
+| SPELL_RESISTANCE_AURA | 2 | unicorn, warUnicorn | units of its side next to it resist a hero's damage spell more often [spellForecast]. |
 | ACID_BREATH | 1 | rustDragon | acid damage and lost defence [simAfterHit]. |
 | THREE_HEADED_ATTACK | 1 | cerberus | bites the neighbours of its target [simMultiHex]. |
 
@@ -66,9 +66,9 @@ open: 29 | switch: 10 | simulated: 33 | formula: 9 | no effect: 9
 | NON_LIVING | 15 | ironGolem, stoneGolem, airElemental, earthElemental, fireElemental ... | no morale; life drain, death stare, ageing and poison do nothing. |
 | UNDEAD | 15 | skeleton, skeletonWarrior, walkingDead, zombieLord, wight ... | no morale; life drain, death stare, ageing and poison do nothing. |
 | HP_REGENERATION | 11 | wight, wraith, troll, haspid, seaserpent ... | top creature heals every round. |
-| SPELL_SCHOOL_IMMUNITY | 9 | efreet, efreetSultan, fireElemental, energyElemental, phoenix ... | fire immunity against fire shield and fireball shots; hero spells are not part of the forecast yet. |
+| SPELL_SCHOOL_IMMUNITY | 9 | efreet, efreetSultan, fireElemental, energyElemental, phoenix ... | fire immunity against fire shield and fireball shots; a hero's damage spells of the school do nothing to it [spellForecast]. |
 | ADDITIONAL_ATTACK | 8 | marksman, crusader, grandElf, hobgoblinWolfRider, automaton ... | strikes or shoots twice. |
-| LEVEL_SPELL_IMMUNITY | 6 | greenDragon, goldDragon, redDragon, blackDragon, magicElemental ... | immune to spells up to a level: spell-like shots and effects after an attack do nothing. |
+| LEVEL_SPELL_IMMUNITY | 6 | greenDragon, goldDragon, redDragon, blackDragon, magicElemental ... | immune to spells up to a level: spell-like shots and effects after an attack do nothing; a hero's damage spells up to that level neither [spellForecast]. |
 | MORALE | 6 | angel, archangel, boneDragon, ghostDragon, minotaur ... | expected value of the morale dice. |
 | SIEGE_WEAPON | 6 | catapult, ballista, firstAidTent, ammoCart, arrowTower ... | war machine: does not move, knows no morale. |
 | LUCK | 5 | devil, archDevil, halfling, leprechaun, halflingGrenadier | expected value of the luck dice. |

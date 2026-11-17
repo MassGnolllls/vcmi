@@ -98,18 +98,18 @@ KNOWN = {
     "MANA_DRAIN": ("open", "takes spell points from the enemy hero every round"),
     "MANA_CHANNELING": ("open", "passes the enemy hero's spent spell points to ours"),
     "MAGIC_MIRROR": ("open", "may throw a spell back"),
-    "MAGIC_RESISTANCE": ("open", "chance to resist hostile spells"),
-    "SPELL_DAMAGE_REDUCTION": ("open", "takes less damage from spells"),
-    "MORE_DAMAGE_FROM_SPELL": ("open", "takes more damage from a spell"),
-    "SPELL_IMMUNITY": ("open", "immune to a spell (the hero's spells are not part of the forecast yet)"),
-    "SPELL_SCHOOL_IMMUNITY": ("simulated", "fire immunity against fire shield and fireball shots; hero spells are not part of the forecast yet"),
-    "LEVEL_SPELL_IMMUNITY": ("simulated", "immune to spells up to a level: spell-like shots and effects after an attack do nothing"),
-    "NEGATIVE_EFFECTS_IMMUNITY": ("open", "immune to hostile spells of a school"),
+    "MAGIC_RESISTANCE": ("switch", "chance to resist a hero's damage spell, as an expected value [spellForecast]"),
+    "SPELL_DAMAGE_REDUCTION": ("switch", "takes less damage from a hero's spells, none at full protection - the game's own rule, compared with the game in real battles [spellForecast]"),
+    "MORE_DAMAGE_FROM_SPELL": ("switch", "takes more damage from a spell (elementals and their opposite element) [spellForecast]"),
+    "SPELL_IMMUNITY": ("switch", "immune to a spell: a hero's damage spell does nothing to it in a forecast - the game's own rule, compared with the game in real battles [spellForecast]"),
+    "SPELL_SCHOOL_IMMUNITY": ("simulated", "fire immunity against fire shield and fireball shots; a hero's damage spells of the school do nothing to it [spellForecast]"),
+    "LEVEL_SPELL_IMMUNITY": ("simulated", "immune to spells up to a level: spell-like shots and effects after an attack do nothing; a hero's damage spells up to that level neither [spellForecast]"),
+    "NEGATIVE_EFFECTS_IMMUNITY": ("switch", "immune to hostile spells of a school: a hero's damage spells of it do nothing [spellForecast]"),
     "MIND_IMMUNITY": ("switch", "cannot be blinded or hypnotised [simAfterHit]"),
     "RECEPTIVE": ("open", "friendly spells of a school work despite immunity"),
     "DISPEL_IMMUNITY": ("open", "its spells cannot be dispelled"),
     "ENCHANTED": ("open", "under a lasting spell from the start"),
-    "SPELL_RESISTANCE_AURA": ("open", "neighbours resist spells"),
+    "SPELL_RESISTANCE_AURA": ("switch", "units of its side next to it resist a hero's damage spell more often [spellForecast]"),
     "HEALER": ("simulated", "first aid tent"),
     "FIRST_STRIKE": ("open", "retaliates before it is struck"),
     "RANGED_RETALIATION": ("open", "shoots back at shooters"),
@@ -138,8 +138,8 @@ KNOWN = {
     "NONE": ("no effect", "an ability this version of the engine does not know (written for a newer one): it does nothing in the game either"),
     "BLOCKS_RANGED_RETALIATION": ("open", "is not shot back at (matters against the two units that shoot back)"),
     "CPU_CONTROLLED": ("no effect", "war machines the game steers itself"),
-    "CHANGES_SPELL_COST_FOR_ALLY": ("open", "our hero's spells cost less (the price of spell points does not know it)"),
-    "CHANGES_SPELL_COST_FOR_ENEMY": ("open", "the enemy hero's spells cost more"),
+    "CHANGES_SPELL_COST_FOR_ALLY": ("switch", "its hero's spells cost less spell points in a forecast [spellForecast]"),
+    "CHANGES_SPELL_COST_FOR_ENEMY": ("switch", "the enemy hero's spells cost more spell points in a forecast [spellForecast]"),
     "ON_COMBAT_EVENT": ("open", "effects triggered by events of the battle (yeti runemaster)"),
     "YETI_RUNE_LEVEL_COUNTER": ("open", "runes of the yeti runemaster"),
     # --- outside battles
@@ -203,8 +203,10 @@ def main() -> int:
         state, how = KNOWN.get(kind, ("unknown", "not in the catalogue yet - look it up and decide"))
         by_state[state].append((kind, units, how))
 
+    # the mods are read from the creatures themselves: "hota.cove:seadog" comes from the mod "hota"
+    mods = sorted({c["id"].split(":")[0].split(".")[0] for c in creatures if ":" in c["id"]} - {"core"})
     lines = ["# What creatures can do, and what FairAI knows of it", "",
-             f"{len(creatures)} creatures of the installed game (mods: {args.mods or 'none'}), {len(kinds)} kinds of ability.", ""]
+             f"{len(creatures)} creatures of the installed game (mods: {', '.join(mods) or 'none'}), {len(kinds)} kinds of ability.", ""]
     counts = {state: len(by_state.get(state, [])) for state in ["unknown"] + ORDER}
     lines.append(" | ".join(f"{state}: {counts[state]}" for state in ["unknown"] + ORDER if counts[state]))
     lines.append("")

@@ -61,6 +61,11 @@ def cmd_gen(args) -> int:
             shutil.rmtree(maps_dir)
         maps_dir.mkdir(parents=True, exist_ok=True)
         rng = random.Random(args.seed)
+        # --primary 4,3,8,6 for every hero, or early=1,1,3,2;mid=3,3,6,5;late=6,6,10,8 by the stage of its army
+        primary_by_stage = {}
+        for part in filter(None, args.primary.split(";")):
+            stage_name, _, numbers = part.rpartition("=")
+            primary_by_stage[stage_name] = [int(x) for x in numbers.split(",")]
         index = []
         made = failed = 0
         for guard in guards:
@@ -78,9 +83,13 @@ def cmd_gen(args) -> int:
                         army = battle_scenarios.scale_army(army, real_ratio / ratio)
                         army_value = battle_scenarios.army_value(army, value_of)
                     hero = rng.choice([h for h in might if h["faction"] == faction] or might)["id"]
-                    name = f"{safe(guard['id'])}__r{int(ratio * 100):03d}__{copy}"
-                    scenario = {"name": name, "terrain": rng.choice(battle_scenarios.TERRAINS), "kind": "guard", "stage": stage, "magic": False,
-                                "sides": [{"hero": hero, "primary": battle_scenarios.STAGES[stage]["primary"], "army": army, "spellBook": False, "spells": []},
+                    name = f"{safe(guard['id'])}__r{int(ratio * 100):03d}__{copy}{args.tag}"
+                    # --spells: the hero carries a spell book with these spells (and --primary: its skills),
+                    # to see what the hero's magic does to a guard fight and how well that is forecast
+                    spell_list = [x for x in args.spells.split(",") if x]
+                    primary = primary_by_stage.get(stage) or primary_by_stage.get("") or battle_scenarios.STAGES[stage]["primary"]
+                    scenario = {"name": name, "terrain": rng.choice(battle_scenarios.TERRAINS), "kind": "guard", "stage": stage, "magic": bool(spell_list),
+                                "sides": [{"hero": hero, "primary": primary, "army": army, "spellBook": bool(spell_list), "spells": spell_list},
                                           {"guard": [guard["id"], count]}]}
                     scen_file = work / "scenarios" / f"{name}.json"
                     scen_file.parent.mkdir(parents=True, exist_ok=True)
@@ -95,7 +104,12 @@ def cmd_gen(args) -> int:
                     else:
                         failed += 1
                         print(f"FAILED {name}: {res.stderr.strip()[-300:]}")
-        (maps_dir / "index.json").write_text(json.dumps(index, indent=1))
+        # sets made earlier (other --tag) stay in the index
+        index_file = maps_dir / "index.json"
+        if index_file.exists():
+            fresh = {e["name"] for e in index}
+            index = [e for e in json.loads(index_file.read_text()) if e["name"] not in fresh] + index
+        index_file.write_text(json.dumps(index, indent=1))
         print(f"{made} guard battles ready in {maps_dir} ({failed} failed, {len(guards)} creatures)")
         return 0 if made else 1
     finally:
@@ -166,13 +180,16 @@ def forecast_report(folder: Path):
         plans = [loss(f[2], f[3], f[0]), loss(f[5], f[6], f[0])]
         # the same battle forecast from the armies alone, as the adventure AI sees it beforehand
         from_map = min(loss(f[10], f[11], f[8]), loss(f[12], f[13], f[8])) if len(f) >= 14 else None
-        rows.append((actual, min(plans), plans[0], plans[1], from_map))
+        # ... and with the hero's damage spells played (parameter spellForecast): the better of all four plans
+        with_spells = min(from_map, loss(f[14], f[15], f[8]), loss(f[17], f[18], f[8])) if len(f) >= 20 else None
+        rows.append((actual, min(plans), plans[0], plans[1], from_map, with_spells))
     if len(rows) < 5:
         return []
     n = len(rows)
     lines = ["", "## Forecast of the simulator (before the first move) against the real result", "",
              "| forecast | battles | mean forecast loss | mean real loss | mean error | mean absolute error |", "|---|---|---|---|---|---|"]
-    for label, pick in (("better of both plans", 1), ("hold", 2), ("advance", 3), ("from the armies alone (as on the map)", 4)):
+    for label, pick in (("better of both plans", 1), ("hold", 2), ("advance", 3), ("from the armies alone (as on the map)", 4),
+                        ("from the armies and the hero's damage spells", 5)):
         chosen = [r for r in rows if r[pick] is not None]
         if not chosen:
             continue
@@ -188,7 +205,7 @@ def forecast_report(folder: Path):
     if var_p > 0 and var_r > 0:
         lines.append("")
         lines.append(f"Correlation of forecast and real loss: {cov / (var_p * var_r) ** 0.5:.2f}.")
-    for title, pick in (("forecast loss", 1), ("forecast loss from the armies alone", 4)):
+    for title, pick in (("forecast loss", 1), ("forecast loss from the armies alone", 4), ("forecast loss from the armies and the hero's damage spells", 5)):
         chosen = [r for r in rows if r[pick] is not None]
         if not chosen:
             continue
@@ -294,6 +311,9 @@ def main() -> int:
     g.add_argument("--armies", type=int, default=2, help="different armies per guard and ratio")
     g.add_argument("--seed", type=int, default=5)
     g.add_argument("--only", default="")
+    g.add_argument("--spells", default="", help="spells in the hero's book, e.g. core:magicArrow,core:lightningBolt (default: no book)")
+    g.add_argument("--primary", default="", help="the hero's attack,defence,power,knowledge, or by stage: early=1,1,3,2;mid=3,3,6,5;late=6,6,10,8 (default: the stage's might hero)")
+    g.add_argument("--tag", default="", help="suffix of the map names, to keep several sets side by side (play --filter)")
     g.add_argument("--force", action="store_true")
     p = sub.add_parser("play")
     p.add_argument("--client", required=True)

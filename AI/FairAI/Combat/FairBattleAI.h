@@ -65,6 +65,9 @@ private:
 	bool lastActionWasSpell = false;
 	int quietDecisions = 0; ///< our decisions since anybody was hurt (the attacker must not let a battle stand still)
 	bool forecastLogged = false;
+	bool spellCheckDone = false; ///< FAI_SPELLCHECK: the spell rules were compared with the game's in this battle
+	/// (test) FairAI's own rules of what a spell does to a unit - used by forecasts outside a battle - against the game's
+	void spellCheck(const BattleID & battleID);
 
 	std::shared_ptr<Environment> env;
 	std::shared_ptr<CBattleCallback> cb;
@@ -75,6 +78,7 @@ private:
 	bool spellSearch = false; ///< from the player's FairAI parameters (or FAI_SPELL_SEARCH)
 	int spellMode = 0;        ///< 2: a spell is cast when it changes how the fight ends by more than its spell points are worth
 	double manaShare = 0.15;  ///< what a full store of spell points is worth, as a share of the army
+	bool spellForecast = false; ///< the forecast logged at the start of a battle plays our hero's damage spells (as the adventure AI's does)
 	bool simAbilities = true; ///< from the player's FairAI parameters: the look-ahead knows special abilities
 	bool battlePlan = false;  ///< from the player's FairAI parameters: candidates are judged by playing several rounds ahead, holding or advancing
 

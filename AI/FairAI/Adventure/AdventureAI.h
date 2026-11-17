@@ -57,6 +57,11 @@ VCMI_LIB_NAMESPACE_END
 namespace FAI
 {
 
+namespace Combat
+{
+struct HeroSpec;
+}
+
 class Perception;
 class FairAIGateway;
 struct ObservedObject;
@@ -292,6 +297,7 @@ private:
 		int day = -1;
 		std::array<double, 4> skills{}; ///< attack, defence, spell power, knowledge
 		double magic = 1.0; ///< what the spells we saw it cast add to its strength (noteHeroSpell)
+		std::set<int> damageSpells; ///< the damage spells we saw it cast: a forecast plays them against us (spellForecast)
 	};
 	std::map<int, HeroIntel> heroIntel; ///< hero type -> primary skills the game showed us, and when
 	mutable std::mutex intelMutex;
@@ -369,7 +375,15 @@ private:
 		bool win = false;
 		double lossShare = 1.0; ///< of our army value
 		double lossValue = 0;
+		int mana = 0;           ///< spell points our hero uses in the plan
+		double manaShare = 0;   ///< ... and what they are worth, as a share of our army value (spellForecast)
 	};
+	/// our hero's spells for a forecast (nullptr while spellForecast is off)
+	const Combat::HeroSpec * ownSpells(const CGHeroInstance * hero, Combat::HeroSpec & spec) const;
+	/// what a spell point of this hero is worth right now, as a share of the value of its army
+	double manaPointShare(const CGHeroInstance * hero) const;
+	/// army and (with spellForecast) spell points and spells of a hero: the same hash, the same forecast
+	uint64_t fightSignature(const CGHeroInstance * hero) const;
 	FightForecast forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const;
 	/// expected loss (gold) of attacking this stack of wandering monsters; -1: leave it alone
 	double monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster) const;

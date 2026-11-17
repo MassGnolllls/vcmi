@@ -280,6 +280,7 @@ void Params::loadOverrides(int playerIndex)
 	read("simMultiHex", simMultiHex);
 	read("simAfterHit", simAfterHit);
 	read("manaShare", manaShare);
+	read("spellForecast", spellForecast);
 	read("battlePlan", battlePlan);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
@@ -1290,14 +1291,22 @@ double AdventureAI::fieldStrength(const CGHeroInstance * hero) const
 	return static_cast<double>(hero->getArmyStrength()) * hero->getFightingStrength() * std::sqrt((1.0 + std::max(0.0, melee)) / (1.0 - armour));
 }
 
-AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const
+const Combat::HeroSpec * AdventureAI::ownSpells(const CGHeroInstance * hero, Combat::HeroSpec & spec) const
 {
-	FightForecast result;
-	const CCreature * type = creature.toCreature();
-	if(!hero || !type || count <= 0 || hero->stacksCount() == 0)
-		return result;
+	if(!params.spellForecast || !hero || !hero->hasSpellbook() || hero->mana <= 0)
+		return nullptr;
+	spec.hero = hero;
+	return &spec;
+}
 
-	// same question, same answer: the hero's army and the guards do not change between planning steps
+double AdventureAI::manaPointShare(const CGHeroInstance * hero) const
+{
+	// the battle AI asks the same price when it weighs a spell (FairBattleAI::trySpellByOutcome)
+	return params.manaShare * Combat::manaUrgency(hero->id.getNum()) / std::max(30, hero->manaLimit());
+}
+
+uint64_t AdventureAI::fightSignature(const CGHeroInstance * hero) const
+{
 	uint64_t signature = 1469598103934665603ULL;
 	for(const auto & [slot, stack] : hero->Slots())
 	{
@@ -1306,6 +1315,24 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 		signature = (signature ^ static_cast<uint64_t>(stack->getCreatureID().getNum() * 100003 + slot.getNum())) * 1099511628211ULL;
 		signature = (signature ^ static_cast<uint64_t>(stack->getCount())) * 1099511628211ULL;
 	}
+	if(params.spellForecast && hero->hasSpellbook())
+	{
+		// a battle that cost spell points and no troops leaves another hero behind
+		signature = (signature ^ static_cast<uint64_t>(hero->mana + 1)) * 1099511628211ULL;
+		signature = (signature ^ static_cast<uint64_t>(hero->getSpellsInSpellbook().size())) * 1099511628211ULL;
+	}
+	return signature;
+}
+
+AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const
+{
+	FightForecast result;
+	const CCreature * type = creature.toCreature();
+	if(!hero || !type || count <= 0 || hero->stacksCount() == 0)
+		return result;
+
+	// same question, same answer: the hero's army and the guards do not change between planning steps
+	const uint64_t signature = fightSignature(hero);
 	const auto key = std::make_tuple(hero->id.getNum(), signature, creature.getNum(), count);
 	if(auto cached = forecastCache.find(key); cached != forecastCache.end())
 		return cached->second;
@@ -1335,11 +1362,15 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 	try
 	{
 		const JsonNode & layout = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
-		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout);
-		const int plan = forecast.bestPlan();
+		Combat::HeroSpec spec;
+		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, spec));
+		const double pointShare = manaPointShare(hero);
+		const int plan = forecast.bestPlan(pointShare * forecast.ownBefore);
 		result.win = forecast.win(plan);
 		result.lossShare = forecast.lossShare(plan);
 		result.lossValue = result.lossShare * forecast.ownBefore;
+		result.mana = forecast.manaSpent[plan];
+		result.manaShare = pointShare * result.mana;
 	}
 	catch(const std::exception & e)
 	{
@@ -1364,17 +1395,19 @@ double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObjec
 	if(!likely.win)
 		return -1;
 	double share = likely.lossShare;
+	double mana = likely.manaShare; // the spell points the fight takes, priced like troops
 	if(seen.maxCount > likelyCount)
 	{
 		const FightForecast worst = forecastMonsterFight(hero, seen.creature, seen.maxCount);
 		if(!worst.win)
 			return -1;
 		share = 0.7 * likely.lossShare + 0.3 * worst.lossShare;
+		mana = 0.7 * likely.manaShare + 0.3 * worst.manaShare;
 	}
 	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : params.maxLossShareSecondary;
 	if(share > limit)
 		return -1;
-	return share * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+	return (share + mana) * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
 }
 
 double AdventureAI::guardLoss(const CGHeroInstance * hero, const int3 & tile) const
@@ -2337,14 +2370,7 @@ AdventureAI::FightForecast AdventureAI::forecastGuards(const CGHeroInstance * he
 		return result;
 
 	// same question, same answer: the hero's army does not change between planning steps
-	uint64_t signature = 1469598103934665603ULL;
-	for(const auto & [slot, stack] : hero->Slots())
-	{
-		if(!stack || !stack->getCreature())
-			continue;
-		signature = (signature ^ static_cast<uint64_t>(stack->getCreatureID().getNum() * 100003 + slot.getNum())) * 1099511628211ULL;
-		signature = (signature ^ static_cast<uint64_t>(stack->getCount())) * 1099511628211ULL;
-	}
+	const uint64_t signature = fightSignature(hero);
 	uint64_t setup = 1469598103934665603ULL;
 	for(const auto & [creature, count] : guards)
 		setup = ((setup ^ static_cast<uint64_t>(creature.getNum())) * 1099511628211ULL ^ static_cast<uint64_t>(count)) * 1099511628211ULL;
@@ -2373,11 +2399,15 @@ AdventureAI::FightForecast AdventureAI::forecastGuards(const CGHeroInstance * he
 	{
 		const JsonNode & layouts = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS);
 		const JsonNode & layout = layouts[layoutName].isNull() ? layouts["default"] : layouts[layoutName];
-		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout);
-		const int plan = forecast.bestPlan();
+		Combat::HeroSpec spec;
+		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, spec));
+		const double pointShare = manaPointShare(hero);
+		const int plan = forecast.bestPlan(pointShare * forecast.ownBefore);
 		result.win = forecast.win(plan);
 		result.lossShare = forecast.lossShare(plan);
 		result.lossValue = result.lossShare * forecast.ownBefore;
+		result.mana = forecast.manaSpent[plan];
+		result.manaShare = pointShare * result.mana;
 	}
 	catch(const std::exception & e)
 	{
@@ -2475,7 +2505,7 @@ AdventureAI::GuardedPlan AdventureAI::guardedPlan(const CGHeroInstance * hero, c
 					health += static_cast<double>(creature.toCreature()->getMaxHealth()) * count;
 				worth += health * expValue(hero);
 				share = forecast.lossShare;
-				cost = share * army * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+				cost = (share + forecast.manaShare) * army * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
 				take = worth > cost;
 			}
 		}
@@ -2999,6 +3029,11 @@ void AdventureAI::noteHeroSpell(HeroTypeID hero, SpellID spell, int affected)
 {
 	if(!hero.hasValue() || !spell.hasValue())
 		return;
+	if(const auto * info = spell.toSpell(); info && info->isDamage())
+	{
+		std::unique_lock lock(intelMutex);
+		heroIntel[hero.getNum()].damageSpells.insert(spell.getNum());
+	}
 	double magic = 1.0;
 	if(spell == SpellID::SLOW || spell == SpellID::HASTE)
 		magic = affected >= 4 ? (spell == SpellID::SLOW ? 1.6 : 1.4) : 1.1;
@@ -3031,6 +3066,26 @@ double AdventureAI::heroFightLoss(const CGHeroInstance * hero, const ObservedObj
 	// the enemy casts every round and ours does too: what counts is who is the better mage
 	const double magic = std::clamp(std::sqrt((1.0 + 0.05 * skills[2]) * (1.0 + 0.05 * skills[3])) / std::max(1.0, hero->getMagicStrength()), 0.8, 1.6);
 
+	// (spellForecast) our damage spells are played, and the enemy's as far as we saw it cast them:
+	// with the power we estimate and a full store of spell points
+	Combat::HeroSpec ownSpec;
+	Combat::HeroSpec enemySpec;
+	const Combat::HeroSpec * enemySpells = nullptr;
+	if(params.spellForecast)
+	{
+		std::unique_lock lock(intelMutex);
+		auto intel = heroIntel.find(enemy.subtype.getNum());
+		if(intel != heroIntel.end() && !intel->second.damageSpells.empty())
+		{
+			enemySpec.power = std::max(1, static_cast<int>(std::lround(skills[2])));
+			enemySpec.mana = 10 * std::max(1, static_cast<int>(std::lround(skills[3])));
+			for(int spell : intel->second.damageSpells)
+				enemySpec.spells.emplace_back(SpellID(spell), 1);
+			enemySpells = &enemySpec;
+		}
+	}
+	const double pointShare = manaPointShare(hero);
+
 	auto simulate = [&](bool upper) -> FightForecast
 	{
 		FightForecast result;
@@ -3052,10 +3107,13 @@ double AdventureAI::heroFightLoss(const CGHeroInstance * hero, const ObservedObj
 		try
 		{
 			const JsonNode & layout = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
-			const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout);
-			const int plan = forecast.bestPlan();
+			const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, ownSpec), enemySpells);
+			// against a hero the spell points are well spent: the plan that keeps most of the army
+			const int plan = forecast.bestPlan(0);
 			result.win = forecast.win(plan);
 			result.lossShare = forecast.lossShare(plan);
+			result.mana = forecast.manaSpent[plan];
+			result.manaShare = pointShare * result.mana;
 		}
 		catch(const std::exception & e)
 		{
@@ -3068,8 +3126,8 @@ double AdventureAI::heroFightLoss(const CGHeroInstance * hero, const ObservedObj
 	if(!likely.win || !worst.win)
 		return -1;
 	const double share = std::min(1.0, (0.7 * likely.lossShare + 0.3 * worst.lossShare) * magic);
-	logAi->debug("FairAI %s: %s against hero %d: forecast loss %.2f (at most %.2f), enemy attack %d defence %d, magic x%.2f", me.toString(),
-		hero->getNameTranslated(), enemy.subtype.getNum(), likely.lossShare, worst.lossShare, attack, defence, magic);
+	logAi->debug("FairAI %s: %s against hero %d: forecast loss %.2f (at most %.2f), enemy attack %d defence %d, magic x%.2f, our spells %d points, its spells known %d", me.toString(),
+		hero->getNameTranslated(), enemy.subtype.getNum(), likely.lossShare, worst.lossShare, attack, defence, magic, likely.mana, static_cast<int>(enemySpec.spells.size()));
 	if(share > (isMain(hero) ? 0.6 : 0.3))
 		return -1;
 	return share * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
@@ -4964,10 +5022,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const int likelyCount = std::max(1, static_cast<int>(std::lround((1 - params.dangerUpperWeight) * middle + params.dangerUpperWeight * seen.maxCount)));
 			const FightForecast likely = forecastMonsterFight(hero, seen.creature, likelyCount);
 			const FightForecast worst = forecastMonsterFight(hero, seen.creature, seen.maxCount);
-			forecastLines += boost::str(boost::format(" [%s %d-%d: %s %.2f, at most %s %.2f, old rule %s, loss %.0f]")
+			forecastLines += boost::str(boost::format(" [%s %d-%d: %s %.2f, at most %s %.2f, old rule %s, loss %.0f%s]")
 				% (seen.creature.hasValue() ? seen.creature.toCreature()->getJsonKey() : std::string("?")) % seen.minCount % seen.maxCount
 				% (likely.win ? "win" : "LOSE") % likely.lossShare % (worst.win ? "win" : "LOSE") % worst.lossShare
-				% (expectedLoss(hero, danger) < 0 ? "no" : "yes") % loss);
+				% (expectedLoss(hero, danger) < 0 ? "no" : "yes") % loss
+				% (likely.mana + worst.mana > 0 ? boost::str(boost::format(", spells for %d to %d points") % likely.mana % worst.mana) : std::string()));
 		}
 		if(loss < 0 && (weakestRejected == 0 || danger < weakestRejected))
 			weakestRejected = danger;

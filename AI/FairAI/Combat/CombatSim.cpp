@@ -7,6 +7,7 @@
  */
 #include "../StdInc.h"
 #include "CombatSim.h"
+#include "SpellSim.h"
 
 #include "../../../lib/CBonusTypeHandler.h"
 #include "../../../lib/CCreatureHandler.h"
@@ -355,6 +356,8 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	s.value = type ? std::max(1, type->getAIValue()) : 1;
 	s.speed = static_cast<int>(creature.getMovementRange());
 	s.initiative = creature.getInitiative();
+	s.spellResist = spellResistance(u);
+	s.resistAura = std::clamp(u.valOfBonuses(BonusType::SPELL_RESISTANCE_AURA), 0, 100) / 100.0;
 	s.shots = std::max(0, u.valOfBonuses(BonusType::SHOTS));
 	s.shooter = s.shots > 0;
 	s.flying = u.hasBonusOfType(BonusType::FLYING);
@@ -1510,17 +1513,210 @@ void SimState::playout(int lastRound)
 		int unit = nextActiveUnit();
 		if(unit < 0 || round > lastRound)
 			return;
+		// a hero casts when the first unit of its side gets its turn; the spell may end the battle,
+		// or kill the very unit whose turn it is (a chain, a blast on its own side)
+		if(heroCast(units[unit].side) && (battleOver() || !units[unit].alive()))
+			continue;
 		playDefault(unit);
 	}
 }
 
+// ------------------------------------------------------------------ the heroes' spells
+
+double SimState::spellHits(const SimSpell & spell, BattleSide caster, int aim, BattleHex hex, std::vector<std::pair<int, double>> & hits) const
+{
+	hits.clear();
+	const int n = static_cast<int>(units.size());
+	// the chance to resist: the unit's own, and what a neighbour of its side lends it
+	auto getsThrough = [&](int unit) -> double
+	{
+		const auto & u = units[unit];
+		double aura = 0;
+		for(int i = 0; i < n; ++i)
+		{
+			if(i != unit && units[i].alive() && units[i].side == u.side && units[i].resistAura > aura && adjacent(i, units[i].pos, unit))
+				aura = units[i].resistAura;
+		}
+		return (1.0 - u.spellResist) * (1.0 - aura);
+	};
+	auto strikes = [&](int unit, double share)
+	{
+		if(unit < 0 || unit >= n || !units[unit].alive() || unit >= static_cast<int>(spell.damage.size()))
+			return;
+		const double damage = spell.damage[unit] * share * getsThrough(unit);
+		if(damage > 0)
+			hits.emplace_back(unit, damage);
+	};
+
+	if(spell.everyUnit)
+	{
+		for(int i = 0; i < n; ++i)
+		{
+			if(!spell.sparesOwn || units[i].side != caster)
+				strikes(i, 1.0);
+		}
+	}
+	else if(spell.chain > 1)
+	{
+		// from unit to nearest unit, friend or foe, each time weaker; the immune are passed over
+		std::vector<char> done(n, 0);
+		int current = aim;
+		double share = 1.0;
+		for(int jump = 0; jump < spell.chain && current >= 0; ++jump)
+		{
+			done[current] = 1;
+			strikes(current, share);
+			share *= spell.chainFactor;
+			int next = -1;
+			int nearest = std::numeric_limits<int>::max();
+			for(int i = 0; i < n; ++i)
+			{
+				if(done[i] || !units[i].alive() || i >= static_cast<int>(spell.damage.size()) || spell.damage[i] <= 0)
+					continue;
+				const int distance = BattleHex::getDistance(units[current].pos, units[i].pos);
+				if(distance < nearest)
+				{
+					nearest = distance;
+					next = i;
+				}
+			}
+			current = next;
+		}
+	}
+	else if(!spell.layer[1] && !spell.layer[2])
+	{
+		strikes(aim, 1.0);
+	}
+	else
+	{
+		// a blast: every unit with a hex at one of the distances the spell reaches
+		for(int i = 0; i < n; ++i)
+		{
+			if(!units[i].alive() || (spell.sparesOwn && units[i].side == caster))
+				continue;
+			bool inside = false;
+			for(const BattleHex & part : unitHexes(i, units[i].pos))
+			{
+				const int distance = BattleHex::getDistance(hex, part);
+				inside = inside || (distance >= 0 && distance < static_cast<int>(spell.layer.size()) && spell.layer[distance]);
+			}
+			if(inside)
+				strikes(i, 1.0);
+		}
+	}
+
+	double gain = 0;
+	for(const auto & [unit, damage] : hits)
+	{
+		const auto & u = units[unit];
+		const double killed = u.value * std::min<double>(damage, static_cast<double>(u.totalHP())) / u.maxHP;
+		gain += u.side == caster ? -killed : killed;
+	}
+	return gain;
+}
+
+bool SimState::heroCast(BattleSide side)
+{
+	SimHero & hero = heroes[side == BattleSide::ATTACKER ? 0 : 1];
+	if(!hero.casts || !hero.spells || hero.castRound == round || hero.mana <= 0)
+		return false;
+
+	const int n = static_cast<int>(units.size());
+	const SimSpell * best = nullptr;
+	double bestGain = 0;
+	std::vector<std::pair<int, double>> bestHits;
+	std::vector<std::pair<int, double>> hits;
+	auto consider = [&](const SimSpell & spell, int aim, BattleHex hex)
+	{
+		const double gain = spellHits(spell, side, aim, hex, hits);
+		// of two spells that do the same the cheaper one
+		if(gain > bestGain + 1e-9 || (best && gain > 0 && gain > bestGain - 1e-9 && spell.cost < best->cost))
+		{
+			bestGain = gain;
+			best = &spell;
+			bestHits = hits;
+		}
+	};
+	for(const SimSpell & spell : *hero.spells)
+	{
+		if(spell.cost > hero.mana)
+			continue;
+		if(spell.everyUnit)
+		{
+			consider(spell, -1, BattleHex());
+		}
+		else if(spell.chain > 1 || (!spell.layer[1] && !spell.layer[2]))
+		{
+			for(int i = 0; i < n; ++i)
+			{
+				if(units[i].alive() && units[i].side != side && i < static_cast<int>(spell.damage.size()) && spell.damage[i] > 0)
+					consider(spell, i, units[i].pos);
+			}
+		}
+		else
+		{
+			// a blast is aimed at a hex: every hex an enemy stands on, and the hexes around those
+			std::array<bool, FIELD_SIZE> tried{};
+			for(int i = 0; i < n; ++i)
+			{
+				if(!units[i].alive() || units[i].side == side)
+					continue;
+				for(const BattleHex & part : unitHexes(i, units[i].pos))
+				{
+					for(int direction = -1; direction < 6; ++direction)
+					{
+						const BattleHex hex = direction < 0 ? part : part.cloneInDirection(static_cast<BattleHex::EDir>(direction), false);
+						if(!hex.isValid() || tried[hex.toInt()])
+							continue;
+						tried[hex.toInt()] = true;
+						consider(spell, -1, hex);
+					}
+				}
+			}
+		}
+	}
+	if(!best)
+		return false;
+
+	static const bool trace = std::getenv("FAI_SPELLTRACE") != nullptr;
+	if(trace)
+	{
+		std::string text;
+		for(const auto & [unit, damage] : bestHits)
+			text += boost::str(boost::format(" %s x%d -%.0f") % (units[unit].creature.hasValue() ? units[unit].creature.toCreature()->getJsonKey() : std::string("?")) % units[unit].count % damage);
+		logAi->info("FairAI spelltrace: round %d side %d casts %s for %d of %d (gain %.0f):%s", round, side == BattleSide::ATTACKER ? 0 : 1,
+			SpellID(best->id).toSpell()->getJsonKey(), best->cost, hero.mana, bestGain, text);
+	}
+	for(const auto & [unit, damage] : bestHits)
+	{
+		units[unit].stunned = 0; // what is hit wakes up
+		removeHealth(unit, damage);
+	}
+	hero.mana -= best->cost;
+	hero.spent += best->cost;
+	hero.castRound = round;
+	return true;
+}
+
 // ------------------------------------------------------------------ forecast
 
-int Forecast::bestPlan() const
+int Forecast::bestPlan(double manaPrice) const
 {
-	if(win(0) != win(1))
-		return win(0) ? 0 : 1;
-	return ownAfter[0] - enemyAfter[0] >= ownAfter[1] - enemyAfter[1] ? 0 : 1;
+	int best = 0;
+	for(int plan = 1; plan < plans; ++plan)
+	{
+		if(win(plan) != win(best))
+		{
+			if(win(plan))
+				best = plan;
+			continue;
+		}
+		const double mine = ownAfter[plan] - enemyAfter[plan] - manaPrice * manaSpent[plan];
+		const double other = ownAfter[best] - enemyAfter[best] - manaPrice * manaSpent[best];
+		if(mine > other)
+			best = plan;
+	}
+	return best;
 }
 
 double Forecast::lossShare(int plan) const
@@ -1530,7 +1726,8 @@ double Forecast::lossShare(int plan) const
 	return std::clamp(1.0 - ownAfter[plan] / ownBefore, 0.0, 1.0);
 }
 
-Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds, Stance enemyStance)
+Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds, Stance enemyStance,
+	const HeroSpec * ownHero, const HeroSpec * enemyHero)
 {
 	DamageTable table;
 	table.build(stacks);
@@ -1539,20 +1736,36 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 	const BattleSide other = ownSide == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
 	const int ownIndex = ownSide == BattleSide::ATTACKER ? 0 : 1;
 
+	// the heroes' spells: what each does to every stack of this battle
+	std::vector<SimSpell> ownSpells;
+	std::vector<SimSpell> enemySpells;
+	if(ownHero)
+	{
+		ownSpells = describeSpells(*ownHero, ownSide, stacks, base.heroes[ownIndex].mana);
+		base.heroes[ownIndex].spells = &ownSpells;
+	}
+	if(enemyHero)
+	{
+		enemySpells = describeSpells(*enemyHero, other, stacks, base.heroes[1 - ownIndex].mana);
+		base.heroes[1 - ownIndex].spells = &enemySpells;
+		base.heroes[1 - ownIndex].casts = !enemySpells.empty();
+	}
+
 	Forecast result;
 	result.ownBefore = base.sideValue(ownSide);
 	result.enemyBefore = base.sideValue(other);
-	int plan = 0;
-	for(Stance stance : {Stance::HOLD, Stance::CHARGE})
+	result.plans = ownSpells.empty() ? 2 : 4;
+	for(int plan = 0; plan < result.plans; ++plan)
 	{
 		SimState sim = base;
-		sim.stance[ownIndex] = stance;
+		sim.stance[ownIndex] = plan % 2 == 0 ? Stance::HOLD : Stance::CHARGE;
 		sim.stance[1 - ownIndex] = enemyStance;
+		sim.heroes[ownIndex].casts = plan >= 2;
 		sim.playout(maxRounds);
 		result.ownAfter[plan] = sim.sideValue(ownSide);
 		result.enemyAfter[plan] = sim.sideValue(other);
 		result.rounds[plan] = sim.round;
-		++plan;
+		result.manaSpent[plan] = sim.heroes[ownIndex].spent;
 	}
 	return result;
 }

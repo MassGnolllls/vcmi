@@ -30,6 +30,7 @@ VCMI_LIB_NAMESPACE_BEGIN
 class CBattleInfoCallback;
 class ACreature;
 class CCreature;
+class CGHeroInstance;
 class JsonNode;
 namespace battle
 {
@@ -106,6 +107,8 @@ struct SimUnit
 	bool mindImmune = false;         ///< cannot be blinded
 	bool fearless = false;           ///< does not lose turns to fear
 	double spreadsFear = 0;          ///< chance that each enemy unit loses its turn (azure dragons)
+	double spellResist = 0;          ///< chance to resist a hostile spell (dwarves, a hero's Resistance)
+	double resistAura = 0;           ///< ... that it lends to the units of its side next to it (unicorns)
 	double lowDamage = 1.0;          ///< its lowest damage as a share of its average damage (what a curse leaves)
 	// --- what the unit suffers from such attacks at the moment (expected values)
 	double stunned = 0;              ///< share of its next action that is lost
@@ -126,6 +129,39 @@ struct SimUnit
 	bool alive() const { return count > 0; }
 	int64_t totalHP() const { return count > 0 ? static_cast<int64_t>(count - 1) * maxHP + firstHP : 0; }
 	double remainingValue() const { return count > 0 ? value * (count - 1 + static_cast<double>(firstHP) / maxHP) : 0.0; }
+};
+
+/// A hero's spell as a forecast plays it: what it does to every unit of the battle
+struct SimSpell
+{
+	int32_t id = -1;
+	int cost = 0;
+	bool everyUnit = false;       ///< reaches the whole field (death ripple, armageddon)
+	bool sparesOwn = true;        ///< picks its victims: the caster's own units stay unharmed
+	std::array<bool, 3> layer{};  ///< the hexes it reaches around its aim: the aim itself, one step away, two steps away
+	int chain = 1;                ///< jumps on until it has hit this many units, friend or foe (chain lightning) ...
+	double chainFactor = 1.0;     ///< ... each with this share of the damage before
+	std::vector<double> damage;   ///< per unit: health it takes off a unit it hits first; 0 = the unit is immune. Without the chance to resist
+};
+
+/// The hero of one side in a forecast
+struct SimHero
+{
+	int mana = 0;
+	bool casts = false;           ///< casts the most harmful spell every round while the spell points last
+	int spent = 0;                ///< spell points used so far
+	int castRound = -1;           ///< round of the last spell: one a round
+	const std::vector<SimSpell> * spells = nullptr;
+};
+
+/// A hero as a forecast is told of it. Ours: everything is read from the hero. An enemy's: what we
+/// have seen of it and estimate.
+struct HeroSpec
+{
+	const CGHeroInstance * hero = nullptr;
+	int power = 0;
+	int mana = 0;
+	std::vector<std::pair<SpellID, int>> spells; ///< spell and mastery of its school (0 none to 3 expert)
 };
 
 /// One stack described by anything that carries creature bonuses: a unit in a battle, a stack of
@@ -210,6 +246,7 @@ public:
 	BattleSide lastMoved = BattleSide::NONE;
 	const DamageTable * damage = nullptr;
 	std::array<Stance, 2> stance = {Stance::CHARGE, Stance::CHARGE}; ///< indexed by side
+	std::array<SimHero, 2> heroes; ///< attacker, defender (forecasts; a battle's own search does not play the heroes yet)
 
 	/// Build from the real battle. `units` order must match the damage table.
 	void init(const CBattleInfoCallback & cb, const std::vector<const battle::Unit *> & battleUnits, const DamageTable & table, bool abilities = true);
@@ -247,6 +284,9 @@ public:
 	void playDefault(int unit);
 	/// play with the default policy until the end of round `lastRound` or the end of the battle
 	void playout(int lastRound);
+	/// The hero of `side` casts if it may this round and a spell of its harms the enemy more than its own
+	/// side. Returns whether it cast.
+	bool heroCast(BattleSide side);
 
 	/// expected value killed/lost by an attack, without applying it
 	double meleeTradeValue(int attacker, int target) const;
@@ -267,6 +307,9 @@ private:
 	void afterHit(int attacker, int target, bool ranged, double share, bool far = false);
 	/// fear spread by one side's units takes turns from the other side (called once the units are described)
 	void applyFear();
+	/// What a spell does if it is aimed at unit `aim` or hex `hex`: the units it hits and the health each
+	/// loses (resisting counted in as an expected value). Returns the caster's gain in value.
+	double spellHits(const SimSpell & spell, BattleSide caster, int aim, BattleHex hex, std::vector<std::pair<int, double>> & hits) const;
 	/// units on the further hexes a melee attack of `attacker` on `target` reaches (not the target itself)
 	void extraVictims(int attacker, int target, std::array<int, 8> & out, int & count) const;
 	/// units next to the target that a bursting shot of `attacker` also hits
@@ -276,23 +319,29 @@ private:
 };
 
 /// How a battle between two armies is expected to end, both sides played by the default policy:
-/// index 0 = our side holds its ground, 1 = it advances. The enemy always advances.
+/// plan 0 = our side holds its ground, 1 = it advances. The enemy always advances. With a hero of ours
+/// that has spells worth casting there are four plans: 2 and 3 are the same two with the hero casting.
+/// An enemy hero casts in every plan.
 struct Forecast
 {
 	double ownBefore = 0;
 	double enemyBefore = 0;
-	std::array<double, 2> ownAfter = {0, 0};
-	std::array<double, 2> enemyAfter = {0, 0};
-	std::array<int, 2> rounds = {0, 0};
+	int plans = 2;
+	std::array<double, 4> ownAfter = {0, 0, 0, 0};
+	std::array<double, 4> enemyAfter = {0, 0, 0, 0};
+	std::array<int, 4> rounds = {0, 0, 0, 0};
+	std::array<int, 4> manaSpent = {0, 0, 0, 0}; ///< spell points our hero uses in the plan
 
-	/// the plan we would pick
-	int bestPlan() const;
+	/// The plan we would pick. manaPrice: what a spell point is worth, in the value of our army - a
+	/// plan with spells must save more army than its spell points are worth.
+	int bestPlan(double manaPrice = 0) const;
 	bool win(int plan) const { return enemyAfter[plan] <= 0 && ownAfter[plan] > 0; }
 	/// share of our army value lost; 1 if the battle is lost (or not won in time)
 	double lossShare(int plan) const;
 };
 
-Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30, Stance enemyStance = Stance::CHARGE);
+Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30, Stance enemyStance = Stance::CHARGE,
+	const HeroSpec * ownHero = nullptr, const HeroSpec * enemyHero = nullptr);
 
 /// Attacks that reach several hexes (breath, further heads, bursting shots) in the simulator: on or off.
 /// One switch for the whole process (parameter simMultiHex; off until the unit lab and a benchmark confirm it).
