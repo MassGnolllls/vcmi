@@ -234,6 +234,11 @@ private:
 	void updateResourcePlan();
 	double scarcity(GameResID res) const;
 	std::set<ObjectInstanceID> heroesLastTurn;
+	std::map<ObjectInstanceID, int> townGainedDay;        ///< (townHeroes) town of ours -> the day it became ours (the first towns: long ago)
+	std::map<ObjectInstanceID, ObjectInstanceID> postOf;  ///< (townHeroes) hero -> the town of ours it is moving to
+	std::map<ObjectInstanceID, int> postSince;            ///< (townHeroes) hero -> the day it reached the town it moved to
+	/// (townHeroes) a town of ours that changed hands lately or has enemy heroes about: where a garrison is needed
+	bool contested(const CGTownInstance * town) const;
 	std::set<ObjectInstanceID> usedTeleporters;
 	/// An enemy hero was seen within `radius` tiles of `tile` during the last `days` days
 	bool enemySeenNear(const int3 & tile, int days, double radius) const;

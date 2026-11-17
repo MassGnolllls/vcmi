@@ -462,6 +462,16 @@ bool AdventureAI::heavy(const CGHeroInstance * hero) const
 	return static_cast<double>(hero->getArmyStrength()) >= std::max(params.heavyPartValue, params.heavyPartShare * (leader ? static_cast<double>(leader->getArmyStrength()) : 0.0));
 }
 
+bool AdventureAI::contested(const CGTownInstance * town) const
+{
+	if(!town)
+		return false;
+	auto gained = townGainedDay.find(town->id);
+	if(gained != townGainedDay.end() && today - gained->second <= 14)
+		return true;
+	return enemySeenNear(town->visitablePos(), 7, 24);
+}
+
 double AdventureAI::secondArmyBar() const
 {
 	// What a second army must be able to beat on its own: the strongest enemy hero seen in the last
@@ -581,6 +591,16 @@ void AdventureAI::playTurn()
 			}
 		}
 		heroesLastTurn = current;
+	}
+	{
+		// (townHeroes) since when each town is ours: one taken lately is one the enemy comes back for
+		std::map<ObjectInstanceID, int> now;
+		for(const auto * town : perception.ownTowns())
+		{
+			auto known = townGainedDay.find(town->id);
+			now[town->id] = known != townGainedDay.end() ? known->second : (today <= 1 ? -1000 : today);
+		}
+		townGainedDay = std::move(now);
 	}
 	chooseMainHero();
 	if(std::getenv("FAI_CHECK_REACH"))
@@ -4916,18 +4936,57 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			refugeCost = node->cost;
 		}
 		evacuating = refuge != nullptr;
+		if(refuge)
+			postOf[hero->id] = refuge->id;
 		if(heavyPartLog.insert(today * 1000 + heroNum % 1000 + 500000000).second)
 			logAi->info("FairAI %s day %d: %s cannot hold %s (an army of %.0f in reach, we stand at %.0f behind the walls): %s", me.toString(), today,
 				hero->getNameTranslated(), hero->getVisitedTown() ? hero->getVisitedTown()->getNameTranslated() : std::string("the town"),
 				threatAt(heroPos), defenceAt(hero, heroPos),
 				refuge ? (boost::format("leaving for %s, %.1f days away") % refuge->getNameTranslated() % refugeCost).str() : std::string("no town to go to - it stays"));
 	}
+	// (townHeroes) A town's hero whose town is calm moves to a town of ours that is not: one taken
+	// lately, or with enemy heroes about, and no hero of ours in it. Towns change sides about ten
+	// times a game each way, and the enemy takes back what the main hero leaves behind it. The road
+	// is judged as a supply courier judges its road; the army must be able to stand there.
+	const CGTownInstance * post = nullptr;
+	double postCost = 1e9;
+	if(params.townHeroes && heavyPart && !evacuating)
+	{
+		const CGTownInstance * home = hero->getVisitedTown();
+		if(auto goal = postOf.find(hero->id); goal != postOf.end() && home && home->id == goal->second)
+		{
+			postOf.erase(goal); // arrived
+			postSince[hero->id] = today;
+		}
+		// (a week at least where it went: what makes a town contested comes and goes within days)
+		auto since = postSince.find(hero->id);
+		if(roundTripBudget >= 0 && home && !contested(home) && (since == postSince.end() || today - since->second >= 7))
+		{
+			for(const auto * town : perception.ownTowns())
+			{
+				if(town == home || town->getVisitingHero() || town->getGarrisonHero() || !contested(town))
+					continue;
+				bool taken = false;
+				for(const auto & [other, goal] : postOf)
+					taken = taken || (other != hero->id && goal == town->id && ownHero(other));
+				const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+				if(taken || !node || !node->reachable() || node->turns > 6 || node->cost >= postCost || failedToday.count({heroNum, town->visitablePos()}))
+					continue;
+				if(threatAt(town->visitablePos(), ObjectInstanceID(), true) > tolerance(hero) * defenceAt(hero, town->visitablePos()))
+					continue;
+				if(node->turns > 0 && supplyRoadThreat(node) > tolerance(hero) * fieldStrength(hero))
+					continue;
+				post = town;
+				postCost = node->cost;
+			}
+		}
+	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
 	{
 		if(evacuating && description != "evacuate")
 			return;
 		// (safeParts) the main hero within today's march: delivering the troops is arriving
-		const bool delivery = (heavyPart && object.hasValue() && object == mainHero && travel < 1.0) || description == "evacuate";
+		const bool delivery = (heavyPart && object.hasValue() && object == mainHero && travel < 1.0) || description == "evacuate" || description == "relocate";
 		if(fortressOutside && description != "fortress" && description != "retreat" && description != "flee" && travel > 0.25 && !delivery)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
@@ -4970,6 +5029,15 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	if(evacuating)
 		addTarget(refuge->visitablePos(), refuge->id, 2000 + 0.5 * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue, 0, refugeCost, "evacuate");
+	if(post)
+	{
+		postOf[hero->id] = post->id;
+		if(heavyPartLog.insert(today * 1000 + heroNum % 1000 + 600000000).second)
+			logAi->info("FairAI %s day %d: %s moves its army (%llu) from %s to %s, %.1f days away - taken lately or enemy heroes about, and no hero of ours there", me.toString(), today,
+				hero->getNameTranslated(), static_cast<unsigned long long>(hero->getArmyStrength()),
+				hero->getVisitedTown() ? hero->getVisitedTown()->getNameTranslated() : std::string("?"), post->getNameTranslated(), postCost);
+		addTarget(post->visitablePos(), post->id, 3000 + static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue, 0, postCost, "relocate");
+	}
 
 	// value hidden behind guards, credited to the guard that blocks it
 	std::map<ObjectInstanceID, double> unlockValue;
@@ -5521,14 +5589,29 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	{
 		// the town of ours where the hero stands strongest against that army, by the days it takes to get there
 		// (safeParts: a heavy part outside a town - any town of ours, the nearest first)
+		// (townHeroes) An army on its way to another town of ours - its new post, or the refuge from a
+		// town it could not hold - goes on: the town it left a step ago is the nearest, and without
+		// this it walked straight back in.
+		const CGTownInstance * goalTown = nullptr;
+		if(auto goal = postOf.find(hero->id); params.townHeroes && heavyPart && goal != postOf.end())
+		{
+			for(const auto * town : perception.ownTowns())
+			{
+				const CGPathNode * node = town->id == goal->second ? paths.getPathInfo(town->visitablePos()) : nullptr;
+				if(node && node->reachable() && !failedToday.count({heroNum, town->visitablePos()}))
+					goalTown = town;
+			}
+		}
 		for(const auto * town : perception.ownTowns())
 		{
 			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
 			if(!node || !node->reachable() || failedToday.count({heroNum, town->visitablePos()}))
 				continue;
+			if(goalTown && town != goalTown)
+				continue;
 			double holds = defenceAt(hero, town->visitablePos()) * tolerance(hero) >= outmatched ? 2.0 : 1.0;
 			// (townHeroes) an army that left a town it could not hold does not walk back into it
-			if(params.townHeroes && heavyPart && threatAt(town->visitablePos(), ObjectInstanceID(), true) > tolerance(hero) * defenceAt(hero, town->visitablePos()))
+			if(params.townHeroes && heavyPart && !goalTown && threatAt(town->visitablePos(), ObjectInstanceID(), true) > tolerance(hero) * defenceAt(hero, town->visitablePos()))
 				holds = 0.25;
 			addTarget(town->visitablePos(), town->id, holds * 0.5 * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue, 0, node->cost, "fortress");
 		}
