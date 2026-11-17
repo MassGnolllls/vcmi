@@ -268,3 +268,27 @@ match   20 FairAI as red of 2: victory winner=red day=123 score=1.00 [165.5s]
 match   19 FairAI as blue of 2: victory winner=blue day=116 score=1.00 [182.6s]
 match   18 FairAI as red of 2: timeout winner= day=151 score=0.82 [257.0s]
 match   21 FairAI as blue of 2: timeout winner= day=151 score=0.70 [210.5s]
+match   23 FairAI as blue of 2: victory winner=blue day=109 score=1.00 [203.1s]
+match   22 FairAI as red of 2: victory winner=blue day=147 score=0.00 [277.3s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 13 -> FairAI won 10, lost 3  (win rate 77%, 95% CI 50%-92%)
+- day limit reached: 11 (material lead for FairAI in 7)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 129 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 56 --out /home/alex/fairai/runs/022zz2d925-towns-b/m-land-2p/nST-s56 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"scouts": 2, "townWorth": 1}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    3 FairAI as blue of 2: victory winner=blue day=103 score=1.00 [184.9s]
+match    4 FairAI as red of 2: victory winner=red day=124 score=1.00 [205.9s]
+match    2 FairAI as red of 2: victory winner=red day=126 score=1.00 [213.7s]
+match    0 FairAI as red of 2: victory winner=red day=133 score=1.00 [240.5s]
+match    1 FairAI as blue of 2: timeout winner= day=151 score=0.61 [265.2s]
+match    5 FairAI as blue of 2: timeout winner= day=151 score=0.31 [270.4s]
+match    9 FairAI as blue of 2: victory winner=blue day=61 score=1.00 [70.7s]
+match    6 FairAI as red of 2: victory winner=red day=99 score=1.00 [160.9s]
+match   11 FairAI as blue of 2: victory winner=blue day=68 score=1.00 [94.7s]
+match    8 FairAI as red of 2: victory winner=blue day=144 score=0.00 [230.1s]
+match   10 FairAI as red of 2: victory winner=blue day=133 score=0.00 [210.8s]
