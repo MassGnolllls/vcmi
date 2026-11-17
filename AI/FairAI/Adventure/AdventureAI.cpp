@@ -286,6 +286,7 @@ void Params::loadOverrides(int playerIndex)
 	read("townWorth", townWorth);
 	read("secondArmy", secondArmy);
 	read("townHeroes", townHeroes);
+	read("spareStock", spareStock);
 	read("townKeep", townKeep);
 	read("lastTowns", lastTowns);
 	read("heroLossPause", heroLossPause);
@@ -7440,6 +7441,46 @@ void AdventureAI::manageTowns(bool endOfTurn)
 		// troops in the garrison defend the town and wait for the main hero
 		const int64_t reserve = economy.rho > 1.5 ? 0 : 1000;
 		recruitInTown(town, town->getUpperArmy(), reserve);
+		if(params.spareStock)
+		{
+			// (spareStock) what the garrison has no slot for: the hero in the gate buys it, or one is hired for it
+			double blocked = 0;
+			int64_t blockedGold = 0;
+			for(const auto & entry : town->creatures)
+			{
+				if(entry.first == 0 || entry.second.empty())
+					continue;
+				const CCreature * type = entry.second.back().toCreature();
+				if(type && !town->getUpperArmy()->getSlotFor(type->getId()).validSlot())
+				{
+					blocked += static_cast<double>(entry.first) * type->getAIValue();
+					blockedGold += static_cast<int64_t>(entry.first) * type->getRecruitCost(GameResID::GOLD);
+				}
+			}
+			const CGHeroInstance * visitor = town->getVisitingHero();
+			if(blocked > 0 && visitor && visitor->tempOwner == me && visitor->id != mainHero && !(supply && supply->courier == visitor->id))
+				recruitInTown(town, visitor, reserve);
+			else if(!visitor && endOfTurn && blocked >= params.heavyPartValue && town->hasBuilt(BuildingID::TAVERN)
+				&& static_cast<int>(perception.ownHeroes().size()) < params.maxHeroes
+				&& spendable()[GameResID::GOLD] >= blockedGold + GameConstants::HERO_GOLD_COST + params.heroGoldReserve)
+			{
+				const CGHeroInstance * best = nullptr;
+				for(const auto * candidate : cb->getAvailableHeroes(town))
+				{
+					if(!best || candidate->level > best->level || (candidate->level == best->level && candidate->getTotalStrength() > best->getTotalStrength()))
+						best = candidate;
+				}
+				if(best)
+				{
+					logAi->info("FairAI %s day %d: hiring %s (level %d) in %s for the %.0f troops the garrison has no slot for", me.toString(), today,
+						best->getNameTranslated(), static_cast<int>(best->level), town->getNameTranslated(), blocked);
+					cb->recruitHero(town, best);
+					gateway.waitTillFree();
+					if(const auto * hired = town->getVisitingHero(); hired && hired->tempOwner == me)
+						recruitInTown(town, hired, reserve);
+				}
+			}
+		}
 		if(params.garrisonRoom && endOfTurn && economy.rho > 1.5)
 		{
 			// gold to spare: the garrison's troops become what the town's dwellings sell now
