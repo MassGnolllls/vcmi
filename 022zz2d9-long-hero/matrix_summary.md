@@ -1,0 +1,8 @@
+# Matrix test: 6 map categories, configs new, nCFE, nMCX, nUFX, nUME, nSEX, nSMF, nSUC, nSUMCFEX, seeds 44
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | new (games, score, decided) | nCFE (games, score, decided) | nMCX (games, score, decided) | nUFX (games, score, decided) | nUME (games, score, decided) | nSEX (games, score, decided) | nSMF (games, score, decided) | nSUC (games, score, decided) | nSUMCFEX (games, score, decided) | nCFE − new | nMCX − new | nUFX − new | nUME − new | nSEX − new | nSMF − new | nSUC − new | nSUMCFEX − new |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-land-2p | 24, 0.599 ± 0.166, 10 won 6 lost | 23, 0.742 ± 0.166, 16 won 3 lost | 24, 0.427 ± 0.174, 7 won 8 lost | 24, 0.445 ± 0.184, 7 won 10 lost | 24, 0.446 ± 0.160, 4 won 6 lost | 24, 0.757 ± 0.150, 15 won 3 lost | 24, 0.460 ± 0.154, 4 won 7 lost | 23, 0.691 ± 0.156, 12 won 3 lost | 24, 0.555 ± 0.190, 11 won 9 lost | +0.161 ± 0.175 (23) | -0.172 ± 0.186 (24) | -0.153 ± 0.191 (24) | -0.152 ± 0.206 (24) | +0.159 ± 0.174 (24) | -0.139 ± 0.159 (24) | +0.110 ± 0.203 (23) | -0.043 ± 0.234 (24) |
+| **mean of categories** | 0.599 | 0.742 | 0.427 | 0.445 | 0.446 | 0.757 | 0.460 | 0.691 | 0.555 | +0.161 (all games: +0.161 ± 0.175) | -0.172 (all games: -0.172 ± 0.186) | -0.153 (all games: -0.153 ± 0.191) | -0.152 (all games: -0.152 ± 0.206) | +0.159 (all games: +0.159 ± 0.174) | -0.139 (all games: -0.139 ± 0.159) | +0.110 (all games: +0.110 ± 0.203) | -0.043 (all games: -0.043 ± 0.234) |
