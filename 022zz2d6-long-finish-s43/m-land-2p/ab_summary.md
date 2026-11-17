@@ -5,7 +5,7 @@ Paired against `base`: mean difference over the games both played (95% CI). scor
 | config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|---|---|
 | base | `{}` | 24 | 0 | 4 | 0.516 ± 0.125 | - | 0.351 ± 0.089 | - | 24 |
-| fU | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "surrender": 1, "veterans": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| fU | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "surrender": 1, "veterans": 1}` | 24 | 7 | 7 | 0.454 ± 0.162 | -0.062 ± 0.209 | 0.381 ± 0.168 | +0.030 ± 0.187 | 24 |
 | fSR | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "scouts": 2, "garrisonRoom": 1, "collectorsTakeGarrison": 0}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | fDRU | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "townDefenceValue": 40000, "garrisonRoom": 1, "collectorsTakeGarrison": 0, "surrender": 1, "veterans": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | fDS | `{"leaderFocus": 1, "campaignEdge": 3.0, "heroModel": 1, "noChase": 2, "townDefenceValue": 40000, "scouts": 2}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
