@@ -283,6 +283,9 @@ void Params::loadOverrides(int playerIndex)
 	read("spellForecast", spellForecast);
 	read("magicWorth", magicWorth);
 	read("safeParts", safeParts);
+	read("townWorth", townWorth);
+	read("trappedHome", trappedHome);
+	read("townHop", townHop);
 	read("heavyPartValue", heavyPartValue);
 	read("heavyPartShare", heavyPartShare);
 	read("battlePlan", battlePlan);
@@ -796,19 +799,47 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		if(targets.empty() && isMain(hero) && !hero->getVisitedTown())
 		{
 			// nothing to do: wait in the nearest own town, where garrison and walls help
+			// (trappedHome) Threatened where it stands, with nothing safe in reach and nowhere to flee
+			// to: standing still helps nothing - the nights on the way home are no worse than this one,
+			// and at home wait the walls and the troops that have grown there. However far it is.
+			const int3 here = hero->visitablePos();
+			const bool trapped = params.trappedHome && threatAt(here) > tolerance(hero) * defenceAt(hero, here);
 			const CGTownInstance * home = nullptr;
 			double homeCost = 1e9;
+			const CGTownInstance * strongest = nullptr;
+			double strongestMargin = -1e18;
+			double strongestCost = 1e9;
 			for(const auto * town : perception.ownTowns())
 			{
 				const CGPathNode * node = paths->getPathInfo(town->visitablePos());
-				const bool safe = threatAt(town->visitablePos()) <= tolerance(hero) * defenceAt(hero, town->visitablePos());
-				if(safe && node && node->reachable() && node->cost < homeCost && !failedToday.count({heroId.getNum(), town->visitablePos()}))
+				if(!node || !node->reachable() || failedToday.count({heroId.getNum(), town->visitablePos()}))
+					continue;
+				const double margin = tolerance(hero) * defenceAt(hero, town->visitablePos()) - threatAt(town->visitablePos());
+				if(margin >= 0 && node->cost < homeCost)
 				{
 					home = town;
 					homeCost = node->cost;
 				}
+				if(margin > strongestMargin)
+				{
+					strongest = town;
+					strongestMargin = margin;
+					strongestCost = node->cost;
+				}
 			}
-			if(home && homeCost < 2.0)
+			if(trapped && !home && strongest)
+			{
+				// no town of ours holds against that army either: the one where we stand strongest
+				home = strongest;
+				homeCost = strongestCost;
+			}
+			if(trapped && home && homeCost >= 2.0 && trappedLog != today)
+			{
+				trappedLog = today;
+				logAi->info("FairAI %s day %d: %s is threatened where it stands (%.0f against %.0f) and nothing in reach is safe - marching home to %s, %.1f days away",
+					me.toString(), today, hero->getNameTranslated(), threatAt(here), defenceAt(hero, here), home->getNameTranslated(), homeCost);
+			}
+			if(home && (homeCost < 2.0 || trapped))
 			{
 				Target t;
 				t.tile = home->visitablePos();
@@ -4431,10 +4462,12 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		// without a town the game is lost after seven days: any town is worth everything
 		if(perception.ownTowns().empty())
 			return 100000;
-		if(!campaign(hero))
+		if(!campaign(hero) && !params.townWorth)
 			return enemy ? params.enemyTownValue : params.neutralTownValue;
 		// On campaign: the enemy's towns are how the game is won, and a town taken late is a built-up one
-		return (enemy ? 2.0 * params.enemyTownValue : params.neutralTownValue) * (1.0 + today / 28.0);
+		// (townWorth: that is what a town is worth on any day and to any hero - gold and growth for
+		// four weeks, taken from the enemy; a town is fully built after some twenty weeks)
+		return (enemy ? 2.0 * params.enemyTownValue : params.neutralTownValue) * (1.0 + (params.townWorth ? std::min(today, 140) : today) / 28.0);
 	}
 	case Obj::HERO:
 	{
@@ -4604,7 +4637,16 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			return false;
 		// attacking the threat itself is judged by the battle estimate
 		const double together = partner ? fieldStrength(partner) : 0.0;
-		if(threatAt(tile, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * (defenceAt(hero, tile) + together))
+		// (townHop) a foreign town taken today is ours tonight: behind its walls we stand as we do in our own
+		double walls = 1.0;
+		if(params.townHop && object.hasValue() && node->turns == 0)
+		{
+			auto town = known.find(object);
+			auto fort = townFortLevel.find(object);
+			if(town != known.end() && town->second.type == Obj::TOWN && town->second.owner != me && town->second.visitablePos == tile && fort != townFortLevel.end())
+				walls = fort->second >= CGTownInstance::CITADEL ? params.defenceWallsCitadel : (fort->second >= CGTownInstance::FORT ? params.defenceWallsFort : 1.0);
+		}
+		if(threatAt(tile, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * (defenceAt(hero, tile) * walls + together))
 			return true;
 		return stop.isValid() && stop != tile && threatAt(stop, partner ? ObjectInstanceID() : object, cautious) > tolerance(hero) * defenceAt(hero, stop);
 	};
