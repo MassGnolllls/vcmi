@@ -30,6 +30,11 @@
 #include "../lib/rmg/CRmgTemplate.h"
 #include "../lib/rmg/CRmgTemplateStorage.h"
 #include "../lib/CCreatureHandler.h"
+#include "../lib/bonuses/BonusEnum.h"
+#include "../lib/bonuses/BonusSelector.h"
+#include "../lib/bonuses/BonusList.h"
+#include "../lib/bonuses/Bonus.h"
+#include "../lib/CBonusTypeHandler.h"
 #include "../lib/CRandomGenerator.h"
 #include "../lib/CSkillHandler.h"
 #include "../lib/battle/BattleInfo.h"
@@ -550,6 +555,18 @@ std::string sideName(BattleSide side)
 }
 }
 
+/// the name of a kind of bonus: the built-in ones by the engine's own list, those of the game's files by their identifier
+static std::string bonusName(BonusType type)
+{
+#define BONUS_NAME(x) #x,
+	static const std::vector<std::string> builtin = { BONUS_LIST };
+#undef BONUS_NAME
+	const auto index = static_cast<size_t>(type);
+	if(index < builtin.size())
+		return builtin[index];
+	return LIBRARY->bth->bonusToString(type);
+}
+
 int dumpLibrary(const po::variables_map & vm)
 {
 	JsonNode out;
@@ -577,6 +594,33 @@ int dumpLibrary(const po::variables_map & vm)
 		c["gold"].Integer() = creature->getRecruitCost(EGameResID::GOLD);
 		c["hasUpgrades"].Bool() = creature->hasUpgrades();
 		c["special"].Bool() = creature->special;
+		// every ability, as the game holds it after all mods: kind of bonus, what it refers to, value
+		// (for the catalogue of abilities, arena/ability_catalog.py)
+		for(const auto & bonus : creature->getExportedBonusList())
+		{
+			if(!bonus)
+				continue;
+			JsonNode b;
+			b["type"].String() = bonusName(bonus->type);
+			try
+			{
+				if(bonus->subtype.hasValue())
+					b["subtype"].String() = bonus->subtype.toString();
+			}
+			catch(const std::exception &)
+			{
+				b["subtype"].String() = "?";
+			}
+			b["val"].Integer() = bonus->val;
+			if(bonus->type == BonusType::SPELL_AFTER_ATTACK || bonus->type == BonusType::SPELL_BEFORE_ATTACK || bonus->type == BonusType::SPELLCASTER
+				|| bonus->type == BonusType::SPELL_LIKE_ATTACK || bonus->type == BonusType::ENCHANTER || bonus->type == BonusType::SPECIFIC_SPELL_POWER)
+			{
+				const SpellID spell = bonus->subtype.as<SpellID>();
+				if(spell.hasValue() && spell.toSpell())
+					b["spell"].String() = spell.toSpell()->getJsonKey();
+			}
+			c["bonuses"].Vector().push_back(b);
+		}
 		out["creatures"].Vector().push_back(c);
 	}
 

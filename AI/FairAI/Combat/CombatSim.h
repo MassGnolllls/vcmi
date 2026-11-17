@@ -92,7 +92,7 @@ struct SimUnit
 	bool magicImmune = false;        ///< immune to all spells: spell-like shots do nothing to it
 	// --- what an attack does beyond its damage: read from the unit's bonuses and the spells they
 	// name, as expected values (every chance is per attack). Index 0 = melee, 1 = shot.
-	std::array<double, 2> stare{};   ///< death stare: chance per attacking creature to kill one creature of the target (mighty gorgons; accurate shot)
+	std::array<double, 3> stare{};   ///< death stare: chance per attacking creature to kill one creature of the target (mighty gorgons; accurate shot: index 2 = shot from afar)
 	std::array<double, 2> stun{};    ///< chance to put the target out of action (petrify, paralyse, freeze)
 	std::array<double, 2> stunMind{}; ///< the same by a spell on the mind (blind, hypnotise): the mindless are immune
 	std::array<double, 2> bolt{};    ///< expected spell damage per attacking creature (thunderbolt)
@@ -104,6 +104,8 @@ struct SimUnit
 	double acid = 0;                 ///< expected acid damage per attacking creature (rust dragons)
 	bool flesh = true;               ///< can be stared to death, aged, poisoned: neither undead nor construct, machine or gargoyle
 	bool mindImmune = false;         ///< cannot be blinded
+	bool fearless = false;           ///< does not lose turns to fear
+	double spreadsFear = 0;          ///< chance that each enemy unit loses its turn (azure dragons)
 	double lowDamage = 1.0;          ///< its lowest damage as a share of its average damage (what a curse leaves)
 	// --- what the unit suffers from such attacks at the moment (expected values)
 	double stunned = 0;              ///< share of its next action that is lost
@@ -262,7 +264,9 @@ private:
 	/// chargeHexes: hexes walked before a melee attack; ownTurn: the unit's own action (not a retaliation)
 	void strike(int attacker, int target, bool ranged, int chargeHexes = 0, bool ownTurn = false);
 	/// what an attack does beyond its damage: death stare, bolts, acid, and what the target suffers from then on
-	void afterHit(int attacker, int target, bool ranged, double share);
+	void afterHit(int attacker, int target, bool ranged, double share, bool far = false);
+	/// fear spread by one side's units takes turns from the other side (called once the units are described)
+	void applyFear();
 	/// units on the further hexes a melee attack of `attacker` on `target` reaches (not the target itself)
 	void extraVictims(int attacker, int target, std::array<int, 8> & out, int & count) const;
 	/// units next to the target that a bursting shot of `attacker` also hits

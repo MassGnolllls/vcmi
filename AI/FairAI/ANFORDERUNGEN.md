@@ -22,7 +22,7 @@ Letzte Änderung: 17.11.2026
 | L1 | **Nicht schummeln.** Kein Maphack, keine Extraboni; nur Wissen, das ein Mensch auf demselben Platz hätte. | 15.11. | erfüllt (Prüfung `arena/check_fairness.py` vor jedem Stand) |
 | L2 | **So stark und klug wie möglich** – auf allen gewöhnlichen Karten, nicht nur auf einer. | 15.11./16.11. | offen (siehe Zielmarke Z1) |
 | L3 | **Alles ist situativ.** Nichts wird pauschal getan oder pauschal gelassen. Jede Option wird in Betracht gezogen, aber nur ausgeführt, wenn sie in dieser Lage etwas bringt. „Nur weil man alle Gebäude und Optionen in Betracht ziehen soll, muss man nicht alles machen." | 17.11. | teilweise |
-| L4 | **Jeden Aspekt des Spiels vorher genau untersuchen** und der KI klarmachen, welchen Nutzen und welche Gefahren jede Entscheidung mit sich bringt. | 17.11. | offen (Katalog der Einheitenfähigkeiten in Arbeit) |
+| L4 | **Jeden Aspekt des Spiels vorher genau untersuchen** und der KI klarmachen, welchen Nutzen und welche Gefahren jede Entscheidung mit sich bringt. | 17.11. | teilweise (Einheiten: `ability-catalog.md` listet alle 90 Arten von Fähigkeiten der 199 Kreaturen des installierten Spiels samt HotA, erzeugt aus dem laufenden Spiel, mit Stand je Fähigkeit – 33 im Simulator, 10 hinter einem Schalter, 29 offen. Gebäude: Bewertung nach der Tabelle jeder Gebäudeart. Offen: dasselbe für Zauber, Artefakte, Sekundärfähigkeiten, Stadtgebäude) |
 | L5 | **Nach jedem Schritt neu bewerten**, wenn neue Informationen auftauchen. | 15.11. | erfüllt |
 | L6 | **Nebel, der neu entsteht** (um Nekropolen, Cover of Darkness), verstehen und klug darauf reagieren. | 15.11. | teilweise (wieder verdecktes Land gilt als veraltet; auf Feldzug wie unerkundet) |
 | L7 | Eine KI für Abenteuerkarte **und** Kampf. | 15.11. | erfüllt (Belagerungen und Teile der Zauberwahl spielt noch VCMIs Kampflogik, siehe K9, M1) |
@@ -50,7 +50,7 @@ Letzte Änderung: 17.11.2026
 | K7 | **Taktik:** nutzen – und einrechnen, dass der Gegner sie auch haben kann und dann schneller ist. | 17.11. | offen (Aufstellungsphase wird sofort beendet) |
 | K8 | Wirksamkeit der eigenen Armee **gegen die konkrete gegnerische Armee** beurteilen, nicht nur Zahlen vergleichen. | 17.11. | teilweise (Heldenkämpfe nach Armeewert mal Heldenwert; Simulation als Schalter) |
 | K9 | Belagerungen selbst spielen. | 16.11. | offen |
-| K10 | **Ausnahmen der Fähigkeiten kennen.** Beispiel: Der Lebensraub der Vampirfürsten wirkt nicht gegen Elementare und andere nicht-lebende Kreaturen. | 17.11. | teilweise (im Kampfsimulator erfüllt: Lebensraub nur aus Schaden an Lebenden – keine Untoten, Elementare, Golems, Gargoyles, Maschinen; im Einheiten-Labor gegen das Spiel bestätigt. Die Entscheidung vor dem Kampf nutzt den Simulator für Kartenwachen noch nicht im Standard, siehe K4) |
+| K10 | **Ausnahmen der Fähigkeiten kennen.** Beispiel: Der Lebensraub der Vampirfürsten wirkt nicht gegen Elementare und andere nicht-lebende Kreaturen. | 17.11. | teilweise (im Kampfsimulator erfüllt: Lebensraub nur aus Schaden an Lebenden nach der Regel des Spiels – keine Untoten, Elementare, Golems, Gargoyles, Maschinen. Die Gargoyles fehlten bis 17.11. in dieser Ausnahme und sind nachgetragen. Im Einheiten-Labor geprüft: Vampirfürsten heilen gegen Oger wie vorhergesagt, gegen Erdelementare und Obsidian-Gargoyles gar nicht. Die Entscheidung vor dem Kampf nutzt den Simulator für Kartenwachen noch nicht im Standard, siehe K4) |
 
 ## Armeezusammenstellung
 

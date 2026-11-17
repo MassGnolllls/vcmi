@@ -335,6 +335,8 @@ void SimState::init(const CBattleInfoCallback & cb, const std::vector<const batt
 
 	for(int i = 0; i < static_cast<int>(units.size()); ++i)
 		place(i, units[i].pos);
+	if(abilities)
+		applyFear();
 
 	round = 0;
 }
@@ -373,8 +375,10 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	s.retaliationsLeft = s.retaliationsPerRound;
 
 	// --- special abilities
-	s.living = !u.hasBonusOfType(BonusType::UNDEAD) && !u.hasBonusOfType(BonusType::NON_LIVING)
-		&& !u.hasBonusOfType(BonusType::MECHANICAL) && !u.hasBonusOfType(BonusType::SIEGE_WEAPON);
+	// The game's own rule (ACreature::isLiving): living is what is neither undead nor a construct,
+	// machine, war machine or gargoyle. Life drain, death stare, ageing and poison work on the living
+	// only. (Until 17.11.2026 gargoyles counted as living here: vampire lords "healed" on them.)
+	s.living = u.hasBonusOfType(BonusType::LIVING);
 	s.lifeDrain = u.valOfBonuses(BonusType::LIFE_DRAIN) / 100.0;
 	s.regeneration = u.valOfBonuses(BonusType::HP_REGENERATION);
 	s.fireShield = u.valOfBonuses(BonusType::FIRE_SHIELD) / 100.0;
@@ -442,8 +446,7 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	// acid are bonuses of their own, everything else is a spell the unit casts after an attack, read
 	// by what that spell does to its target (so creatures of mods are covered as far as their spells
 	// are built from the same parts).
-	static const BonusType gargoyle = bonusNamed("GARGOYLE");
-	s.flesh = s.living && (gargoyle == BonusType::NONE || !u.hasBonusOfType(gargoyle));
+	s.flesh = s.living;
 	s.mindImmune = !s.living || u.hasBonusOfType(BonusType::MIND_IMMUNITY);
 	s.lowDamage = 1.0;
 	if(type && type->getBaseDamageMin() + type->getBaseDamageMax() > 0)
@@ -462,6 +465,7 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	{
 		s.stare[0] = std::clamp(u.valOfBonuses(BonusType::DEATH_STARE, BonusCustomSubtype::deathStareGorgon) / 100.0, 0.0, 1.0);
 		s.stare[1] = std::clamp(u.valOfBonuses(BonusType::DEATH_STARE, BonusCustomSubtype::deathStareNoRangePenalty) / 100.0, 0.0, 1.0);
+		s.stare[2] = std::clamp(u.valOfBonuses(BonusType::DEATH_STARE, BonusCustomSubtype::deathStareRangePenalty) / 100.0, 0.0, 1.0);
 		for(const auto & breath : *u.getBonusesOfType(BonusType::ACID_BREATH))
 			s.acid += breath->val * (breath->parameters ? std::clamp(breath->parameters->toNumber() / 100.0, 0.0, 1.0) : 1.0);
 
@@ -563,11 +567,45 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	s.meleeFactor = (1.0 + lucky - 0.5 * unlucky) * (1.0 + deathBlow);
 	s.rangedFactor = 1.0 + lucky - 0.5 * unlucky;
 	const int morale = creature.moraleVal();
+	s.fearless = false;
+	for(const auto & fear : *u.getBonusesOfType(BonusType::FEARFUL))
+		s.fearless = s.fearless || fear->valType == BonusValueType::INDEPENDENT_MIN;
+	s.spreadsFear = 0;
+	if(type)
+	{
+		// what its own kind lays on the other side (azure dragons: every enemy may lose its turn)
+		for(const auto & fear : type->getExportedBonusList())
+		{
+			if(fear && fear->type == BonusType::FEARFUL && fear->propagator && fear->val > 0)
+				s.spreadsFear = std::max(s.spreadsFear, std::clamp(fear->val / 100.0, 0.0, 1.0));
+		}
+	}
 	s.turnFactor = 1.0;
 	if(morale > 0)
 		s.turnFactor = 1.0 + chance(EGameSettings::COMBAT_GOOD_MORALE_CHANCE, EGameSettings::COMBAT_MORALE_DICE_SIZE, morale);
 	else if(morale < 0)
 		s.turnFactor = 1.0 - chance(EGameSettings::COMBAT_BAD_MORALE_CHANCE, EGameSettings::COMBAT_MORALE_DICE_SIZE, -morale);
+}
+
+void SimState::applyFear()
+{
+	// Fear: every unit facing azure dragons may lose its turn, unless it is fearless. As an expected
+	// value on the turns it gets. (In a battle the game holds this as a bonus on the frightened; the
+	// simulator reads it from the dragons, so forecasts without a battle know it too.)
+	if(!abilitiesBeyondDamage)
+		return;
+	std::array<double, 2> fear{};
+	for(const auto & u : units)
+	{
+		if(u.alive() && (u.side == BattleSide::ATTACKER || u.side == BattleSide::DEFENDER))
+			fear[u.side == BattleSide::ATTACKER ? 1 : 0] = std::max(fear[u.side == BattleSide::ATTACKER ? 1 : 0], u.spreadsFear);
+	}
+	for(auto & u : units)
+	{
+		const double chance = u.side == BattleSide::ATTACKER ? fear[0] : fear[1];
+		if(chance > 0 && !u.fearless)
+			u.turnFactor *= 1.0 - chance;
+	}
 }
 
 void SimState::initForecast(const std::vector<StackSpec> & stacks, const DamageTable & table, const JsonNode & layout)
@@ -629,6 +667,7 @@ void SimState::initForecast(const std::vector<StackSpec> & stacks, const DamageT
 		}
 		place(i, pos);
 	}
+	applyFear();
 	round = 0;
 	lastMoved = BattleSide::NONE;
 }
@@ -951,7 +990,7 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 			}
 		}
 		dealDamage(target, damage->ranged(attacker, target, far) * a.count * a.rangedFactor * turns);
-		afterHit(attacker, target, true, able);
+		afterHit(attacker, target, true, able, far);
 		return;
 	}
 
@@ -996,15 +1035,17 @@ void SimState::strike(int attacker, int target, bool ranged, int chargeHexes, bo
 	afterHit(attacker, target, false, able);
 }
 
-void SimState::afterHit(int attacker, int target, bool ranged, double share)
+void SimState::afterHit(int attacker, int target, bool ranged, double share, bool far)
 {
 	const SimUnit a = units[attacker];
 	if(!a.alive() || !units[target].alive() || share <= 0)
 		return;
 	const int kind = ranged ? 1 : 0;
 	// death stare: whole creatures, whatever they are worth - the reason not to walk an archangel into gorgons
-	if(a.stare[kind] > 0 && units[target].flesh)
-		removeHealth(target, share * stareKills(a.count, a.stare[kind]) * units[target].maxHP);
+	const double stare = a.stare[ranged && far ? 2 : kind];
+	// (the stare of the gorgons spares what is not of flesh; an accurate shot spares nothing)
+	if(stare > 0 && (ranged || units[target].flesh))
+		removeHealth(target, share * stareKills(a.count, stare) * units[target].maxHP);
 	if(units[target].alive() && a.bolt[kind] > 0 && !units[target].magicImmune)
 		removeHealth(target, share * a.bolt[kind] * a.count);
 	if(units[target].alive() && !ranged && a.acid > 0)
@@ -1255,7 +1296,7 @@ void SimState::applyOutcome(int unit, const AttackOutcome & outcome)
 	{
 		// what the hit does beyond its damage - and what the blow struck back does to us
 		const bool struckBack = !outcome.shooting && u.totalHP() < hpBefore;
-		afterHit(unit, outcome.target, outcome.shooting, 1.0);
+		afterHit(unit, outcome.target, outcome.shooting, 1.0, outcome.shooting && shotIsFar(unit, outcome.target));
 		if(struckBack && units[unit].alive() && units[outcome.target].alive())
 			afterHit(outcome.target, unit, false, 1.0);
 	}
