@@ -130,7 +130,10 @@ public:
 	/// battle against it or in our thieves' guild. Remembered with the day.
 	void noteHeroSkills(HeroTypeID hero, const std::array<int, 4> & skills);
 	/// a battle against an enemy hero is over: what we know of its army is what the battle left of it
-	void noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength);
+	void noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos);
+	/// (fortress) the strength of an enemy army seen near us lately that outmatches this hero (0: none)
+	double outmatchedBy(const CGHeroInstance * hero) const;
+	int fortressLog = -1;
 	void noteHeroSpell(HeroTypeID hero, SpellID spell, int affected);
 	/// A battle is lost: is buying our army free for `cost` gold the better end? ownValue: AI value we
 	/// still have on the field, enemyLoss: what it would still kill (parameter surrender)
@@ -279,6 +282,7 @@ private:
 	{
 		int day = -1;
 		double strength = 0; ///< army as shown, times the hero factor
+		int3 pos = int3(-1, -1, -1); ///< where
 	};
 	std::map<int, Sighting> enemySightings; ///< hero type -> last time we saw it on the map
 	/// what a battle against an enemy hero left of it (reported by the battle thread, applied in updateThreats)
@@ -289,6 +293,7 @@ private:
 		double remainingShare = 1; ///< else: the share of its army that survived
 		double ownStrength = 0;    ///< our army in that battle
 		double enemyStrength = 0;  ///< its army in that battle
+		int3 pos = int3(-1, -1, -1); ///< where the battle was fought
 	};
 	std::vector<BattleOutcome> pendingOutcomes; ///< guarded by intelMutex
 	std::map<int, int> defeatedDay;             ///< hero type -> day we beat it

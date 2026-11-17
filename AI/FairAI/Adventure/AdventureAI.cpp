@@ -287,6 +287,10 @@ void Params::loadOverrides(int playerIndex)
 	read("garrisonRoom", garrisonRoom);
 	read("magicFocus", magicFocus);
 	read("heroChoice", heroChoice);
+	read("fortress", fortress);
+	read("fortressRatio", fortressRatio);
+	read("fortressDays", fortressDays);
+	read("fortressRadius", fortressRadius);
 	read("roomFactor", roomFactor);
 	read("exploreRegion", exploreRegion);
 	read("fetchRoundTrip", fetchRoundTrip);
@@ -787,7 +791,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		logAi->debug("FairAI %s: %s -> %s %s value %.0f loss %.0f travel %.2f score %.0f", me.toString(), hero->getNameTranslated(),
 			best.description, best.tile.toString(), best.value, best.loss, best.travel, best.score);
 
-		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside" || best.description == "way out";
+		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside" || best.description == "way out"
+			|| best.description == "fortress";
 		if(params.antiOscillation)
 		{
 			// giving up an unreached goal: do not come back to it today (A-B-A wastes the day's movement)
@@ -1336,6 +1341,13 @@ void AdventureAI::updateThreats()
 			{
 				seen->second.day = today;
 				seen->second.strength *= std::clamp(outcome.remainingShare, 0.0, 1.0);
+				if(outcome.pos.x >= 0)
+					seen->second.pos = outcome.pos;
+			}
+			else
+			{
+				// it came out of the fog and beat one of our armies: now we know it (its hero's worth unknown: a usual one)
+				enemySightings[outcome.hero] = Sighting{today, outcome.enemyStrength * std::clamp(outcome.remainingShare, 0.0, 1.0) * 1.3, outcome.pos};
 			}
 		}
 	}
@@ -1354,7 +1366,7 @@ void AdventureAI::updateThreats()
 		const double factor = heroFactor(object);
 		t.strength = observedDanger(object) * factor * (1.0 + params.threatGrowth * age);
 		if(age == 0)
-			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor};
+			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor, object.visitablePos};
 		t.radius = params.threatRadius * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
@@ -1635,12 +1647,40 @@ double AdventureAI::heroFactor(const ObservedObject & hero) const
 	return factor;
 }
 
-void AdventureAI::noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength)
+void AdventureAI::noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos)
 {
 	if(!hero.hasValue())
 		return;
 	std::unique_lock lock(intelMutex);
-	pendingOutcomes.push_back(BattleOutcome{hero.getNum(), gone, remainingShare, ownStrength, enemyStrength});
+	pendingOutcomes.push_back(BattleOutcome{hero.getNum(), gone, remainingShare, ownStrength, enemyStrength, pos});
+}
+
+double AdventureAI::outmatchedBy(const CGHeroInstance * hero) const
+{
+	// Whenever the enemy attacked our biggest army it won: it comes only when it is the stronger, and
+	// it comes unseen (out of unexplored land, through a portal). What we can know: an army stronger
+	// than ours has shown itself on our side of the map in the last days, or has beaten one of ours
+	// there. Until it is seen no more, or we have outgrown it, the main hero sleeps behind walls.
+	if(!params.fortress || !hero)
+		return 0;
+	const double own = fieldStrength(hero);
+	const int3 here = hero->visitablePos();
+	double worst = 0;
+	for(const auto & [type, seen] : enemySightings)
+	{
+		const int age = today - seen.day;
+		if(age > params.fortressDays || seen.pos.x < 0)
+			continue;
+		const double strength = seen.strength * (1.0 + 0.03 * age);
+		if(strength <= params.fortressRatio * own || strength <= worst)
+			continue;
+		bool near = seen.pos.dist2d(here) <= params.fortressRadius;
+		for(const auto * town : perception.ownTowns())
+			near = near || town->visitablePos().dist2d(seen.pos) <= params.fortressRadius;
+		if(near)
+			worst = strength;
+	}
+	return worst;
 }
 
 void AdventureAI::noteHeroSpell(HeroTypeID hero, SpellID spell, int affected)
@@ -3031,8 +3071,32 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(const auto * home = hero->getVisitedTown(); home && home->visitablePos() == heroPos && townNeed(home, hero) > 0.2)
 			roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
 	}
+	// (fortress) outmatched by an army seen near us: from a town of ours only trips that end back
+	// there today; outside a town the way home, and what lies on it
+	const double outmatched = isMain(hero) ? outmatchedBy(hero) : 0.0;
+	bool fortressOutside = false;
+	if(outmatched > 0)
+	{
+		const auto * home = hero->getVisitedTown();
+		if(home && home->tempOwner == me && home->visitablePos() == heroPos)
+			roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
+		else
+			fortressOutside = !perception.ownTowns().empty();
+		if(fortressLog != today)
+			logAi->debug("FairAI %s day %d: %s is outmatched (own %.0f, an enemy army of %.0f seen near us lately): %s", me.toString(), today,
+				hero->getNameTranslated(), fieldStrength(hero), outmatched, fortressOutside ? "heading for a town of ours" : "day trips from the town only");
+		fortressLog = today;
+	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
 	{
+		if(fortressOutside && description != "fortress" && description != "retreat" && description != "flee" && travel > 0.25)
+		{
+			auto it = object.hasValue() ? known.find(object) : known.end();
+			const bool ownTown = it != known.end() && it->second.type == Obj::TOWN && it->second.owner == me;
+			const bool enemyHeroToday = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner) && travel < 1.0;
+			if(!ownTown && !enemyHeroToday)
+				return;
+		}
 		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
@@ -3492,6 +3556,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	// ---- standing where a stronger enemy hero can reach us: get away (own towns preferred).
 	// Every target above ends the day on a tile that is not threatened, so with the anti-oscillation
 	// rules the retreat is the fallback, not a competitor that calls the hero back after every step.
+	if(fortressOutside)
+	{
+		// the town of ours where the hero stands strongest against that army, by the days it takes to get there
+		for(const auto * town : perception.ownTowns())
+		{
+			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+			if(!node || !node->reachable() || failedToday.count({heroNum, town->visitablePos()}))
+				continue;
+			const double holds = defenceAt(hero, town->visitablePos()) * tolerance(hero) >= outmatched ? 2.0 : 1.0;
+			addTarget(town->visitablePos(), town->id, holds * 0.5 * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue, 0, node->cost, "fortress");
+		}
+	}
 	if((out.empty() || !params.antiOscillation) && threatAt(heroPos, ObjectInstanceID(), cautious) > tolerance(hero) * defenceAt(hero, heroPos))
 	{
 		const int3 size = cb->getMapSize();

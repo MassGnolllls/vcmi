@@ -364,6 +364,7 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 			describe(weAttack ? army1 : army2, weAttack ? hero1 : hero2), weAttack ? "attacks" : "is attacked by",
 			weAttack ? (hero2 ? hero2->getNameTranslated() : std::string("guards")) : (hero1 ? hero1->getNameTranslated() : std::string("monsters")));
 		battleSide = side;
+		battleTile = tile;
 		battleOwnStrength = weAttack ? (army1 ? army1->getArmyStrength() : 0) : (army2 ? army2->getArmyStrength() : 0);
 		battleEnemyStrength = weAttack ? (army2 ? army2->getArmyStrength() : 0) : (army1 ? army1->getArmyStrength() : 0);
 
@@ -468,7 +469,7 @@ void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br
 				enemyLost += static_cast<uint64_t>(entry.second) * entry.first.toCreature()->getAIValue();
 			const double remaining = battleEnemyStrength > 0 ? 1.0 - std::min(1.0, static_cast<double>(enemyLost) / static_cast<double>(battleEnemyStrength)) : 0.0;
 			adventure->noteBattleOutcome(HeroTypeID(battleEnemyHero), br->winner == battleSide, remaining,
-				static_cast<double>(battleOwnStrength), static_cast<double>(battleEnemyStrength));
+				static_cast<double>(battleOwnStrength), static_cast<double>(battleEnemyStrength), battleTile);
 		}
 	}
 	CAdventureAI::battleEnd(battleID, br, queryID);
