@@ -105,3 +105,23 @@ match   23 FairAI as blue of 2: timeout winner= day=151 score=0.82 [315.1s]
 - average length of decided games: 117 days
 - cheat flags raised: 0
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/14b69d2068/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 50 --out /home/alex/fairai/runs/022zz2d91-eight-a/m-land-2p/nCTAH-s50 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"supplyRuns": 1, "armyFit": 1, "sites": 1, "fastKeeper": 1, "simAfterHit": 1, "spellSearch": 2}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    3 FairAI as blue of 2: victory winner=blue day=97 score=1.00 [125.3s]
+match    1 FairAI as blue of 2: victory winner=red day=114 score=0.00 [182.2s]
+match    0 FairAI as red of 2: victory winner=red day=119 score=1.00 [207.1s]
+match    5 FairAI as blue of 2: timeout winner= day=151 score=0.48 [234.1s]
+match    4 FairAI as red of 2: timeout winner= day=151 score=0.32 [240.7s]
+match    2 FairAI as red of 2: timeout winner= day=151 score=0.58 [249.6s]
+match    7 FairAI as blue of 2: victory winner=blue day=117 score=1.00 [188.2s]
+match    6 FairAI as red of 2: timeout winner= day=151 score=0.29 [245.1s]
+match    9 FairAI as blue of 2: victory winner=blue day=110 score=1.00 [144.3s]
+match    8 FairAI as red of 2: timeout winner= day=151 score=0.56 [244.7s]
+match   10 FairAI as red of 2: timeout winner= day=151 score=0.90 [215.1s]
+match   11 FairAI as blue of 2: timeout winner= day=151 score=0.17 [244.9s]
+match   13 FairAI as blue of 2: victory winner=blue day=84 score=1.00 [137.9s]
+match   12 FairAI as red of 2: victory winner=red day=95 score=1.00 [142.1s]
+match   16 FairAI as red of 2: victory winner=red day=101 score=1.00 [141.7s]
+match   19 FairAI as blue of 2: victory winner=blue day=86 score=1.00 [117.8s]
+match   14 FairAI as red of 2: timeout winner= day=151 score=0.46 [256.4s]
+match   18 FairAI as red of 2: victory winner=red day=94 score=1.00 [138.5s]
+match   15 FairAI as blue of 2: victory winner=blue day=136 score=1.00 [227.3s]
