@@ -7582,7 +7582,13 @@ void AdventureAI::hireHeroes()
 	{
 		if(!town->hasBuilt(BuildingID::TAVERN))
 			continue;
-		const int heroes = static_cast<int>(perception.ownHeroes().size());
+		int heroes = static_cast<int>(perception.ownHeroes().size());
+		if(params.townHeroes)
+		{
+			// (townHeroes) a town's hero is no collector or scout: it does not count against those we want
+			for(const auto * own : perception.ownHeroes())
+				heroes -= !isMain(own) && own->getVisitedTown() && heavy(own) ? 1 : 0;
+		}
 
 		// Who is on offer? Our hero that surrendered (with its army) comes first, then a veteran - a
 		// hero of ours that fled, or anybody's fallen hero, with its levels and skills (parameter
@@ -7616,6 +7622,8 @@ void AdventureAI::hireHeroes()
 			continue;
 		if(special ? heroes >= params.maxHeroes : heroes >= wanted)
 			return;
+		if(static_cast<int>(perception.ownHeroes().size()) >= params.maxHeroes)
+			return; // (with town heroes left out of the count above: never more than the game allows)
 		if(spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + (special ? 0 : reserve))
 			return;
 
