@@ -1,0 +1,15 @@
+== m-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 57 --out /home/alex/fairai/runs/022zz2d926-idle-means/m-land-2p/nB-s57 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"secondArmy": 1}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    2 FairAI as red of 2: victory winner=red day=112 score=1.00 [188.5s]
+match    5 FairAI as blue of 2: victory winner=red day=121 score=0.00 [199.3s]
+match    4 FairAI as red of 2: timeout winner= day=151 score=0.34 [245.6s]
+match    1 FairAI as blue of 2: timeout winner= day=151 score=0.96 [259.5s]
+match    0 FairAI as red of 2: timeout winner= day=151 score=0.42 [262.1s]
+match    3 FairAI as blue of 2: timeout winner= day=151 score=0.26 [277.4s]
+match   11 FairAI as blue of 2: victory winner=blue day=78 score=1.00 [99.8s]
+match    6 FairAI as red of 2: victory winner=blue day=147 score=0.00 [226.9s]
+match    8 FairAI as red of 2: victory winner=blue day=132 score=0.00 [184.7s]
+match   10 FairAI as red of 2: victory winner=red day=103 score=1.00 [173.1s]
+match    7 FairAI as blue of 2: timeout winner= day=151 score=0.43 [263.9s]
+match    9 FairAI as blue of 2: timeout winner= day=151 score=0.89 [242.3s]
