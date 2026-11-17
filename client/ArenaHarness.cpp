@@ -85,6 +85,9 @@ const auto startTime = std::chrono::steady_clock::now();
 
 // watchdog: detects matches that stopped making progress (e.g. an AI deadlock)
 std::atomic<int64_t> lastActivityMs{0};
+/// ... and matches in which things keep happening but no day passes (an AI repeating one order for
+/// ever, a battle without end): such a game ran into the one-hour limit while five slots waited for it
+std::atomic<int64_t> lastDayMs{0};
 std::atomic<int> lastTurnPlayer{-1};
 std::atomic<bool> watchdogStarted{false};
 
@@ -296,7 +299,10 @@ void onPackApplied(CClient & client)
 		while(true)
 		{
 			std::this_thread::sleep_for(std::chrono::seconds(1));
-			if(nowMs() - lastActivityMs.load() < stallSeconds * 1000LL)
+			// (no day for twice the stall limit, ten minutes at least: a day of a long game takes seconds)
+			const int64_t dayLimitMs = std::max(600, 2 * stallSeconds) * 1000LL;
+			const bool noDay = lastDayMs.load() > 0 && nowMs() - lastDayMs.load() >= dayLimitMs;
+			if(nowMs() - lastActivityMs.load() < stallSeconds * 1000LL && !noDay)
 				continue;
 
 			// Nothing happened for too long. Try to read the game state for statistics;
@@ -325,6 +331,8 @@ void onNewTurn(CClient & client)
 {
 	if(!isActive())
 		return;
+
+	lastDayMs.store(nowMs());
 
 	const int maxDays = static_cast<int>(arenaSettings()["maxDays"].Integer());
 	if(maxDays <= 0)

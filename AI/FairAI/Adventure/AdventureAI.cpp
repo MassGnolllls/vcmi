@@ -271,6 +271,8 @@ void Params::loadOverrides(int playerIndex)
 	read("artifactCare", artifactCare);
 	read("tables", tables);
 	read("sites", sites);
+	read("idleRho", idleRho);
+	read("idleReserve", idleReserve);
 	read("manaValueMain", manaValueMain);
 	read("moveValueMain", moveValueMain);
 	read("patienceStep", patienceStep);
@@ -1331,6 +1333,106 @@ double AdventureAI::guardLoss(const CGHeroInstance * hero, const int3 & tile) co
 
 // ======================================================================= buildings with rules of their own
 
+double AdventureAI::idleGold() const
+{
+	if(economy.rho < params.idleRho)
+		return 0;
+	return std::max(0.0, static_cast<double>(spendable()[GameResID::GOLD]) - std::max(params.idleReserve, 2.0 * economy.weeklyRecruitCost));
+}
+
+double AdventureAI::artifactGain(const CGHeroInstance * hero, ArtifactID art) const
+{
+	if(!hero || !art.hasValue())
+		return 0;
+	const CArtifact * type = art.toArtifact();
+	const double worth = artifactValue(hero, type, true);
+	if(worth <= 0)
+		return 0;
+	const auto & possible = type->getPossibleSlots();
+	const auto slots = possible.find(ArtBearer::HERO);
+	if(slots == possible.end())
+		return 0;
+	double replaced = std::numeric_limits<double>::max();
+	for(const ArtifactPosition & slot : slots->second)
+	{
+		if(!type->canBePutAt(hero, slot, true))
+			continue;
+		const CArtifactInstance * worn = hero->getArt(slot);
+		if(!worn)
+			return worth; // a free place
+		replaced = std::min(replaced, artifactValue(hero, worn->getType(), true));
+	}
+	// only a hero that sorts its artifacts (artifactCare) puts the better one on
+	return params.artifactCare && replaced < worth ? worth - replaced : 0.0;
+}
+
+int AdventureAI::buyArtifacts(const IMarket * market, const CGHeroInstance * visitor)
+{
+	if(!params.sites || !market || !visitor || visitor->tempOwner != me || !isMain(visitor) || !market->allowsTrade(EMarketMode::RESOURCE_ARTIFACT))
+		return 0;
+	int bought = 0;
+	for(int round = 0; round < 4; ++round)
+	{
+		gateway.checkInterruption();
+		const CGHeroInstance * hero = ownHero(visitor->id);
+		const double idle = idleGold();
+		if(!hero || idle <= 0)
+			break;
+		// The more gold lies about, the less an artifact has to give for its price: gold nothing
+		// waits for wins no battle, attack and defence on the main hero do.
+		const double wanted = idle > 50000 ? 0.04 : (idle > 20000 ? 0.12 : 0.3);
+		ArtifactID best;
+		double bestRatio = wanted;
+		int bestPrice = 0;
+		double bestGain = 0;
+		for(const auto & item : market->availableItemsIds(EMarketMode::RESOURCE_ARTIFACT))
+		{
+			const ArtifactID art = item.as<ArtifactID>();
+			if(!art.hasValue())
+				continue;
+			int give = 0;
+			int get = 0;
+			if(!market->getOffer(GameResID(GameResID::GOLD).getNum(), art.getNum(), give, get, EMarketMode::RESOURCE_ARTIFACT) || give <= 0 || give > idle)
+				continue;
+			const double gain = artifactGain(hero, art);
+			if(gain / give > bestRatio)
+			{
+				bestRatio = gain / give;
+				best = art;
+				bestPrice = give;
+				bestGain = gain;
+			}
+		}
+		if(!best.hasValue())
+			break;
+		logAi->info("FairAI %s: %s buys %s for %d gold (worth %.0f on this hero; %.0f gold lay idle)", me.toString(), hero->getNameTranslated(),
+			best.toArtifact()->getJsonKey(), bestPrice, bestGain, idle);
+		const int64_t goldBefore = spendable()[GameResID::GOLD];
+		cb->trade(market->getObjInstanceID(), EMarketMode::RESOURCE_ARTIFACT, GameResID(GameResID::GOLD), best, 1, hero);
+		if(spendable()[GameResID::GOLD] >= goldBefore)
+			break; // refused: do not ask again
+		++bought;
+		arrangeArtifacts(ownHero(visitor->id));
+	}
+	return bought;
+}
+
+void AdventureAI::onMarket(const IMarket * market, const CGHeroInstance * visitor)
+{
+	if(!params.sites || !market || !visitor || visitor->tempOwner != me || !market->allowsTrade(EMarketMode::RESOURCE_ARTIFACT))
+		return;
+	buyArtifacts(market, visitor);
+	// what is on the counter now: what we know of this market from here on
+	std::vector<ArtifactID> offer;
+	for(const auto & item : market->availableItemsIds(EMarketMode::RESOURCE_ARTIFACT))
+	{
+		if(item.as<ArtifactID>().hasValue())
+			offer.push_back(item.as<ArtifactID>());
+	}
+	std::unique_lock lock(intelMutex);
+	marketOffers[market->getObjInstanceID()] = offer;
+}
+
 double AdventureAI::universitySkillValue(const CGHeroInstance * hero, SecondarySkill skill) const
 {
 	if(!hero->canLearnSkill(skill))
@@ -1451,6 +1553,32 @@ double AdventureAI::siteValue(const CGHeroInstance * hero, const ObservedObject 
 		if(known->second.cost > 4000 || !seer->checkQuest(hero))
 			return 0;
 		return (dynamic_cast<const CGQuestGuard *>(instance) ? 3000.0 : 6000.0) - known->second.cost;
+	}
+
+	// Black market (any market on the map that sells artifacts): for gold that lies idle. What it
+	// sells shows at the counter; once we have stood there we know.
+	if(const auto * market = dynamic_cast<const CGMarket *>(instance); market && market->allowsTrade(EMarketMode::RESOURCE_ARTIFACT))
+	{
+		const double idle = idleGold();
+		if(!main || idle < 15000)
+			return 0;
+		std::vector<ArtifactID> offer;
+		{
+			std::unique_lock lock(intelMutex);
+			const auto seen = marketOffers.find(object.id);
+			if(seen == marketOffers.end())
+				return 1500;
+			offer = seen->second;
+		}
+		double best = 0;
+		for(const ArtifactID & art : offer)
+		{
+			int give = 0;
+			int get = 0;
+			if(market->getOffer(GameResID(GameResID::GOLD).getNum(), art.getNum(), give, get, EMarketMode::RESOURCE_ARTIFACT) && give > 0 && give <= idle)
+				best = std::max(best, artifactGain(hero, art) - 0.05 * give);
+		}
+		return best > 300 ? best : 0.0;
 	}
 
 	// University: a skill for the main hero, for gold
@@ -5701,6 +5829,13 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 			cb->buyArtifact(hero, ArtifactID::SPELLBOOK);
 		}
 		upgradeArmy(hero);
+		// (sites) artifact merchants in this town: gold that lies idle buys what makes the leader stronger
+		if(params.sites && buyArtifacts(town, hero) > 0)
+		{
+			hero = ownHero(hero->id);
+			if(!hero)
+				return;
+		}
 		if(params.buyWarMachines)
 		{
 			// a ballista, tent or ammo cart from the blacksmith helps in every battle

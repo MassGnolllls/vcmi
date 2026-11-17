@@ -244,7 +244,12 @@ void FairAIGateway::showTavernWindow(const CGObjectInstance * object, const CGHe
 void FairAIGateway::showMarketWindow(const IMarket * market, const CGHeroInstance * visitor, QueryID queryID)
 {
 	status.addQuery(queryID, "MarketWindow");
-	executeActionAsync("showMarketWindow", [this, queryID]() { answerQuery(queryID, 0); });
+	executeActionAsync("showMarketWindow", [this, queryID, market, visitor]()
+	{
+		if(adventure)
+			adventure->onMarket(market, visitor);
+		answerQuery(queryID, 0);
+	});
 }
 
 void FairAIGateway::showUniversityWindow(const IMarket * market, const CGHeroInstance * visitor, QueryID queryID)

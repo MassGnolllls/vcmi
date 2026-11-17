@@ -41,7 +41,13 @@ bool ResourceTrader::trade(BuildAnalyzer & buildAnalyzer, CCallback & cc, const 
 	// return false;
 
 	bool shouldTryToTrade = true;
-	while(shouldTryToTrade)
+	// FairAI fork: the only change to Nullkiller2. When the server refuses a deal ("Invalid deal, not
+	// all offered units of resource were used"), nothing changes and the same deal was asked for again
+	// without end - the game hung in Nullkiller2's turn (seen in a test game on 17.11.2026: thousands
+	// of requests per second for an hour). The number of deals per call is limited now; an ordinary
+	// turn needs a handful.
+	int deals = 0;
+	while(shouldTryToTrade && deals++ < 50)
 	{
 		shouldTryToTrade = false;
 		buildAnalyzer.update();

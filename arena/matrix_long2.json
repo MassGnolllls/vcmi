@@ -3,7 +3,7 @@
  "mods": "hota",
  "note": "long games in which every faction starts equally often: twelve medium land maps, each of the twelve factions (Cove, Factory and Bulwark included) starts on two of them; both AIs play both seats",
  "categories": [
-  {"name": "m-land-2p-all", "template": "Skirmish M", "size": "m", "levels": 1, "water": "none", "players": 2, "count": 12, "seed": 42200, "days": 150, "timeout": 3600, "stall": 300,
+  {"name": "m-land-2p-all", "template": "Skirmish M", "size": "m", "levels": 1, "water": "none", "players": 2, "count": 12, "seed": 42200, "days": 150, "timeout": 1500, "stall": 300,
    "towns": "castle,necropolis;rampart,inferno;tower,dungeon;stronghold,conflux;fortress,hota.cove:cove;hota.factory:factory,hota.bulwark:bulwark;dungeon,castle;stronghold,rampart;necropolis,tower;inferno,fortress;conflux,hota.factory:factory;hota.cove:cove,hota.bulwark:bulwark"}
  ]
 }

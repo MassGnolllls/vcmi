@@ -138,6 +138,8 @@ public:
 	void onGarrisonDialog(const CArmedInstance * up, const CGHeroInstance * down);
 	/// A hero stands in a university: buy the skill that is worth its price (parameter sites)
 	void onUniversity(const IMarket * market, const CGHeroInstance * visitor);
+	/// A hero stands at a market on the map (a black market sells artifacts): parameter sites
+	void onMarket(const IMarket * market, const CGHeroInstance * visitor);
 
 	const Params & parameters() const { return params; }
 
@@ -420,6 +422,14 @@ private:
 	std::map<ArtifactID, ObjectInstanceID> questArtifacts; ///< artifact somebody in our quest log asks for -> who
 	/// reads our quest log: what a player sees there (the wish - not the reward, which shows only when it is granted)
 	void updateQuests();
+	/// gold nothing waits for: what is left when our towns could spend two more weeks' worth (0 while gold is short)
+	double idleGold() const;
+	/// what buying this artifact adds to the hero: its worth there against what it would replace
+	double artifactGain(const CGHeroInstance * hero, ArtifactID art) const;
+	/// the main hero at an artifact merchant (town building or black market): gold that lies idle
+	/// buys what makes it stronger. Returns the number of artifacts bought
+	int buyArtifacts(const IMarket * market, const CGHeroInstance * hero);
+	std::map<ObjectInstanceID, std::vector<ArtifactID>> marketOffers; ///< black market -> what it had on offer when we stood there (guarded by intelMutex)
 	std::map<ObjectInstanceID, int> siteWeek;  ///< building -> week we last used it (a refugee camp has new guests every week)
 	std::set<ObjectInstanceID> sitesDone;      ///< buildings that have nothing more for us (a hut of the magi shows the same again)
 	std::atomic<int> guardedTarget{-1};   ///< guarded building the moving hero is heading for (for the game's question at its door)
