@@ -286,6 +286,8 @@ void Params::loadOverrides(int playerIndex)
 	read("townWorth", townWorth);
 	read("secondArmy", secondArmy);
 	read("townHeroes", townHeroes);
+	read("lastTowns", lastTowns);
+	read("heroLossPause", heroLossPause);
 	read("evacuateRatio", evacuateRatio);
 	read("secondArmyEdge", secondArmyEdge);
 	read("freshHeroes", freshHeroes);
@@ -4627,7 +4629,16 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		// On campaign: the enemy's towns are how the game is won, and a town taken late is a built-up one
 		// (townWorth: that is what a town is worth on any day and to any hero - gold and growth for
 		// four weeks, taken from the enemy; a town is fully built after some twenty weeks)
-		return (enemy ? 2.0 * params.enemyTownValue : params.neutralTownValue) * (1.0 + (params.townWorth ? std::min(today, 140) : today) / 28.0);
+		double worth = (enemy ? 2.0 * params.enemyTownValue : params.neutralTownValue) * (1.0 + (params.townWorth ? std::min(today, 140) : today) / 28.0);
+		if(enemy && params.townWorth && params.lastTowns > 0)
+		{
+			// (lastTowns) the fewer towns that enemy has left, the more each of them is the game itself
+			int held = 0;
+			for(const auto & [otherId, other] : perception.knownObjects())
+				held += other.type == Obj::TOWN && other.owner == object.owner ? 1 : 0;
+			worth *= 1.0 + params.lastTowns / std::max(1, held);
+		}
+		return worth;
 	}
 	case Obj::HERO:
 	{
@@ -7544,7 +7555,7 @@ void AdventureAI::hireHeroes()
 	if(economy.rho > 2 && spendable()[GameResID::GOLD] > 8000)
 		wanted += 2;
 	// every lost hero feeds the enemy experience: after a loss only replace the minimum
-	if(today - lastHeroLossDay < 7)
+	if(today - lastHeroLossDay < 7 && (params.heroLossPause || spendable()[GameResID::GOLD] <= 15000))
 		wanted = std::min(wanted, 2);
 	wanted = std::min(wanted, params.maxHeroes);
 	const int64_t reserve = today <= 2 ? 0 : params.heroGoldReserve;
