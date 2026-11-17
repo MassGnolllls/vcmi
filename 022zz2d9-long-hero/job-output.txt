@@ -119,3 +119,26 @@ match    9 FairAI as blue of 2: timeout winner= day=151 score=0.89 [208.5s]
 match   11 FairAI as blue of 2: victory winner=red day=127 score=0.00 [173.4s]
 match   10 FairAI as red of 2: timeout winner= day=151 score=0.68 [221.0s]
 match   12 FairAI as red of 2: victory winner=blue day=86 score=0.00 [136.1s]
+match   13 FairAI as blue of 2: victory winner=blue day=123 score=1.00 [164.6s]
+match   15 FairAI as blue of 2: victory winner=blue day=105 score=1.00 [159.7s]
+match   14 FairAI as red of 2: victory winner=red day=117 score=1.00 [184.0s]
+match   17 FairAI as blue of 2: victory winner=red day=110 score=0.00 [165.9s]
+match   18 FairAI as red of 2: victory winner=red day=118 score=1.00 [187.8s]
+match   16 FairAI as red of 2: victory winner=red day=133 score=1.00 [234.2s]
+match   19 FairAI as blue of 2: victory winner=red day=116 score=0.00 [199.2s]
+match   21 FairAI as blue of 2: victory winner=red day=121 score=0.00 [210.5s]
+match   22 FairAI as red of 2: victory winner=blue day=113 score=0.00 [199.7s]
+match   20 FairAI as red of 2: timeout winner= day=151 score=0.95 [255.7s]
+match   23 FairAI as blue of 2: victory winner=red day=139 score=0.00 [261.9s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 17 -> FairAI won 7, lost 10  (win rate 41%, 95% CI 22%-64%)
+- day limit reached: 7 (material lead for FairAI in 4)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 117 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/301cd3df16/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 44 --out /home/alex/fairai/runs/022zz2d9-long-hero/m-land-2p/nUME-s44 --pool long1-m-land-2p --max-days 150 --timeout 3600 --stall-seconds 300 --base-port 7000 --ai-params {"surrender": 1, "veterans": 1, "magicFocus": 1, "skillChoice": 1, "campaignEdge": 2.0}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    5 FairAI as blue of 2: victory winner=blue day=98 score=1.00 [95.1s]
