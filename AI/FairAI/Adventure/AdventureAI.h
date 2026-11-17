@@ -18,7 +18,8 @@
  * to the main hero.
  *
  * All knowledge about foreign objects comes from Perception (fairness boundary). Object
- * values depend only on what a human sees: the object type, never hidden contents.
+ * values depend only on what a human sees: the object type, never hidden contents. What a
+ * building can hold comes from the public table of its kind (Perception::rewardTable).
  *
  * License: GNU General Public License v2.0 or later
  * Full text of license available in license.txt file, in main folder
@@ -44,6 +45,12 @@ class CArmedInstance;
 struct CPathsInfo;
 struct CGPathNode;
 struct Component;
+class CStackBasicDescriptor;
+namespace Rewardable
+{
+struct Reward;
+struct RewardRevealTiles;
+}
 VCMI_LIB_NAMESPACE_END
 
 namespace FAI
@@ -52,6 +59,7 @@ namespace FAI
 class Perception;
 class FairAIGateway;
 struct ObservedObject;
+struct RewardTable;
 
 /// A visible (or recently seen) enemy hero and how far it may move until our next turn
 struct Threat
@@ -123,6 +131,10 @@ public:
 	void onHeroExchange(ObjectInstanceID first, ObjectInstanceID second);
 	/// A hero visits a dwelling and may recruit
 	void recruitAtDwelling(const CGDwelling * dwelling, const CArmedInstance * destination);
+	/// The game asks whether to go on - at a guarded building it shows the guards: true = yes (parameter tables)
+	bool confirmVisit(const std::vector<Component> & components);
+	/// A building hands over creatures and the army has no free slot: the exchange window is open
+	void onGarrisonDialog(const CArmedInstance * up, const CGHeroInstance * down);
 
 	const Params & parameters() const { return params; }
 
@@ -359,6 +371,37 @@ private:
 	/// same for whatever guards a tile
 	double guardLoss(const CGHeroInstance * hero, const int3 & tile) const;
 	mutable std::map<std::tuple<int, uint64_t, int, int>, FightForecast> forecastCache;
+
+	// ---- buildings valued by the public table of their kind (parameter tables)
+	/// what one reward of a table is worth to this hero, in gold; what the building takes is subtracted
+	double rewardValue(const CGHeroInstance * hero, const Rewardable::Reward & reward, const int3 & where) const;
+	/// what a visit brings on average over the buildings the table can produce (`only`: these samples)
+	double tableValue(const CGHeroInstance * hero, const RewardTable & table, const std::vector<int> * only, const int3 & where) const;
+	/// an artifact to pick up: by its class, or by what it does for our heroes (parameter artifactCare)
+	double artifactPickupValue(const CGHeroInstance * hero, ArtifactID art) const;
+	/// army value the hero really gains from creatures handed to it: a stack of the same kind, a free
+	/// slot, or a weaker stack to send away
+	double armyGain(const CGHeroInstance * hero, const std::vector<CStackBasicDescriptor> & creatures) const;
+	/// tiles we have not seen that a building would reveal
+	double unexploredAround(const int3 & where, const Rewardable::RewardRevealTiles & reveal) const;
+	/// a creature bank or another guarded building (and tables = 2)
+	bool guardedTable(const ObservedObject & object) const;
+	struct GuardedPlan
+	{
+		double chance = 0;    ///< share of the states the building can be in whose guards we would fight
+		double value = 0;     ///< what the visit brings on average, in gold (a state we turn away from brings nothing)
+		double loss = 0;      ///< what those fights cost on average, in gold
+		double lossShare = 0; ///< ... as a share of our army (diagnostics)
+		bool known = false;   ///< the game lists the guards
+	};
+	GuardedPlan guardedPlan(const CGHeroInstance * hero, const ObservedObject & object, bool useCache = true) const;
+	/// the fight against these guards in this battle layout as the battle simulator expects it to go
+	FightForecast forecastGuards(const CGHeroInstance * hero, const std::vector<std::pair<CreatureID, int>> & guards, const std::string & layout, bool useCache) const;
+	std::atomic<int> guardedTarget{-1};   ///< guarded building the moving hero is heading for (for the game's question at its door)
+	std::atomic<int> guardAnswer{-1};     ///< what we answered there: 1 fight, 0 turn back, -1 not asked
+	std::atomic<int> guardForecast{0};    ///< loss forecast for that fight, in thousandths of our army
+	int tableLogDay = -1;                 ///< diagnostics: the main hero's judgement of the guarded buildings in reach, once a day
+	mutable std::string * tableDebug = nullptr; ///< diagnostics: objectValue notes the buildings it values by their table here
 	int forecastLogDay = -1; ///< diagnostics: the forecasts of the main hero are logged once a day
 	int guardLogDay = -1;    ///< diagnostics: the main hero's judgement of the guards in reach, once a day
 
@@ -391,7 +434,8 @@ private:
 	/// Leaves the weakest stacks in the town while enemy heroes are about
 	void leaveGarrison(const CGHeroInstance * hero, const CGTownInstance * town);
 	/// Moves the strongest stacks from `source` to `destination` (keeps one unit on a source hero)
-	void pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source);
+	/// takeAll: nothing is left behind as a guard (the source is a building that hands troops over)
+	void pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source, bool takeAll = false);
 	double transferableValue(const CGHeroInstance * from) const;
 	/// army value `destination` would really gain by taking troops from `source` (see pickBestCreatures)
 	double transferGain(const CArmedInstance * destination, const CArmedInstance * source) const;

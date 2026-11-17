@@ -422,21 +422,42 @@ void SimState::initForecast(const std::vector<StackSpec> & stacks, const DamageT
 		s.count = spec.count;
 		s.baseCount = spec.count;
 
-		// the game's loose formation; wide units stand one hex further in
+		// the game's loose formation; a layout without formations (creature banks: we stand in the
+		// middle, the guards around us) lists one hex per stack instead
 		const JsonNode & rows = layout[sideIndex == 0 ? "attackerUnitsLoose" : "defenderUnitsLoose"];
 		const int formation = std::clamp(stackCount[sideIndex], 1, 7) - 1;
-		const int serial = std::min(placed[sideIndex]++, formation);
-		BattleHex pos(static_cast<int>(rows[formation][serial].Integer()));
+		const int serial = std::min(placed[sideIndex]++, 6);
+		const JsonNode & listed = rows.isNull() ? layout[sideIndex == 0 ? "attackerUnits" : "defenderUnits"][serial] : rows[formation][std::min(serial, formation)];
+		BattleHex pos = listed.isNull() ? BattleHex() : BattleHex(static_cast<int>(listed.Integer()));
 		if(!pos.isValid())
 			pos = BattleHex(sideIndex == 0 ? 1 : 15, 5);
-		if(s.doubleWide)
-			pos = BattleHex(pos.getX() + (sideIndex == 0 ? 1 : -1), pos.getY());
 		s.pos = pos;
 		s.acted = !s.canMove && !s.shooter;
 		units.push_back(s);
 	}
 	for(int i = 0; i < static_cast<int>(units.size()); ++i)
-		place(i, units[i].pos);
+	{
+		// Like the game: a unit that cannot stand on its hex - a wide one at the edge of the field,
+		// or the hex is taken - stands on the nearest hex where it can, towards the middle first.
+		BattleHex pos = units[i].pos;
+		if(!canStand(i, pos))
+		{
+			const int inwards = units[i].side == BattleSide::ATTACKER ? 1 : -1;
+			for(int shift : {inwards, -inwards, 2 * inwards, -2 * inwards})
+			{
+				const int x = pos.getX() + shift;
+				if(x < 1 || x > GameConstants::BFIELD_WIDTH - 2)
+					continue;
+				const BattleHex moved(x, pos.getY());
+				if(canStand(i, moved))
+				{
+					pos = moved;
+					break;
+				}
+			}
+		}
+		place(i, pos);
+	}
 	round = 0;
 	lastMoved = BattleSide::NONE;
 }

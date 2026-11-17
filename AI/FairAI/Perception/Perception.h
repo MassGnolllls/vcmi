@@ -10,6 +10,9 @@
  *        i.e. exact numbers only where the game itself grants details (e.g. Thieves Guild)
  *      * wandering monsters / garrisons: quantity categories ("Pack" = 10-19, ...)
  *      * other guarded objects: unknown until the game reveals the guards
+ *      * what a building gives: the public table of its kind (RewardTable) - what it can hold and
+ *        how often - never what this particular building on the map holds; the guards of a creature
+ *        bank only once one of our heroes has stood before it and the game lists them
  *  - Tiles: only revealed tiles. When tiles get hidden again (Cover of Darkness), the
  *    memory keeps the last observation with its timestamp and flags the area as stale.
  *
@@ -25,6 +28,7 @@
 
 #include "../../../lib/int3.h"
 #include "../../../lib/constants/EntityIdentifiers.h"
+#include "../../../lib/rewardable/Configuration.h"
 
 VCMI_LIB_NAMESPACE_BEGIN
 class CCallback;
@@ -65,6 +69,40 @@ struct ObservedArmy
 	static std::pair<int, int> quantityRange(int quantityId);
 };
 
+/// One state a guarded building - a creature bank - can be in: who guards it, and how often a
+/// building of this kind is found in that state
+struct GuardState
+{
+	double chance = 0;
+	std::vector<std::pair<CreatureID, int>> guards; ///< stack by stack, in the order the battle places them
+	std::vector<int> samples;                       ///< RewardTable::samples that are in this state
+	uint64_t strength = 0;                          ///< AI value of the guards
+};
+
+/// What a visit can bring in one of the buildings the table can produce: the rewards a first visit
+/// offers, each with its conditions, as the engine reads the table
+struct RewardSample
+{
+	std::vector<Rewardable::VisitInfo> visits;
+	int weight = 1; ///< how many of the rolled buildings look exactly like this
+};
+
+/// The public table of one kind of building that gives something - a creature bank, a well, an
+/// observatory - turned into the buildings it can produce: a hundred of them, one for every face of
+/// the game's hundred-sided die, rolled with dice of our own. This is what a player knows from the
+/// rules and from experience. It says nothing about what a particular building on the map holds.
+struct RewardTable
+{
+	std::vector<RewardSample> samples;
+	int total = 0;                  ///< sum of the weights
+	bool guarded = false;           ///< some of them are guarded
+	std::vector<GuardState> states; ///< guarded kinds only, weakest first; the chances sum to 1
+	bool forceCombat = false;       ///< the fight begins without the game asking
+	std::string layout;             ///< battle layout of the fight against the guards
+	Rewardable::EVisitMode visitMode = Rewardable::VISIT_UNLIMITED;
+	Rewardable::ESelectMode selectMode = Rewardable::SELECT_FIRST;
+};
+
 /// Last known state of a map object.
 struct ObservedObject
 {
@@ -79,6 +117,12 @@ struct ObservedObject
 	/// heroes: attack, defence, spell power, knowledge - only if the game shows them to us in the
 	/// hero's info window (it does not for an ordinary enemy hero)
 	std::optional<std::array<int, 4>> heroSkills;
+	/// buildings that give something: the public table of their kind (nothing about this one)
+	std::shared_ptr<const RewardTable> table;
+	/// guarded buildings one of our heroes has stood before: the game lists the guards on a right
+	/// click from then on (game setting; on by default). Listed and none shown: nobody guards it any more
+	bool guardsShown = false;
+	std::vector<std::pair<CreatureID, int>> shownGuards; ///< creature and number, as listed
 };
 
 /// The best hero of another player as our thieves' guild shows it (tavern window)
@@ -125,6 +169,9 @@ public:
 	/// Perceive an army the way the UI would show it to us
 	ObservedArmy observeArmy(const CArmedInstance * army) const;
 
+	/// The public table of this kind of building (by its type alone); nullptr if it has none
+	std::shared_ptr<const RewardTable> rewardTable(const CGObjectInstance * obj) const;
+
 	/// What the thieves' guild in one of our taverns tells about the other players' best heroes.
 	/// Only what the window shows: the portrait and, with enough taverns, the primary skills.
 	GuildInfo thievesGuild() const;
@@ -139,6 +186,9 @@ private:
 	mutable std::mutex mx;
 	std::map<ObjectInstanceID, ObservedObject> objects;
 	std::set<int3> hiddenAgain;
+
+	mutable std::mutex tableMx;
+	mutable std::map<std::pair<int, int>, std::shared_ptr<const RewardTable>> tables; ///< object type, subtype -> table (nullptr: none)
 };
 
 }

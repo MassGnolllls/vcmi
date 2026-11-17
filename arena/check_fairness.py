@@ -10,7 +10,11 @@ Rules
   1. Never, anywhere: cheat codes / chat commands, direct access to the full game state
      or the raw map, unchecked object/tile access, raw creature slot containers.
   2. Only inside Perception/: the info callbacks that describe foreign armies
-     (getHeroInfo, getTownInfo, ArmyDescriptor). Everything else must use Perception.
+     (getHeroInfo, getTownInfo, ArmyDescriptor), what a right click on a building shows, and
+     the reading of the public tables of buildings. Everything else must use Perception.
+  3. Never: what a particular building on the map holds (its rolled rewards and guards).
+     FairAI knows the table of its kind - what such a building can hold and how often -
+     and the guards only once the game lists them.
 
 Exit code 0 = clean, 1 = violations found.
 """
@@ -31,12 +35,17 @@ FORBIDDEN_EVERYWHERE = {
     r"\bgetObj\s*\([^;]*,\s*false\s*\)": "object access with visibility errors silenced",
     r"\.stacks\b|->stacks\b": "raw creature slot container",
     r"\bfogOfWarMap\b": "raw fog-of-war data (use Perception)",
+    r"(\.|->)\s*configuration\b": "what a particular building holds (only the public table of its kind may be used)",
+    r"\bgetAvailableRewards\s*\(": "the rewards a particular building holds",
 }
 
 ONLY_IN_PERCEPTION = {
     r"\bgetHeroInfo\s*\(": "foreign hero info must go through Perception",
     r"\bgetTownInfo\s*\(": "foreign town info must go through Perception",
     r"\bArmyDescriptor\s*\(": "army descriptors must go through Perception",
+    r"\bgetPopupComponents\s*\(": "what a right click shows must go through Perception",
+    r"\bwasScouted\s*\(": "what a right click shows must go through Perception",
+    r"\bgenerateConfiguration\s*\(": "tables are read in Perception, by the kind of building alone",
 }
 
 

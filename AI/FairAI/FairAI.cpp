@@ -175,7 +175,7 @@ void FairAIGateway::showBlockingDialog(const std::string & text, const std::vect
 	if(selection)
 		answer = adventure ? adventure->chooseSelection(components) : static_cast<int>(components.size());
 	else if(cancel)
-		answer = 1;
+		answer = !adventure || adventure->confirmVisit(components) ? 1 : 0;
 
 	executeActionAsync("showBlockingDialog", [this, askID, answer]() { answerQuery(askID, answer); });
 }
@@ -183,7 +183,12 @@ void FairAIGateway::showBlockingDialog(const std::string & text, const std::vect
 void FairAIGateway::showGarrisonDialog(const CArmedInstance * up, const CGHeroInstance * down, bool removableUnits, QueryID queryID, const MetaString & customTitle)
 {
 	status.addQuery(queryID, "GarrisonDialog");
-	executeActionAsync("showGarrisonDialog", [this, queryID]() { answerQuery(queryID, 0); });
+	executeActionAsync("showGarrisonDialog", [this, queryID, up, down, removableUnits]()
+	{
+		if(adventure && removableUnits)
+			adventure->onGarrisonDialog(up, down);
+		answerQuery(queryID, 0);
+	});
 }
 
 void FairAIGateway::showTeleportDialog(const CGHeroInstance * hero, TeleportChannelID channel, TTeleportExitsList exits, bool impassable, QueryID askID)

@@ -44,6 +44,10 @@
 #include "../../../lib/ResourceSet.h"
 #include "../../../lib/gameState/UpgradeInfo.h"
 #include "../../../lib/mapObjects/army/CStackInstance.h"
+#include "../../../lib/mapObjects/army/CStackBasicDescriptor.h"
+#include "../../../lib/entities/hero/CHeroHandler.h"
+#include "../../../lib/rewardable/Limiter.h"
+#include "../../../lib/rewardable/Reward.h"
 #include "../../../lib/networkPacks/Component.h"
 #include "../../../lib/pathfinder/CGPathNode.h"
 #include "../../../lib/pathfinder/PathfinderOptions.h"
@@ -261,6 +265,9 @@ void Params::loadOverrides(int playerIndex)
 	read("skillChoice", skillChoice);
 	read("resourcePlan", resourcePlan);
 	read("artifactCare", artifactCare);
+	read("tables", tables);
+	read("manaValueMain", manaValueMain);
+	read("moveValueMain", moveValueMain);
 	read("patienceStep", patienceStep);
 	read("resourceNeedFactor", resourceNeedFactor);
 	read("guardFogFactor", guardFogFactor);
@@ -836,11 +843,24 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		const bool meetingOwnHero = best.object.hasValue() && ownHero(best.object) != nullptr;
 		const int exchangesBefore = exchanges.load();
 		const uint64_t ownArmyBefore = hero->getArmyStrength();
+		// heading for a guarded building: at its door the game shows the guards and asks (confirmVisit)
+		const bool towardsBank = best.description.rfind("bank ", 0) == 0 && best.object.hasValue();
+		guardAnswer = -1;
+		guardedTarget = towardsBank ? best.object.getNum() : -1;
 		activeHero = heroId.getNum();
 		bool sent = stepTowards(hero, best.tile, *paths);
 		if(sent)
 			gateway.waitTillFree();
 		activeHero = -1;
+		guardedTarget = -1;
+		if(towardsBank && guardAnswer.load() == 1)
+		{
+			// how the fight went against what the simulator expected (to keep the forecast honest)
+			const CGHeroInstance * after = ownHero(heroId);
+			const double left = after ? static_cast<double>(after->getArmyStrength()) : 0.0;
+			logAi->info("FairAI %s: fight at the guarded building %s: army %llu -> %.0f, forecast loss %.1f%% of the army%s", me.toString(), best.tile.toString(),
+				static_cast<unsigned long long>(ownArmyBefore), left, guardForecast.load() / 10.0, after ? "" : " - the hero is lost");
+		}
 
 		hero = ownHero(heroId);
 		if(hero)
@@ -1285,6 +1305,521 @@ double AdventureAI::guardLoss(const CGHeroInstance * hero, const int3 & tile) co
 		total += loss;
 	}
 	return total;
+}
+
+// ======================================================================= buildings by their public table
+
+bool AdventureAI::guardedTable(const ObservedObject & object) const
+{
+	return params.tables >= 2 && object.table && object.table->guarded;
+}
+
+double AdventureAI::artifactPickupValue(const CGHeroInstance * hero, ArtifactID art) const
+{
+	if(art == ArtifactID::SPELL_SCROLL)
+		return hero->hasSpellbook() ? 800 : 300;
+	if(!art.hasValue())
+		return 1000;
+	const bool main = isMain(hero);
+	if(params.artifactCare)
+	{
+		// what it would do for the hero leading our army; the others fetch it for that hero
+		const CGHeroInstance * leader = ownHero(mainHero);
+		const double forLeader = artifactValue(leader ? leader : hero, art.toArtifact(), true);
+		const double forMe = main ? forLeader : std::max(artifactValue(hero, art.toArtifact(), false), 0.8 * forLeader);
+		return std::clamp(std::max(forMe, 0.1 * art.toArtifact()->getPrice()), 300.0, 20000.0);
+	}
+	double value = 1000;
+	switch(art.toArtifact()->aClass)
+	{
+	case EArtifactClass::ART_TREASURE: value = 1200; break;
+	case EArtifactClass::ART_MINOR: value = 2500; break;
+	case EArtifactClass::ART_MAJOR: value = 5000; break;
+	case EArtifactClass::ART_RELIC: value = 9000; break;
+	default: break;
+	}
+	return main ? value : 0.8 * value;
+}
+
+double AdventureAI::armyGain(const CGHeroInstance * hero, const std::vector<CStackBasicDescriptor> & creatures) const
+{
+	// the kinds in the army (single creatures split off as bait count with their kind: the game merges them)
+	std::map<CreatureID, double> army;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(stack && stack->getCreature())
+			army[stack->getCreatureID()] += stackValue(stack.get());
+	}
+	double gain = 0;
+	for(const auto & offered : creatures)
+	{
+		if(!offered.getCreature() || offered.getCount() <= 0)
+			continue;
+		const double worth = static_cast<double>(offered.getCreature()->getAIValue()) * offered.getCount();
+		if(auto same = army.find(offered.getId()); same != army.end())
+		{
+			same->second += worth;
+			gain += worth;
+		}
+		else if(army.size() < GameConstants::ARMY_SIZE)
+		{
+			army[offered.getId()] = worth;
+			gain += worth;
+		}
+		else
+		{
+			// no room: they take the place of our weakest stack if they are clearly better
+			auto weakest = std::min_element(army.begin(), army.end(), [](const auto & a, const auto & b) { return a.second < b.second; });
+			if(worth > 1.1 * weakest->second)
+			{
+				gain += worth - weakest->second;
+				army.erase(weakest);
+				army[offered.getId()] = worth;
+			}
+		}
+	}
+	return gain;
+}
+
+double AdventureAI::unexploredAround(const int3 & where, const Rewardable::RewardRevealTiles & reveal) const
+{
+	// Which terrain an unseen tile has we cannot know; the level is all we go by.
+	const int3 size = cb->getMapSize();
+	const bool everywhere = reveal.radius <= 0;
+	const int stride = everywhere ? 3 : 1;
+	double count = 0;
+	for(int z = 0; z < size.z; ++z)
+	{
+		const bool wanted = z == 0 ? (reveal.scoreSurface > 0 || reveal.scoreWater > 0 || reveal.scoreRock > 0) : (reveal.scoreSubterra > 0 || reveal.scoreRock > 0);
+		if(!wanted || (!everywhere && z != where.z))
+			continue;
+		const int x0 = everywhere ? 0 : std::max(0, where.x - reveal.radius);
+		const int x1 = everywhere ? size.x - 1 : std::min(size.x - 1, where.x + reveal.radius);
+		const int y0 = everywhere ? 0 : std::max(0, where.y - reveal.radius);
+		const int y1 = everywhere ? size.y - 1 : std::min(size.y - 1, where.y + reveal.radius);
+		for(int x = x0; x <= x1; x += stride)
+		{
+			for(int y = y0; y <= y1; y += stride)
+			{
+				if(!everywhere && (x - where.x) * (x - where.x) + (y - where.y) * (y - where.y) > reveal.radius * reveal.radius)
+					continue;
+				if(!cb->isVisible(int3(x, y, z)))
+					count += stride * stride;
+			}
+		}
+	}
+	// a chart of the seas only: most of what we have not seen is land
+	if(reveal.scoreSurface <= 0 && reveal.scoreSubterra <= 0 && reveal.scoreRock <= 0)
+		count *= 0.3;
+	return count;
+}
+
+double AdventureAI::rewardValue(const CGHeroInstance * hero, const Rewardable::Reward & reward, const int3 & where) const
+{
+	const bool main = isMain(hero);
+	const double goldFactor = 0.4 + 0.6 * economy.goldWeight; // gold matters less when it piles up
+	const double armyFactor = std::sqrt(economy.armyPremium); // troops matter more when they are scarce
+	double value = 0;
+
+	// resources, by what our towns lack; what the building asks for is counted at the plain rate
+	for(const auto & res : LIBRARY->resourceTypeHandler->getAllObjects())
+	{
+		const double amount = reward.resources[res];
+		if(amount == 0)
+			continue;
+		if(res == GameResID::GOLD)
+		{
+			value += amount * goldFactor;
+			continue;
+		}
+		double need = 1.0;
+		if(amount > 0)
+		{
+			if(auto wanted = resourceNeed.find(res.getNum()); wanted != resourceNeed.end())
+				need += params.resourceNeedFactor * std::min(1.0, wanted->second / amount);
+			if(params.resourcePlan)
+				need = std::max(need, std::clamp(scarcity(res), 0.7, 3.0));
+		}
+		value += amount * resourceValue(res) * need;
+	}
+
+	// experience
+	double experience = reward.heroExperience;
+	if(reward.heroLevel > 0)
+		experience += static_cast<double>(LIBRARY->heroh->reqExp(hero->level + reward.heroLevel)) - static_cast<double>(LIBRARY->heroh->reqExp(hero->level));
+	value += experience * expValue(hero);
+
+	// spell points and movement: what the hero would have afterwards against what it has now
+	if(hero->hasSpellbook() && (reward.manaDiff != 0 || reward.manaPercentage >= 0))
+		value += (reward.calculateManaPoints(hero) - hero->mana) * (main ? params.manaValueMain : 0.25 * params.manaValueMain);
+	if(reward.movePoints != 0 || reward.movePercentage >= 0)
+		value += (reward.calculateMovePoints(hero) - hero->movementPointsRemaining()) * (main ? params.moveValueMain : 0.33 * params.moveValueMain);
+
+	// skills
+	const double primary = main ? params.primarySkillValueMain : params.primarySkillValueOther;
+	for(int points : reward.primary)
+		value += points * primary;
+	for(const auto & [skill, level] : reward.secondary)
+	{
+		const int has = hero->getSecSkillLevel(skill);
+		if(has >= level || (has == 0 && !hero->canLearnSkill(skill)))
+			continue;
+		if(params.skillChoice)
+			value += std::max(0.0, skillValue(hero, skill, level) - (has > 0 ? skillValue(hero, skill, has) : 0.0));
+		else
+			value += (main ? 1000.0 : 300.0) * (level - has);
+	}
+
+	// artifacts, scrolls, spells the hero can learn and does not know
+	for(const ArtifactID & art : reward.grantedArtifacts)
+		value += artifactPickupValue(hero, art);
+	value += (hero->hasSpellbook() ? 800.0 : 300.0) * reward.grantedScrolls.size();
+	static const std::array<double, 6> spellWorth = {0, 400, 700, 900, 1500, 2500};
+	for(const SpellID & spell : reward.spells)
+	{
+		const auto * taught = spell.toSpell();
+		if(!taught || !hero->hasSpellbook() || hero->spellbookContainsSpell(spell) || !hero->canLearnSpell(taught))
+			continue;
+		value += spellWorth[std::clamp(taught->getLevel(), 1, 5)] * (main ? 1.0 : 0.4);
+	}
+
+	// creatures: what the army really gains - and what the building takes or turns into something else
+	if(!reward.creatures.empty())
+	{
+		const double gain = armyGain(hero, reward.creatures);
+		value += gain * params.goldPerArmyValue * armyFactor * (main ? reinforcementBoost(gain) : params.ferryFactor);
+	}
+	for(const auto & taken : reward.takenCreatures)
+	{
+		if(taken.getCreature())
+			value -= static_cast<double>(taken.getCount()) * taken.getCreature()->getAIValue() * params.goldPerArmyValue;
+	}
+	for(const auto & [from, to] : reward.creaturesChange)
+	{
+		if(!from.hasValue() || !to.hasValue())
+			continue;
+		int count = 0;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(stack && stack->getCreatureID() == from)
+				count += stack->getCount();
+		}
+		value += count * (static_cast<double>(to.toCreature()->getAIValue()) - from.toCreature()->getAIValue()) * params.goldPerArmyValue * armyFactor;
+	}
+	value -= 1000.0 * reward.takenArtifacts.size() + 500.0 * reward.takenScrolls.size();
+
+	// morale, luck, movement for the days to come and the like
+	for(const auto & bonus : reward.heroBonuses)
+	{
+		if(!bonus)
+			continue;
+		switch(bonus->type)
+		{
+		case BonusType::MORALE:
+		case BonusType::LUCK:
+			value += (main ? 150.0 : 0.0) * bonus->val;
+			break;
+		case BonusType::MOVEMENT:
+			value += bonus->val * (main ? 1.0 : 0.3);
+			break;
+		default:
+			value += (main ? 100.0 : 30.0) * (bonus->val < 0 ? -1 : 1);
+			break;
+		}
+	}
+
+	// land revealed (a Cover of Darkness hides land from the others: nothing for the visitor)
+	if(reward.revealTiles && !reward.revealTiles->hide)
+		value += std::min(6000.0, 0.5 * params.explorationTileValue * unexploredAround(where, *reward.revealTiles)) * std::max(0.4, 1.0 - today / 84.0);
+	return value;
+}
+
+double AdventureAI::tableValue(const CGHeroInstance * hero, const RewardTable & table, const std::vector<int> * only, const int3 & where) const
+{
+	double total = 0;
+	int weight = 0;
+	std::vector<double> options;
+	auto add = [&](const RewardSample & sample)
+	{
+		// the rewards this hero qualifies for, as the game would offer them
+		options.clear();
+		for(const auto & visit : sample.visits)
+		{
+			if(!visit.limiter.heroAllowed(hero))
+				continue;
+			options.push_back(rewardValue(hero, visit.reward, where));
+			if(table.selectMode == Rewardable::SELECT_FIRST)
+				break;
+		}
+		double worth = 0;
+		if(!options.empty())
+		{
+			switch(table.selectMode)
+			{
+			case Rewardable::SELECT_ALL:
+				worth = std::accumulate(options.begin(), options.end(), 0.0);
+				break;
+			case Rewardable::SELECT_RANDOM:
+				worth = std::accumulate(options.begin(), options.end(), 0.0) / options.size();
+				break;
+			case Rewardable::SELECT_PLAYER:
+				worth = options.back(); // the choice we make when asked (chooseSelection)
+				break;
+			default:
+				worth = options.front();
+				break;
+			}
+		}
+		total += worth * sample.weight;
+		weight += sample.weight;
+	};
+	if(only)
+	{
+		for(int index : *only)
+			add(table.samples[index]);
+	}
+	else
+	{
+		for(const auto & sample : table.samples)
+			add(sample);
+	}
+	return weight > 0 ? total / weight : 0.0;
+}
+
+AdventureAI::FightForecast AdventureAI::forecastGuards(const CGHeroInstance * hero, const std::vector<std::pair<CreatureID, int>> & guards, const std::string & layoutName, bool useCache) const
+{
+	FightForecast result;
+	if(!hero || guards.empty() || hero->stacksCount() == 0)
+		return result;
+
+	// same question, same answer: the hero's army does not change between planning steps
+	uint64_t signature = 1469598103934665603ULL;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		signature = (signature ^ static_cast<uint64_t>(stack->getCreatureID().getNum() * 100003 + slot.getNum())) * 1099511628211ULL;
+		signature = (signature ^ static_cast<uint64_t>(stack->getCount())) * 1099511628211ULL;
+	}
+	uint64_t setup = 1469598103934665603ULL;
+	for(const auto & [creature, count] : guards)
+		setup = ((setup ^ static_cast<uint64_t>(creature.getNum())) * 1099511628211ULL ^ static_cast<uint64_t>(count)) * 1099511628211ULL;
+	for(char c : layoutName)
+		setup = (setup ^ static_cast<uint64_t>(static_cast<unsigned char>(c))) * 1099511628211ULL;
+	const auto key = std::make_tuple(hero->id.getNum(), signature ^ (setup * 0x9E3779B97F4A7C15ULL), -1, static_cast<int>(setup & 0x7fffffff));
+	if(useCache)
+	{
+		if(auto cached = forecastCache.find(key); cached != forecastCache.end())
+			return cached->second;
+	}
+
+	std::vector<Combat::StackSpec> stacks;
+	for(const auto & [slot, stack] : hero->Slots())
+	{
+		if(stack && stack->getCreature() && stack->getCount() > 0)
+			stacks.push_back({stack.get(), stack->getCreature(), stack->getCount(), BattleSide::ATTACKER});
+	}
+	for(const auto & [creature, count] : guards)
+	{
+		const CCreature * type = creature.toCreature();
+		if(type && count > 0)
+			stacks.push_back({type, type, count, BattleSide::DEFENDER});
+	}
+	try
+	{
+		const JsonNode & layouts = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS);
+		const JsonNode & layout = layouts[layoutName].isNull() ? layouts["default"] : layouts[layoutName];
+		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout);
+		const int plan = forecast.bestPlan();
+		result.win = forecast.win(plan);
+		result.lossShare = forecast.lossShare(plan);
+		result.lossValue = result.lossShare * forecast.ownBefore;
+	}
+	catch(const std::exception & e)
+	{
+		logAi->warn("FairAI %s: battle forecast failed (%s)", me.toString(), e.what());
+	}
+	if(useCache)
+		forecastCache[key] = result;
+	return result;
+}
+
+AdventureAI::GuardedPlan AdventureAI::guardedPlan(const CGHeroInstance * hero, const ObservedObject & object, bool useCache) const
+{
+	GuardedPlan plan;
+	plan.known = object.guardsShown;
+	if(!hero || !object.table)
+		return plan;
+	const RewardTable & table = *object.table;
+	const double army = static_cast<double>(hero->getArmyStrength());
+	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : params.maxLossShareSecondary;
+
+	// the states the building can be in, as far as we know
+	struct Possible
+	{
+		double chance;
+		std::vector<std::pair<CreatureID, int>> guards;
+		const std::vector<int> * samples;
+		double strength;
+	};
+	std::vector<Possible> possible;
+	if(object.guardsShown)
+	{
+		if(object.shownGuards.empty())
+			return plan; // nobody guards it any more: somebody has been here before us
+		// the game lists the guards kind by kind: which state of the table is that?
+		std::map<CreatureID, int> listed;
+		for(const auto & [creature, count] : object.shownGuards)
+			listed[creature] += count;
+		const GuardState * match = nullptr;
+		for(const auto & state : table.states)
+		{
+			std::map<CreatureID, int> counted;
+			for(const auto & [creature, count] : state.guards)
+				counted[creature] += count;
+			if(counted == listed)
+			{
+				match = &state;
+				break;
+			}
+		}
+		if(match)
+			possible.push_back({1.0, match->guards, &match->samples, static_cast<double>(match->strength)});
+		else
+		{
+			// guards the table does not know - what a lost battle left of them, say: we fight what
+			// is listed, for what a building of this kind holds on average
+			double strength = 0;
+			for(const auto & [creature, count] : object.shownGuards)
+				strength += static_cast<double>(creature.toCreature()->getAIValue()) * count;
+			possible.push_back({1.0, object.shownGuards, nullptr, strength});
+		}
+	}
+	else
+	{
+		for(const auto & state : table.states)
+			possible.push_back({state.chance, state.guards, &state.samples, static_cast<double>(state.strength)});
+	}
+
+	// Does the game show us the guards before the fight begins? Then the hero may still turn back
+	// at the door, and it is enough that some of the states are worth the fight.
+	const bool blind = !object.guardsShown && (table.forceCombat || !cb->getSettings().getBoolean(EGameSettings::BANKS_SHOW_GUARDS_COMPOSITION));
+
+	for(const auto & state : possible)
+	{
+		double worth = tableValue(hero, table, state.samples, object.visitablePos);
+		if(state.guards.empty())
+		{
+			if(worth > 0)
+			{
+				plan.chance += state.chance;
+				plan.value += state.chance * worth;
+			}
+			continue;
+		}
+		bool take = false;
+		double cost = 0;
+		double share = 0;
+		// (an army worth a third of the guards has no chance: no need to play the battle through)
+		if(army >= 0.33 * state.strength)
+		{
+			const FightForecast forecast = forecastGuards(hero, state.guards, table.layout, useCache);
+			if(forecast.win && forecast.lossShare <= limit)
+			{
+				double health = 0;
+				for(const auto & [creature, count] : state.guards)
+					health += static_cast<double>(creature.toCreature()->getMaxHealth()) * count;
+				worth += health * expValue(hero);
+				share = forecast.lossShare;
+				cost = share * army * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+				take = worth > cost;
+			}
+		}
+		if(take)
+		{
+			plan.chance += state.chance;
+			plan.value += state.chance * worth;
+			plan.loss += state.chance * cost;
+			plan.lossShare += state.chance * share;
+		}
+		else if(blind)
+		{
+			// a fight we cannot turn away from must be worth it whatever waits inside
+			GuardedPlan none;
+			none.known = plan.known;
+			return none;
+		}
+	}
+	if(plan.chance > 0)
+		plan.lossShare /= plan.chance;
+	return plan;
+}
+
+bool AdventureAI::confirmVisit(const std::vector<Component> & components)
+{
+	// Yes/no questions are answered "yes": FairAI only walks into what it wants to visit. The one
+	// exception is the door of a guarded building, where the game shows who guards it - what the
+	// hero came for was a guess at that.
+	const int heroNum = activeHero.load();
+	const int objectNum = guardedTarget.load();
+	if(params.tables < 2 || heroNum < 0 || objectNum < 0)
+		return true;
+	std::vector<std::pair<CreatureID, int>> shown;
+	for(const Component & c : components)
+	{
+		if(c.type == ComponentType::CREATURE && c.value && *c.value > 0)
+			shown.emplace_back(c.subType.as<CreatureID>(), *c.value);
+	}
+	if(shown.empty())
+		return true; // the game does not tell: the decision was made before the hero came
+
+	const CGHeroInstance * hero = ownHero(ObjectInstanceID(heroNum));
+	const auto known = perception.knownObjects();
+	const auto it = known.find(ObjectInstanceID(objectNum));
+	if(!hero || it == known.end() || !it->second.table || !it->second.table->guarded)
+		return true;
+	// is this the question of that building? Its guards are creatures its table knows
+	std::set<CreatureID> kinds;
+	for(const auto & state : it->second.table->states)
+		for(const auto & [creature, count] : state.guards)
+			kinds.insert(creature);
+	for(const auto & [creature, count] : shown)
+	{
+		if(!kinds.count(creature))
+			return true;
+	}
+
+	ObservedObject seen = it->second;
+	seen.guardsShown = true;
+	seen.shownGuards = shown;
+	const GuardedPlan plan = guardedPlan(hero, seen, false);
+	const bool fight = plan.chance > 0;
+	guardAnswer = fight ? 1 : 0;
+	guardForecast = static_cast<int>(std::lround(1000 * plan.lossShare));
+	std::string list;
+	for(const auto & [creature, count] : shown)
+		list += boost::str(boost::format(" %d %s") % count % creature.toCreature()->getJsonKey());
+	logAi->info("FairAI %s: %s at the door of building %d/%d %s, guards:%s -> %s (worth %.0f, forecast loss %.0f = %.0f%% of the army)", me.toString(),
+		hero->getNameTranslated(), it->second.type.getNum(), it->second.subtype.getNum(), it->second.visitablePos.toString(), list,
+		fight ? "fights" : "turns back", plan.value, plan.loss, 100 * plan.lossShare);
+	return fight;
+}
+
+void AdventureAI::onGarrisonDialog(const CArmedInstance * up, const CGHeroInstance * down)
+{
+	// Creatures are handed to a hero whose army has no free slot - by a building, or by monsters
+	// that join: the game opens the exchange window with them waiting on the other side. Whatever
+	// stays there is lost. (FairAI used to close the window at once: joiners worth a third of the
+	// army were sent away while a handful of gremlins kept their slot.)
+	if(!up || !down || down->tempOwner != me || up->tempOwner.isValidPlayer())
+		return; // towns and garrisons of ours are handled where the hero visits them
+	if(up->ID == Obj::HERO || up->ID == Obj::TOWN || up->ID == Obj::GARRISON || up->ID == Obj::GARRISON2)
+		return;
+	const uint64_t before = down->getArmyStrength();
+	pickBestCreatures(down, up, true);
+	if(down->getArmyStrength() != before)
+		logAi->info("FairAI %s: %s takes creatures offered at object %d/%d (army %llu -> %llu)", me.toString(), down->getNameTranslated(), up->ID.getNum(),
+			up->subID.getNum(), static_cast<unsigned long long>(before), static_cast<unsigned long long>(down->getArmyStrength()));
 }
 
 void AdventureAI::updateThreats()
@@ -2950,8 +3485,27 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		return 3000 + object.army->expectedStrength() * params.goldPerArmyValue;
 	}
 	default:
-		return 0;
+		break;
 	}
+
+	// Every other building: the public table of its kind tells what a visit can bring (parameter
+	// tables). No building is worth nothing as such - it depends on the hero and the day.
+	if(!params.tables || !object.table)
+		return 0;
+	if(visitedByHero())
+		return 0; // the game marks it as visited: nothing more for this hero
+	if(object.table->guarded)
+	{
+		if(params.tables < 2)
+			return 0;
+		if(object.guardsShown && object.shownGuards.empty())
+			return 0; // somebody has been here and beaten the guards
+		// before the fight is judged (collectTargets does that for the buildings in reach)
+	}
+	const double worth = std::max(0.0, tableValue(hero, *object.table, nullptr, object.visitablePos));
+	if(tableDebug)
+		*tableDebug += boost::str(boost::format(" [%d/%d at %s: %.0f]") % object.type.getNum() % object.subtype.getNum() % object.visitablePos.toString() % worth);
+	return worth;
 }
 
 std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, const CPathsInfo & paths, const CPathsInfo & freePaths)
@@ -3150,6 +3704,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	std::vector<Seek> seek;
 	std::map<std::string, int> rejected; // diagnostics
+	const bool bankLog = params.tables && isMain(hero) && logAi->isDebugEnabled() && tableLogDay != today;
+	std::string bankLines;
+	std::string tableLines;
+	tableDebug = bankLog ? &tableLines : nullptr;
 
 	// ---- objects other than monsters
 	for(const auto & [id, object] : known)
@@ -3251,6 +3809,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				++rejected["too strong"];
 				continue;
 			}
+			// a creature bank or another guarded building: the fight against what may wait inside
+			const bool bank = guardedTable(object);
+			if(bank)
+			{
+				const GuardedPlan plan = guardedPlan(hero, object);
+				if(bankLog)
+					bankLines += boost::str(boost::format(" [%d/%d at %s, %.1f days: %s, we would fight %.0f%% of what may wait there, worth %.0f, loss %.0f (%.0f%% of the army)]")
+						% object.type.getNum() % object.subtype.getNum() % object.visitablePos.toString() % node->cost
+						% (plan.known ? "guards listed" : "guards unknown") % (100 * plan.chance) % plan.value % plan.loss % (100 * plan.lossShare));
+				if(plan.chance <= 0 || plan.value <= plan.loss)
+				{
+					++rejected["bank too strong"];
+					continue;
+				}
+				value = plan.value;
+				loss += plan.loss;
+			}
 			if(siegedTown.hasValue() && !desperate && defenders > 0)
 			{
 				// moat and arrow towers take their share before the walls fall
@@ -3292,12 +3867,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					value *= (node->cost + params.travelOffset) / (2.0 * node->cost + params.travelOffset);
 			}
 			// (heroes: whose - walking up to our own hero hands over troops, an enemy's is a hunt)
-			addTarget(object.visitablePos, id, value, loss, node->cost, "object " + std::to_string(object.type.getNum())
+			addTarget(object.visitablePos, id, value, loss, node->cost, (bank ? "bank " : "object ") + std::to_string(object.type.getNum())
 				+ (object.type == Obj::HERO ? (object.owner == me ? " own" : " enemy") : ""));
 		}
 		else if(const CGPathNode * free = reachable(freePaths, object.visitablePos))
 		{
 			++rejected["behind guard"];
+			if(guardedTable(object))
+			{
+				// what it is worth once the way is free: after the fight against its own guards
+				const GuardedPlan plan = guardedPlan(hero, object);
+				value = plan.chance > 0 ? std::max(0.0, plan.value - plan.loss) : 0.0;
+			}
 			const GuardOnPath g = firstGuard(free);
 			if(g.guard.hasValue())
 			{
@@ -3317,6 +3898,16 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			// way leads around something): exploring is drawn towards it
 			approach.push_back({object.visitablePos, value});
 		}
+	}
+
+	tableDebug = nullptr;
+	if(bankLog && (!bankLines.empty() || !tableLines.empty()))
+	{
+		// once a day: what the buildings valued by their table are worth to the main hero, and how it
+		// judges the guarded ones in reach (diagnostics)
+		logAi->debug("FairAI %s day %d: %s (army %d) buildings by table:%s; guarded ones in reach:%s", me.toString(), today, hero->getNameTranslated(),
+			static_cast<int>(hero->getArmyStrength()), tableLines.empty() ? " none" : tableLines, bankLines.empty() ? " none" : bankLines);
+		tableLogDay = today;
 	}
 
 	// ---- exploration
@@ -4346,7 +4937,7 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 
 // ======================================================================= armies
 
-void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source)
+void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CArmedInstance * source, bool takeAll)
 {
 	// never an army with itself: a stack merged into its own slot crashes the server
 	if(!destination || !source || destination == source)
@@ -4355,7 +4946,7 @@ void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CA
 
 	// An empty town is taken by any scout walking in: leave the weakest stack behind
 	SlotID reserved;
-	if(!sourceIsHero && params.keepGarrison && destination->ID == Obj::HERO)
+	if(!sourceIsHero && params.keepGarrison && destination->ID == Obj::HERO && !takeAll)
 	{
 		if(source->stacksCount() == 1)
 		{

@@ -125,6 +125,9 @@ struct Params
 	int skillChoice = 0;               ///< secondary skills are valued by the hero's role and army (what the skill's bonuses do) instead of one fixed ranking for everybody. Off until a test shows a gain
 	int resourcePlan = 0;              ///< mines and resource piles are valued by what our towns will need (buildings still missing, weekly creature costs) against stock and income - before a building is blocked. Off until a test shows a gain
 	int artifactCare = 0;              ///< artifacts are valued by what they do for the hero that would carry them; heroes wear the best per slot, hand artifacts on when they meet, assemble sets; artifacts on the map are targets by that value. Off until a test shows a gain
+	int tables = 0;                    ///< buildings without a rule of their own are valued by the public table of their kind: what a visit can bring this hero now - resources by need, creatures by what the army gains, skills, spells, spell points, movement, artifacts, land revealed. 1: unguarded buildings only; 2: creature banks and other guarded buildings too - the fight against every set of guards the table allows is simulated in the bank's battle layout, and at the door, where the game shows the guards, the hero turns back if these are too strong. Off until a test shows a gain
+	double manaValueMain = 4;          ///< tables: gold per spell point a building restores to the main hero (a quarter of it for the others)
+	double moveValueMain = 0.4;        ///< tables: gold per movement point a building gives the main hero today (a third of it for the others)
 
 	// --- combat (read by the battle AI of the same player)
 	int spellSearch = 0;               ///< hero spells chosen by the look-ahead search (0: VCMI's BattleAI evaluator)
