@@ -1,9 +1,12 @@
 {
  "job": "022zz2d926-idle-means",
- "state": "running",
+ "state": "done",
  "commit": "870bc27ee37a37fd00435bca5a2d2fb2a6a24333",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-18T00:36:00",
- "note": "Using what lies idle: five switches on medium land maps, long games, 24 per config. T = a foreign town is worth what it yields on any day (townWorth); C = supply runs; Q = garrisons with legs (townHeroes: a hero holds each town's troops, makes sorties on a leash, spends the night in the garrison, leaves a town that cannot hold, a town with troops and no hero hires one); L = the main hero leaves its weakest stacks behind until the garrison is worth 12 % of hero plus garrison (garrisonShare 0.12); B = a hero whose troops beat 1.3 times the strongest enemy hero seen lately is a second leader (secondArmy). Design 2^(5-1), resolution V: B = T*C*Q*L - main effects and all two-switch interactions are free of each other. Why: 549 long games - on day 84 the main hero leads 249,000 and 313,000 lie in garrisons, 65,000 gold unspent; the enemy takes 4.7 of our towns a game without a battle and 5.3 with one, attacked garrisons hold in 2 % of 2,895 cases and lose 162,000 a game for 56,000; won games differ from undecided ones by towns not lost (4.6 against 8.7), not by towns taken (10.5 against 11.0). Evaluate with arena/effects.py and arena/metrics.py: --factors '{\"T\": {\"townWorth\": 1}, \"C\": {\"supplyRuns\": 1}, \"Q\": {\"townHeroes\": 1}, \"L\": {\"garrisonShare\": 0.12}, \"B\": {\"secondArmy\": 1}}'"
+ "note": "Using what lies idle: five switches on medium land maps, long games, 24 per config. T = a foreign town is worth what it yields on any day (townWorth); C = supply runs; Q = garrisons with legs (townHeroes: a hero holds each town's troops, makes sorties on a leash, spends the night in the garrison, leaves a town that cannot hold, a town with troops and no hero hires one); L = the main hero leaves its weakest stacks behind until the garrison is worth 12 % of hero plus garrison (garrisonShare 0.12); B = a hero whose troops beat 1.3 times the strongest enemy hero seen lately is a second leader (secondArmy). Design 2^(5-1), resolution V: B = T*C*Q*L - main effects and all two-switch interactions are free of each other. Why: 549 long games - on day 84 the main hero leads 249,000 and 313,000 lie in garrisons, 65,000 gold unspent; the enemy takes 4.7 of our towns a game without a battle and 5.3 with one, attacked garrisons hold in 2 % of 2,895 cases and lose 162,000 a game for 56,000; won games differ from undecided ones by towns not lost (4.6 against 8.7), not by towns taken (10.5 against 11.0). Evaluate with arena/effects.py and arena/metrics.py: --factors '{\"T\": {\"townWorth\": 1}, \"C\": {\"supplyRuns\": 1}, \"Q\": {\"townHeroes\": 1}, \"L\": {\"garrisonShare\": 0.12}, \"B\": {\"secondArmy\": 1}}'",
+ "returncode": 0,
+ "finished": "2026-11-18T04:56:22",
+ "minutes": 260.3
 }
