@@ -1,5 +1,5 @@
 {
- "note": "On fresh maps, played to day 300: the standard and the standard with townHeroes + secondArmy (0.61 against 0.48 in d926; d928 tests the pair on the old maps). 24 maps from four templates, both seats: 48 games per config. Shows whether the standard holds on templates it was never tuned on, and whether the pair helps there too. Evaluate per category (matrix_summary.md) and together (arena/effects.py with --factors '{\"A\": {\"townHeroes\": 1, \"secondArmy\": 1}}').",
+ "note": "On fresh maps, played to day 300: the standard, the standard with townHeroes + secondArmy, and that with the five switches for the main army's time on top (townWorth, breakout, magicWorth, fetchByShare, noChase 1 - job d928 takes them apart on the old maps). 24 maps from four templates, both seats: 48 games per config. Shows whether the standard holds on templates it was never tuned on, and whether the two packages help there too. Evaluate per category (matrix_summary.md) and with arena/metrics.py.",
  "script": "matrix.py",
  "args": [
   "play",
@@ -14,7 +14,7 @@
   "--seeds",
   "70",
   "--configs",
-  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}}"
+  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}, \"doc\": {\"townHeroes\": 1, \"secondArmy\": 1, \"townWorth\": 1, \"breakout\": 1, \"magicWorth\": 1, \"fetchByShare\": 1, \"noChase\": 1}}"
  ],
  "jobs": 6
 }
