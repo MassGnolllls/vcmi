@@ -548,3 +548,46 @@ match   21 FairAI as blue of 2: victory winner=red day=85 score=0.00 [117.9s]
 match   22 FairAI as red of 2: victory winner=blue day=117 score=0.00 [241.4s]
 match   18 FairAI as red of 2: timeout winner= day=151 score=0.28 [390.5s]
 match   23 FairAI as blue of 2: victory winner=blue day=125 score=1.00 [272.3s]
+match   20 FairAI as red of 2: timeout winner= day=151 score=0.63 [325.1s]
+match   19 FairAI as blue of 2: timeout winner= day=151 score=0.00 [393.1s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 13 -> FairAI won 10, lost 3  (win rate 77%, 95% CI 50%-92%)
+- day limit reached: 11 (material lead for FairAI in 5)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 123 days
+- cheat flags raised: 0
+# A/B test (16 configs, seeds 58)
+
+Paired against `new`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| new | `{}` | 24 | 13 | 1 | 0.786 ± 0.123 | - | 0.786 ± 0.127 | - | 24 |
+| nZHS | `{"mainHorizon": 12, "heroLossPause": 0, "scouts": 3}` | 24 | 12 | 4 | 0.692 ± 0.152 | -0.094 ± 0.121 | 0.685 ± 0.163 | -0.101 ± 0.126 | 24 |
+| nFMHS | `{"fetchByShare": 1, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "heroLossPause": 0, "scouts": 3, "collectorsRoam": 3}` | 24 | 11 | 3 | 0.666 ± 0.155 | -0.121 ± 0.157 | 0.655 ± 0.153 | -0.131 ± 0.152 | 24 |
+| nFZM | `{"fetchByShare": 1, "mainHorizon": 12, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "collectorsRoam": 3}` | 24 | 11 | 2 | 0.680 ± 0.144 | -0.106 ± 0.155 | 0.685 ± 0.150 | -0.101 ± 0.167 | 24 |
+| nUMH | `{"unlockDirect": 1, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "heroLossPause": 0, "collectorsRoam": 3}` | 24 | 11 | 5 | 0.651 ± 0.167 | -0.136 ± 0.186 | 0.645 ± 0.184 | -0.140 ± 0.205 | 24 |
+| nUZMS | `{"unlockDirect": 1, "mainHorizon": 12, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "scouts": 3, "collectorsRoam": 3}` | 24 | 13 | 3 | 0.705 ± 0.154 | -0.081 ± 0.199 | 0.679 ± 0.167 | -0.107 ± 0.209 | 24 |
+| nUFS | `{"unlockDirect": 1, "fetchByShare": 1, "scouts": 3}` | 24 | 15 | 4 | 0.740 ± 0.156 | -0.047 ± 0.149 | 0.720 ± 0.166 | -0.065 ± 0.171 | 24 |
+| nUFZH | `{"unlockDirect": 1, "fetchByShare": 1, "mainHorizon": 12, "heroLossPause": 0}` | 24 | 12 | 4 | 0.686 ± 0.160 | -0.100 ± 0.180 | 0.679 ± 0.161 | -0.107 ± 0.179 | 24 |
+| nPMS | `{"passage": 1, "regionValue": 8000, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "scouts": 3, "collectorsRoam": 3}` | 24 | 13 | 1 | 0.707 ± 0.142 | -0.080 ± 0.146 | 0.696 ± 0.154 | -0.089 ± 0.161 | 24 |
+| nPZMH | `{"passage": 1, "regionValue": 8000, "mainHorizon": 12, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "heroLossPause": 0, "collectorsRoam": 3}` | 24 | 11 | 5 | 0.592 ± 0.173 | -0.195 ± 0.177 | 0.583 ± 0.175 | -0.202 ± 0.197 | 24 |
+| nPFH | `{"passage": 1, "regionValue": 8000, "fetchByShare": 1, "heroLossPause": 0}` | 24 | 10 | 2 | 0.705 ± 0.130 | -0.081 ± 0.137 | 0.702 ± 0.151 | -0.083 ± 0.159 | 24 |
+| nPFZS | `{"passage": 1, "regionValue": 8000, "fetchByShare": 1, "mainHorizon": 12, "scouts": 3}` | 24 | 14 | 1 | 0.748 ± 0.136 | -0.038 ± 0.151 | 0.732 ± 0.145 | -0.054 ± 0.162 | 24 |
+| nPUHS | `{"passage": 1, "regionValue": 8000, "unlockDirect": 1, "heroLossPause": 0, "scouts": 3}` | 24 | 10 | 7 | 0.606 ± 0.176 | -0.180 ± 0.175 | 0.607 ± 0.174 | -0.179 ± 0.175 | 24 |
+| nPUZ | `{"passage": 1, "regionValue": 8000, "unlockDirect": 1, "mainHorizon": 12}` | 24 | 11 | 2 | 0.716 ± 0.128 | -0.070 ± 0.151 | 0.649 ± 0.155 | -0.137 ± 0.150 | 24 |
+| nPUFM | `{"passage": 1, "regionValue": 8000, "unlockDirect": 1, "fetchByShare": 1, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "collectorsRoam": 3}` | 24 | 15 | 5 | 0.715 ± 0.171 | -0.071 ± 0.164 | 0.738 ± 0.171 | -0.048 ± 0.184 | 24 |
+| nPUFZMHS | `{"passage": 1, "regionValue": 8000, "unlockDirect": 1, "fetchByShare": 1, "mainHorizon": 12, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "heroLossPause": 0, "scouts": 3, "collectorsRoam": 3}` | 24 | 10 | 3 | 0.650 ± 0.160 | -0.136 ± 0.191 | 0.607 ± 0.170 | -0.179 ± 0.211 | 24 |
+
+# Matrix test: 6 map categories, configs new, nZHS, nFMHS, nFZM, nUMH, nUZMS, nUFS, nUFZH, nPMS, nPZMH, nPFH, nPFZS, nPUHS, nPUZ, nPUFM, nPUFZMHS, seeds 58
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | new (games, score, decided) | nZHS (games, score, decided) | nFMHS (games, score, decided) | nFZM (games, score, decided) | nUMH (games, score, decided) | nUZMS (games, score, decided) | nUFS (games, score, decided) | nUFZH (games, score, decided) | nPMS (games, score, decided) | nPZMH (games, score, decided) | nPFH (games, score, decided) | nPFZS (games, score, decided) | nPUHS (games, score, decided) | nPUZ (games, score, decided) | nPUFM (games, score, decided) | nPUFZMHS (games, score, decided) | nZHS − new | nFMHS − new | nFZM − new | nUMH − new | nUZMS − new | nUFS − new | nUFZH − new | nPMS − new | nPZMH − new | nPFH − new | nPFZS − new | nPUHS − new | nPUZ − new | nPUFM − new | nPUFZMHS − new |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-land-2p | 24, 0.786 ± 0.123, 13 won 1 lost | 24, 0.692 ± 0.152, 12 won 4 lost | 24, 0.666 ± 0.155, 11 won 3 lost | 24, 0.680 ± 0.144, 11 won 2 lost | 24, 0.651 ± 0.167, 11 won 5 lost | 24, 0.705 ± 0.154, 13 won 3 lost | 24, 0.740 ± 0.156, 15 won 4 lost | 24, 0.686 ± 0.160, 12 won 4 lost | 24, 0.707 ± 0.142, 13 won 1 lost | 24, 0.592 ± 0.173, 11 won 5 lost | 24, 0.705 ± 0.130, 10 won 2 lost | 24, 0.748 ± 0.136, 14 won 2 lost | 24, 0.606 ± 0.176, 10 won 7 lost | 24, 0.716 ± 0.128, 11 won 2 lost | 24, 0.715 ± 0.171, 15 won 5 lost | 24, 0.650 ± 0.160, 10 won 3 lost | -0.094 ± 0.121 (24) | -0.121 ± 0.157 (24) | -0.106 ± 0.155 (24) | -0.136 ± 0.186 (24) | -0.081 ± 0.199 (24) | -0.047 ± 0.149 (24) | -0.100 ± 0.180 (24) | -0.080 ± 0.146 (24) | -0.195 ± 0.177 (24) | -0.081 ± 0.137 (24) | -0.038 ± 0.151 (24) | -0.180 ± 0.175 (24) | -0.070 ± 0.151 (24) | -0.071 ± 0.164 (24) | -0.136 ± 0.191 (24) |
+| **mean of categories** | 0.786 | 0.692 | 0.666 | 0.680 | 0.651 | 0.705 | 0.740 | 0.686 | 0.707 | 0.592 | 0.705 | 0.748 | 0.606 | 0.716 | 0.715 | 0.650 | -0.094 (all games: -0.094 ± 0.121) | -0.121 (all games: -0.121 ± 0.157) | -0.106 (all games: -0.106 ± 0.155) | -0.136 (all games: -0.136 ± 0.186) | -0.081 (all games: -0.081 ± 0.199) | -0.047 (all games: -0.047 ± 0.149) | -0.100 (all games: -0.100 ± 0.180) | -0.080 (all games: -0.080 ± 0.146) | -0.195 (all games: -0.195 ± 0.177) | -0.081 (all games: -0.081 ± 0.137) | -0.038 (all games: -0.038 ± 0.151) | -0.180 (all games: -0.180 ± 0.175) | -0.070 (all games: -0.070 ± 0.151) | -0.071 (all games: -0.071 ± 0.164) | -0.136 (all games: -0.136 ± 0.191) |
+
