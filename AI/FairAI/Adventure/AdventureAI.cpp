@@ -828,6 +828,28 @@ void AdventureAI::playTurn()
 		heroesLastTurn.insert(hero->id);
 	for(const auto * hero : perception.ownHeroes())
 		ownFactorSeen[hero->id.getNum()] = commanderFactor(hero); // (calibration) as the enemy will find it tonight
+	{
+		// (calibration) how far away the reach model has every enemy hero we know of from each of our
+		// heroes as the turn ends - against which the attacks of the coming night are measured
+		threatDistanceSeen.clear();
+		const auto knownNow = perception.knownObjects();
+		for(const auto & t : threats)
+		{
+			auto object = knownNow.find(t.hero);
+			if(object == knownNow.end() || object->second.type != Obj::HERO)
+				continue;
+			const int type = object->second.subtype.getNum();
+			for(const auto * hero : perception.ownHeroes())
+			{
+				const double distance = enemyDistance(t.hero, t.pos, t.strength, hero->visitablePos(), 60.0);
+				const int tenths = std::isfinite(distance) ? static_cast<int>(std::lround(distance * 10)) : 9999;
+				auto & slot = threatDistanceSeen[hero->id.getNum()];
+				auto had = slot.find(type);
+				if(had == slot.end() || tenths < had->second.first)
+					slot[type] = {tenths, t.age};
+			}
+		}
+	}
 
 	if(const char * dump = std::getenv("FAI_DUMP_MAP"))
 	{
@@ -3159,17 +3181,31 @@ void AdventureAI::updateThreats()
 				const double ownFactor = mine != ownFactorSeen.end() ? mine->second : -1;
 				const double theirFactor = seen != enemySightings.end() && seen->second.factor > 0 ? seen->second.factor : -1;
 				const double theirLost = 1.0 - std::clamp(outcome.remainingShare, 0.0, 1.0);
+				int64_t modelDistance = -1;
+				int64_t sightingAge = -1;
+				if(!outcome.weAttack)
+				{
+					if(auto mineSeen = threatDistanceSeen.find(outcome.ownHero); mineSeen != threatDistanceSeen.end())
+						if(auto it = mineSeen->second.find(outcome.hero); it != mineSeen->second.end())
+						{
+							modelDistance = it->second.first;
+							sightingAge = it->second.second;
+						}
+				}
 				fightNotes.push_back({static_cast<int64_t>(outcome.day), outcome.weAttack ? 1 : 0, outcome.siege ? 1 : 0,
 					static_cast<int64_t>(outcome.ownStrength), static_cast<int64_t>(std::lround(ownFactor * 100)),
 					static_cast<int64_t>(outcome.enemyStrength), static_cast<int64_t>(std::lround(theirFactor * 100)),
-					outcome.gone ? 1 : 0, static_cast<int64_t>(std::lround(outcome.ownLostShare * 100)), static_cast<int64_t>(std::lround(theirLost * 100))});
+					outcome.gone ? 1 : 0, static_cast<int64_t>(std::lround(outcome.ownLostShare * 100)), static_cast<int64_t>(std::lround(theirLost * 100)),
+					modelDistance, sightingAge});
 				const HeroTypeID type(outcome.hero);
-				logAi->info("FairAI %s day %d: hero battle on day %d (%s%s) against %s: our %.0f x %.2f, their %.0f x %.2f - model ratio %.2f - %s, we lost %.0f %%, they %.0f %%",
+				const std::string reach = outcome.weAttack ? std::string() : (modelDistance < 0 ? std::string("; it was not among the threats we knew")
+					: boost::str(boost::format("; our reach model had it %.1f tiles away (sighting %d day(s) old)") % (modelDistance / 10.0) % sightingAge));
+				logAi->info("FairAI %s day %d: hero battle on day %d (%s%s) against %s: our %.0f x %.2f, their %.0f x %.2f - model ratio %.2f - %s, we lost %.0f %%, they %.0f %%%s",
 					me.toString(), today, outcome.day, outcome.weAttack ? "we attack" : "we are attacked", outcome.siege ? ", at the walls" : "",
 					type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?"),
 					outcome.ownStrength, ownFactor, outcome.enemyStrength, theirFactor,
 					ownFactor > 0 && theirFactor > 0 ? outcome.ownStrength * ownFactor / (outcome.enemyStrength * theirFactor) : -1.0,
-					outcome.gone ? "won" : "lost", outcome.ownLostShare * 100, theirLost * 100);
+					outcome.gone ? "won" : "lost", outcome.ownLostShare * 100, theirLost * 100, reach);
 			}
 			if(outcome.gone)
 			{

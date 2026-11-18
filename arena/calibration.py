@@ -31,6 +31,7 @@ def main() -> int:
     ap.add_argument("--walls", type=float, default=1.5)
     args = ap.parse_args()
     rows = collections.defaultdict(list)
+    reach = collections.defaultdict(list)
     games = unseen = 0
     for folder in args.folders:
         for results in sorted(folder.rglob("results.jsonl")):
@@ -44,7 +45,10 @@ def main() -> int:
                     if fights is None:
                         continue
                     games += 1
-                    for day, attack, siege, own, own_factor, their, their_factor, won, own_lost, their_lost in fights:
+                    for fight in fights:
+                        day, attack, siege, own, own_factor, their, their_factor, won, own_lost, their_lost = fight[:10]
+                        if not attack and own >= args.min and len(fight) > 11:
+                            reach[("at the walls" if siege else "open field")].append((fight[10], fight[11], won, own * own_lost / 100.0))
                         if min(own, their) < args.min:
                             continue
                         if own_factor <= 0 or their_factor <= 0:
@@ -70,6 +74,17 @@ def main() -> int:
                 continue
             label = f"{low:.2f} - {high:.2f}" if high < 1e8 else f"over {low:.2f}"
             print(f"| {label} | {len(part)} | {100 * sum(b[1] for b in part) / len(part):.0f} % | {sum(b[2] for b in part) / len(part):.0f} % | {sum(b[3] for b in part) / len(part):.0f} % |")
+    # attacks on our armies: how far away the reach model had the attacker when our last turn ended
+    steps = [(-2, 0, "not among the threats we knew"), (0, 80, "up to 8 tiles"), (80, 120, "8 - 12"), (120, 160, "12 - 16"), (160, 200, "16 - 20"),
+             (200, 240, "20 - 24"), (240, 320, "24 - 32"), (320, 601, "32 - 60"), (601, 100000, "over 60")]
+    for where, attacks in sorted(reach.items()):
+        print(f"\nattacks on our armies of {args.min:.0f} or more, {where}: {len(attacks)} - where our reach model had the attacker the evening before")
+        print("| model distance | attacks | share | held | army lost, thousands |")
+        print("|---|---|---|---|---|")
+        for low, high, label in steps:
+            part = [a for a in attacks if low <= a[0] < high]
+            if part:
+                print(f"| {label} | {len(part)} | {100 * len(part) / len(attacks):.0f} % | {100 * sum(a[2] for a in part) / len(part):.0f} % | {sum(a[3] for a in part) / 1000:.0f} |")
     return 0
 
 

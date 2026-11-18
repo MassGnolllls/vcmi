@@ -379,7 +379,11 @@ private:
 	/// fought, and how it ended - for the test bench (statistics file, key "fights") and the log; never
 	/// used for a decision. One entry: day, we attack, siege, our army, our hero's factor x 100, their
 	/// army, the factor we gave their hero x 100 (-1: never seen before), won, our loss in per cent, theirs.
-	std::vector<std::array<int64_t, 10>> fightNotes;
+	/// And for attacks on us: how far away our reach model had that hero when our last turn ended, in
+	/// tenths of a tile (-1: not among the threats we knew, 9999: further than 60 tiles), and the age
+	/// of the sighting in days - what the model said the night before the enemy proved it could reach us.
+	std::vector<std::array<int64_t, 12>> fightNotes;
+	std::map<int, std::map<int, std::pair<int, int>>> threatDistanceSeen; ///< (calibration) own hero (object id) -> enemy hero type -> (model distance x 10 at our last turn end, age of the sighting)
 	std::map<int, double> ownFactorSeen; ///< (calibration) own hero (object id) -> its commander factor when last looked at
 	std::map<int, int> defeatedDay;             ///< hero type -> day we beat it
 	int decisiveVictoryDay = -1;                ///< the day we beat what was the strongest enemy army we knew of
