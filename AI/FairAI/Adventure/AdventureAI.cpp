@@ -7,6 +7,8 @@
  */
 #include "StdInc.h"
 #include "AdventureAI.h"
+#include <cstdio>
+#include <fstream>
 #include "../Combat/CombatSim.h"
 
 #include "../FairAI.h"
@@ -375,6 +377,9 @@ AdventureAI::AdventureAI(FairAIGateway & gateway, std::shared_ptr<CCallback> cb,
 	, me(me)
 {
 	params.loadOverrides(me.getNum());
+	statsFile = std::getenv("FAI_STATS"); // the test bench asks for statistics of this game
+	if(statsFile && !*statsFile)
+		statsFile = nullptr;
 	Combat::setMultiHex(params.simMultiHex != 0); // the forecasts of the adventure AI use the same simulator
 	Combat::setAfterHit(params.simAfterHit != 0);
 }
@@ -619,7 +624,7 @@ void AdventureAI::playTurn()
 		}
 		townGainedDay = std::move(now);
 	}
-	if(params.breakout)
+	if(params.breakout || statsFile)
 	{
 		// (breakout) how much of the map we have uncovered, day by day
 		const int3 size = cb->getMapSize();
@@ -820,6 +825,97 @@ void AdventureAI::playTurn()
 		cb->getResourceAmount(GameResID::GOLD), static_cast<int>(perception.ownHeroes().size()), static_cast<int>(perception.ownTowns().size()),
 		main ? main->getNameTranslated() : "-", main ? static_cast<int>(main->getArmyStrength()) : 0, mines,
 		cb->getResourceAmount(GameResID::WOOD), cb->getResourceAmount(GameResID::ORE));
+	if(statsFile)
+		closeStatsDay();
+}
+
+int AdventureAI::phaseOf(int day)
+{
+	// four-week phases: 0 = days 1 to 28, 1 = 29 to 56, ...; everything from day 197 on is phase 7
+	return std::clamp((day - 1) / 28, 0, 7);
+}
+
+void AdventureAI::noteStep(const Target & best)
+{
+	// what the main hero is walking to, in a few kinds (statistics for the test bench only)
+	const std::string & d = best.description;
+	std::string kind = "object";
+	if(d == "explore" || d == "approach")
+		kind = "explore";
+	else if(d == "monster")
+		kind = "monster";
+	else if(d.rfind("bank", 0) == 0)
+		kind = "bank";
+	else if(d == "retreat" || d == "flee" || d == "home" || d == "aside" || d == "way out" || d == "fortress" || d == "evacuate" || d == "relocate")
+		kind = "safety";
+	else if(best.object.hasValue())
+	{
+		const auto known = perception.knownObjects();
+		auto it = known.find(best.object);
+		if(it != known.end() && it->second.type == Obj::TOWN)
+			kind = it->second.owner == me ? "ownTown" : "foreignTown";
+		else if(it != known.end() && it->second.type == Obj::HERO)
+			kind = it->second.owner == me ? "ownHero" : "enemyHero";
+	}
+	++mainStepsToday[kind];
+}
+
+void AdventureAI::closeStatsDay()
+{
+	// One more day of the game, booked by phase: what the main hero spent it on (the kind most of
+	// its steps went to), whether exploring has stalled, how many heroes lead or hold a town's
+	// troops, what lies idle. Written out after every turn - the test bench reads the last state.
+	auto & phase = stats[phaseOf(today)];
+	phase["days"] += 1;
+	std::string most = "none";
+	int steps = 0;
+	for(const auto & [kind, count] : mainStepsToday)
+	{
+		if(count > steps)
+		{
+			steps = count;
+			most = kind;
+		}
+	}
+	phase["main." + most] += 1;
+	mainStepsToday.clear();
+	const CGHeroInstance * main = ownHero(mainHero);
+	if(main && main->getVisitedTown() && main->getVisitedTown()->tempOwner == me)
+		phase["mainEndsInOwnTown"] += 1;
+	if(exploringStalled())
+		phase["stalled"] += 1;
+	int heavyHeroes = 0;
+	for(const auto * hero : perception.ownHeroes())
+		heavyHeroes += heavy(hero) ? 1 : 0;
+	phase["leaders"] += static_cast<double>(secondLeaders.size());
+	phase["heavy"] += heavyHeroes;
+	phase["campaign"] += campaignMode ? 1 : 0;
+	phase["gold"] += cb->getResourceAmount(GameResID::GOLD);
+
+	std::string text = "{";
+	bool firstPhase = true;
+	for(const auto & [index, figures] : stats)
+	{
+		text += std::string(firstPhase ? "" : ",") + "\"" + std::to_string(index) + "\":{";
+		firstPhase = false;
+		bool first = true;
+		for(const auto & [name, value] : figures)
+		{
+			text += std::string(first ? "" : ",") + "\"" + name + "\":" + boost::str(boost::format("%.0f") % value);
+			first = false;
+		}
+		text += "}";
+	}
+	text += "}";
+	const std::string path = std::string(statsFile) + "-" + me.toString() + ".json";
+	const std::string tmp = path + ".tmp";
+	{
+		std::ofstream out(tmp, std::ios::trunc);
+		if(!out)
+			return;
+		out << text;
+	}
+	std::rename(tmp.c_str(), path.c_str()); // the game may end at any moment: never a half-written file
 }
 
 void AdventureAI::playHero(ObjectInstanceID heroId)
@@ -1100,6 +1196,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 
 		logAi->debug("FairAI %s: %s -> %s %s value %.0f loss %.0f travel %.2f score %.0f", me.toString(), hero->getNameTranslated(),
 			best.description, best.tile.toString(), best.value, best.loss, best.travel, best.score);
+		if(statsFile && isMain(hero))
+			noteStep(best);
 
 		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside" || best.description == "way out"
 			|| best.description == "fortress";
@@ -7678,7 +7776,7 @@ void AdventureAI::manageTowns(bool endOfTurn)
 			upgradeArmy(town->getUpperArmy());
 			mergeDuplicates(town->getUpperArmy());
 		}
-		if(endOfTurn && logAi->isDebugEnabled())
+		if(endOfTurn && (logAi->isDebugEnabled() || statsFile))
 		{
 			// what stays unbought at the end of the day, and what stands in the way
 			std::string left;
@@ -7698,11 +7796,14 @@ void AdventureAI::manageTowns(bool endOfTurn)
 					if(cost > 0 && available[res] < cost)
 						why += " no " + res.toResource()->getJsonKey();
 				}
-				if(!town->getUpperArmy()->getSlotFor(type->getId()).validSlot())
+				const bool noSlot = !town->getUpperArmy()->getSlotFor(type->getId()).validSlot();
+				if(statsFile)
+					stats[phaseOf(today)][noSlot ? "unboughtNoSlot" : (why.empty() ? "unboughtOther" : "unboughtNoGold")] += static_cast<double>(entry.first) * type->getRecruitCost(GameResID::GOLD);
+				if(noSlot)
 					why += " no slot";
 				left += boost::str(boost::format(" %d %s%s;") % entry.first % type->getJsonKey() % why);
 			}
-			if(!left.empty())
+			if(!left.empty() && logAi->isDebugEnabled())
 			{
 				std::string holds;
 				for(const auto & [slot, stack] : town->getUpperArmy()->Slots())

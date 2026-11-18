@@ -293,6 +293,14 @@ private:
 	std::map<ObjectInstanceID, uint16_t> entryMasks;
 	/// fortification level of towns (visible on the map), remembered while we see them
 	std::map<ObjectInstanceID, int> townFortLevel;
+	// statistics for the test bench (environment variable FAI_STATS = path prefix): what the main hero
+	// spends its days on and what lies idle, by four-week phase. Never read by the AI itself.
+	const char * statsFile = nullptr;
+	std::map<std::string, int> mainStepsToday;
+	std::map<int, std::map<std::string, double>> stats;
+	static int phaseOf(int day);
+	void noteStep(const Target & best);
+	void closeStatsDay();
 	int breakoutLogDay = -1;
 	std::map<int, int> seenTilesOn; ///< (breakout) tiles of the map uncovered at the start of each of our days
 	int mapTiles = 0;

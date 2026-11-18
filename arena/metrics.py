@@ -39,6 +39,13 @@ COLORS = ["red", "blue", "tan", "green", "orange", "purple", "teal", "pink"]
 COLUMNS = ["army", "towns", "heroes", "income", "mines", "explored", "level", "gold", "dwellings", "guardFights", "guardLosses", "mainArmy", "garrisons"]
 FIGURES = ["score", "won", "lost", "t42", "t84", "et84", "main84", "garr84", "gold84", "heroes84", "expl42", "gain", "loss", "free", "gdef", "caught", "gkill", "days"]
 THOUSANDS = {"main84", "garr84", "gold84"}
+# What FairAI's main hero spent its days on (results written by clients built after 18.11.2026 08:55 carry
+# these statistics, by four-week phase): share of the days 29 to 84 by the kind most of its steps went to -
+# own town (fetching troops), own hero, chasing an enemy hero, a foreign town, exploring, fighting guards or
+# banks, other objects, safety moves, nothing -, share of days 29 to 112 on which exploring had stalled,
+# heroes leading a second army and heroes holding a town's troops (mean per day, days 29 to 112), and the
+# gold value of creatures left unbought per day (days 57 to 140) for want of a slot or of gold.
+BEHAVIOUR = ["mOwnTown", "mOwnHero", "mChase", "mTown", "mExplore", "mFight", "mObject", "mSafety", "mNone", "stall", "leaders", "heavy", "noSlot", "noGold"]
 
 
 def read_configs(folder: Path) -> dict:
@@ -108,7 +115,30 @@ def figures(record):
             else:
                 caught += dlost
     battles = (result.get("battles") or {}).get(me) or {}
+    behaviour = {}
+    own = (record.get("fairai") or {}).get(me)
+    if own:
+        def total(name, phases):
+            return sum((own.get(str(p)) or {}).get(name, 0) for p in phases)
+
+        def per_day(name, phases):
+            days = total("days", phases)
+            return total(name, phases) / days if days else None
+
+        middle, longer, late = (1, 2), (1, 2, 3), (2, 3, 4)
+        kinds = {"mOwnTown": ["main.ownTown"], "mOwnHero": ["main.ownHero"], "mChase": ["main.enemyHero"], "mTown": ["main.foreignTown"],
+                 "mExplore": ["main.explore"], "mFight": ["main.monster", "main.bank"], "mObject": ["main.object"], "mSafety": ["main.safety"],
+                 "mNone": ["main.none"]}
+        if total("days", middle):
+            for name, parts in kinds.items():
+                behaviour[name] = sum(total(part, middle) for part in parts) / total("days", middle)
+        for name, source, phases in (("stall", "stalled", longer), ("leaders", "leaders", longer), ("heavy", "heavy", longer),
+                                     ("noSlot", "unboughtNoSlot", late), ("noGold", "unboughtNoGold", late)):
+            value = per_day(source, phases)
+            if value is not None:
+                behaviour[name] = value
     return {
+        "behaviour": behaviour,
         "score": 1.0 if won else (0.0 if lost else 0.5), "won": 1.0 if won else 0.0, "lost": 1.0 if lost else 0.0,
         "t42": at(result, me, 42, "towns"), "t84": at(result, me, 84, "towns"), "et84": at(result, enemy, 84, "towns"),
         "main84": at(result, me, 84, "mainArmy"), "garr84": at(result, me, 84, "garrisons"), "gold84": at(result, me, 84, "gold"),
@@ -152,7 +182,56 @@ def fmt(name, value):
         return f"{value:.0f}k"
     if name in ("days", "expl42"):
         return f"{value:.0f}"
+    if name in ("noSlot", "noGold"):
+        return f"{value / 1000:.1f}k"
     return f"{value:.2f}"
+
+
+def behaviour_tables(games, params, factors):
+    """the same two tables for FairAI's own statistics, over the games that carry them"""
+    rows_of = {name: [r["behaviour"] for r in rows.values() if r.get("behaviour")] for name, rows in games.items()}
+    if not any(rows_of.values()):
+        return
+
+    def mean(rows, f):
+        values = [r[f] for r in rows if f in r]
+        return statistics.mean(values) if values else None
+
+    print("\nWhat the main hero did (share of days 29-84 by kind), days stalled (29-112), heroes leading / holding a town (per day), unbought gold value per day (57-140):\n")
+    print("| config | games | " + " | ".join(BEHAVIOUR) + " |")
+    print("|---|---|" + "---|" * len(BEHAVIOUR))
+    for name in sorted(games):
+        rows = rows_of[name]
+        if rows:
+            print(f"| {name} | {len(rows)} | " + " | ".join("-" if mean(rows, f) is None else fmt(f, mean(rows, f)) for f in BEHAVIOUR) + " |")
+    if not factors:
+        return
+
+    def is_on(config, wanted):
+        return all(params[config].get(k) == v for k, v in wanted.items())
+
+    print("\n| switch | games on/off | " + " | ".join(BEHAVIOUR) + " |")
+    print("|---|---|" + "---|" * len(BEHAVIOUR))
+    for factor, wanted in factors.items():
+        on = [r for c in games if is_on(c, wanted) for r in rows_of[c]]
+        off = [r for c in games if not is_on(c, wanted) for r in rows_of[c]]
+        if not on or not off:
+            continue
+        cells = []
+        for f in BEHAVIOUR:
+            a = [r[f] for r in on if f in r]
+            b = [r[f] for r in off if f in r]
+            if len(a) < 2 or len(b) < 2:
+                cells.append("-")
+                continue
+            effect = statistics.mean(a) - statistics.mean(b)
+            half = 1.96 * math.sqrt(statistics.pvariance(a) / len(a) + statistics.pvariance(b) / len(b))
+            mark = "**" if abs(effect) > half and half > 0 else ""
+            if f in ("noSlot", "noGold"):
+                cells.append(f"{mark}{effect / 1000:+.1f}k ±{half / 1000:.1f}{mark}")
+            else:
+                cells.append(f"{mark}{effect:+.2f} ±{half:.2f}{mark}")
+        print(f"| {factor} | {len(on)}/{len(off)} | " + " | ".join(cells) + " |")
 
 
 def main() -> int:
@@ -173,6 +252,7 @@ def main() -> int:
         print(f"| {name} | {len(rows)} | " + " | ".join(fmt(f, statistics.mean(r[f] for r in rows)) for f in FIGURES) + " |")
 
     if not args.factors:
+        behaviour_tables(games, params, None)
         return 0
     factors = json.loads(args.factors)
     missing = [name for name in games if name not in params]
@@ -220,6 +300,7 @@ def main() -> int:
             mark = "**" if abs(effect) > half and half > 0 else ""
             cells.append(f"{mark}{effect / scale:+.{digits}f}{unit} ±{half / scale:.{digits}f}{mark}")
         print(f"| {factor} | {n_on}/{n_off} | " + " | ".join(cells) + " |")
+    behaviour_tables(games, params, factors)
     return 0
 
 

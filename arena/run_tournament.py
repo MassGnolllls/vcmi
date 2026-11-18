@@ -213,6 +213,9 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
         config_home = make_config_home(getattr(args, "mods", ""), os.environ.get("ARENA_AI_LOG"))
         env = client_env(config_home, args.client)
 
+    # FairAI writes what its main hero spent the days on (and the like) next to the logs; see below
+    env["FAI_STATS"] = str(log_dir / "fairai")
+
     port = args.base_port + match_id % 1000
     if battle_mode:
         # FairAI drives the (trivial) adventure part and hands each side's battle to the requested combat AI
@@ -262,6 +265,12 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
         record["returncode"] = proc.returncode
         if result_file.exists():
             record["result"] = json.loads(result_file.read_text())
+            # statistics of FairAI's own play, by colour and four-week phase (kept with the result: the logs go)
+            for stats in sorted(log_dir.glob("fairai-*.json")):
+                try:
+                    record.setdefault("fairai", {})[stats.stem[len("fairai-"):]] = json.loads(stats.read_text())
+                except (OSError, ValueError):
+                    pass
         else:
             record["error"] = "no result file"
             (log_dir / "stdout.txt").write_text(proc.stdout[-200000:])
