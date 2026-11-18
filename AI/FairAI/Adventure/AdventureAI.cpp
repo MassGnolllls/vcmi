@@ -343,6 +343,7 @@ void Params::loadOverrides(int playerIndex)
 	read("surrenderMinArmy", surrenderMinArmy);
 	read("nightWatch", nightWatch);
 	read("boldBehind", boldBehind);
+	read("gather", gather);
 	read("primaryByArmy", primaryByArmy);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
@@ -4844,16 +4845,31 @@ double AdventureAI::reinforcementBoost(double troops) const
 	if(!leader)
 		return 1.0;
 	const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+	// (gather) Troops that turn a battle we would not take into one we would - against the strongest
+	// enemy hero seen in the last three weeks - are worth more than their size: they are what the
+	// decisive battle waits for. Counted while our leader is within reach of the edge it asks for
+	// (from half the enemy's strength on): three times their value when they carry it over the edge,
+	// in between by the share of the gap they close.
+	double decisive = 0;
+	if(params.gather && oppositionHeroes > 0 && troops > 0)
+	{
+		const double own = fieldStrength(leader);
+		const double now = own / oppositionHeroes;
+		const double then = (own + troops * commanderFactor(leader)) / oppositionHeroes;
+		const double edge = heroEdgeNow();
+		if(now >= 0.5 && now < edge)
+			decisive = 1.0 + 2.0 * std::clamp((then - now) / (edge - now), 0.0, 1.0);
+	}
 	if(params.fetchByShare)
 	{
 		// Troops waiting in a town do not run away: fetching them only brings their use forward. A
 		// trickle (a few per cent of the army) is not worth a trip - it would keep the hero circling
 		// its town; a week's growth that makes the army half as big again is.
-		return std::clamp(troops / (params.fetchShare * army), 0.1, 1.5);
+		return std::max(decisive, std::clamp(troops / (params.fetchShare * army), 0.1, 1.5));
 	}
 	if(!params.couriers)
-		return 1.0;
-	return 1.0 + std::min(2.0, troops / army);
+		return std::max(decisive, 1.0);
+	return std::max(decisive, 1.0 + std::min(2.0, troops / army));
 }
 
 double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const
