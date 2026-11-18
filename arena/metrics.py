@@ -156,7 +156,8 @@ def figures(record):
                                      ("noSlot", "unboughtNoSlot", late), ("noGold", "unboughtNoGold", late), ("watch", "nightWatch", (1, 2, 3, 4)),
                                      ("edge10", "edge10", (1, 2, 3, 4)), ("edge08", "edge08", (1, 2, 3, 4)), ("deficit", "townDeficit", (1, 2, 3)),
                                      ("vetBack", "veteranBack", (1, 2, 3, 4)), ("wayOut", "wayOut", (0, 1, 2, 3)), ("door", "door", (0, 1, 2, 3)), ("muster", "muster", (1, 2, 3, 4)), ("eTowns", "enemyTowns", (1, 2)), ("noOpp", "noOpposition", (1, 2)), ("twice", "twice", (1, 2)), ("ahead", "ahead", (1, 2)), ("behind", "behind", (1, 2)), ("supply", "supplyRun", (0, 1, 2, 3)), ("called", "courierCalled", (0, 1, 2, 3)), ("hired", "courierHired", (0, 1, 2, 3)),
-                                     ("way", "madeWay", (0, 1, 2, 3)), ("far", "fetchFar", (1, 2, 3, 4))):
+                                     ("way", "madeWay", (0, 1, 2, 3)), ("far", "fetchFar", (1, 2, 3, 4)),
+                                     ("saving", "savingDays", (0, 1)), ("sold", "soldForGold", (0, 1, 2, 3)), ("tower", "towerGuard", (0, 1, 2, 3))):
             value = per_day(source, phases)
             if value is not None:
                 behaviour[name] = value

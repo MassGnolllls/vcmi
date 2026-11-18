@@ -11,7 +11,7 @@ FairAI als fertig gilt, wird jeder Punkt hier einzeln abgehakt.
 - Was die KI heute tatsächlich kann, steht in `README.md`; Messungen und Reihenfolge stehen in der
   Roadmap des Projekts.
 
-Letzte Änderung: 17.11.2026
+Letzte Änderung: 18.11.2026
 
 ---
 
@@ -51,6 +51,8 @@ Letzte Änderung: 17.11.2026
 | K8 | Wirksamkeit der eigenen Armee **gegen die konkrete gegnerische Armee** beurteilen, nicht nur Zahlen vergleichen. | 17.11. | teilweise (Heldenkämpfe nach Armeewert mal Heldenwert; Simulation als Schalter) |
 | K9 | Belagerungen selbst spielen. | 16.11. | offen (17.11. gemessen: Belagerungen kosten die Hauptarmee 88.000 pro Partie; rund 70 % der Verluste machen die Türme, und Läuferarmeen brauchen 7 bis 13 Runden statt 2 bis 3 mit vielen Fliegern, weil sie auf das Katapult warten) |
 | K10 | **Ausnahmen der Fähigkeiten kennen.** Beispiel: Der Lebensraub der Vampirfürsten wirkt nicht gegen Elementare und andere nicht-lebende Kreaturen. | 17.11. | teilweise (im Kampfsimulator erfüllt: Lebensraub nur aus Schaden an Lebenden nach der Regel des Spiels – keine Untoten, Elementare, Golems, Gargoyles, Maschinen. Die Gargoyles fehlten bis 17.11. in dieser Ausnahme und sind nachgetragen. Im Einheiten-Labor geprüft: Vampirfürsten heilen gegen Oger wie vorhergesagt, gegen Erdelementare und Obsidian-Gargoyles gar nicht. Die Entscheidung vor dem Kampf nutzt den Simulator für Kartenwachen noch nicht im Standard, siehe K4) |
+| K11 | **Kämpfe gegen neutrale Wachen verlustfrei gewinnen, wenn es einen Weg gibt:** vor dem Kampf durchrechnen, wie er mit Schützen, vielen 1er-Stacks und defensivem Spiel ohne Verluste zu gewinnen ist – oder so, dass nur ein, zwei 1er-Stacks fallen. | 18.11. | offen (die Kampf-KI rechnet jede Aktion drei Runden voraus, hat aber keinen Plan über mehrere Einheiten; in der ersten Partie des Nutzers verlor FairAI in vier Wachenkämpfen 5.866 von 12.609 Armeewert, der Nutzer in 13 Kämpfen fast nichts. Ein Baustein, der Einzelkreaturen abspaltet, liegt als Schalter `baitStacks` bereit, wird im Kampf aber nicht planvoll genutzt) |
+| K12 | **1er-Stacks des Gegners erkennen:** nicht mit einem wertvollen Trupp einen einzelnen Zentauren angreifen, während die Schützen dahinter weiterschießen. | 18.11. (eigener Befund aus der Partie des Nutzers) | offen (Tag 25: 20.321 gegen 10.135 gewonnen, aber mit 43 % Verlust; 15 Großelfen schossen vier Salven, bevor unsere Truppen zuschlugen) |
 
 ## Armeezusammenstellung
 
@@ -81,12 +83,15 @@ Letzte Änderung: 17.11.2026
 | M6 | **Abenteuerzauber selbst nutzen:** Dimensionstor, Fliegen, Wasserwandeln, Stadtportal, Boot rufen und versenken, Visionen, Luft- und Erdsicht, Täuschung. | 16.11. | teilweise (Fliegen und Wasserwandeln; der Rest offen) |
 | M7 | Bei **feindlichen Helden einplanen**, dass sie solche Zauber haben können. | 16.11. | offen |
 | M8 | **Täuschung (Disguise) erkennen:** Sie verfälscht die angezeigte Armee. Ein Mensch merkt das meist; FairAI soll solche Armeen als verdächtig einstufen. | 16.11. | offen |
+| M9 | **Alle Zauber des Spiels benutzen können** – im Kampf auch die, die einen Plan brauchen (Teleport, Kraftfeld, Treibsand, Klonen, Opfer, Berserker, Blenden und stehen lassen, Wiederbelebung am Kampfende), auf der Karte alle Abenteuerzauber. | 18.11. | teilweise (Kampf: Die Zauberwahl rechnet jeden Zauber durch, das trägt bei Schadenszaubern und einfachen Segen und Flüchen; Karte: nur Fliegen und Wasserwandeln, siehe M6) |
 
 ## Wirtschaft
 
 | Nr. | Anforderung | Seit | Stand |
 |---|---|---|---|
 | W1 | **Ressourcen vorausschauend:** Minen der Ressource bevorzugen, die die eigene Fraktion brauchen wird. Beispiele: Edelsteine für Castle, Kristalle für Rampart. | 16.11. | im Test (Schalter `resourcePlan`; einfacher Bedarfsfaktor ist Standard) |
+| W2 | **Kapitol früh bauen, dafür sparen.** In der ersten Partie des Nutzers war die Burg (Voraussetzung fürs Kapitol) von Tag 9 bis Tag 36 das beste Gebäude und wurde nie gebaut, weil jeden Tag das nächstbeste bezahlbare Gebäude oder Truppen das Gold nahmen: 2.000 Gold am Tag gegen 4.000 des Nutzers ab Tag 14. | 18.11. (Befund aus der Partie des Nutzers) | im Test (Schalter `saveFor`: Für eine Halle oder was eine Halle braucht wird der Preis zurückgelegt; überschüssige Rohstoffe werden dafür verkauft, wenn das Gebäude damit heute bezahlt ist. In 16 Probepartien steht das Kapitol an Tag 12 bis 19 statt an Tag 13 bis 36) |
+| W3 | **Wer den Gegner kommen sieht, rekrutiert.** „Obwohl sie mich kommen sah, hat sie wenige Einheiten in ihrer Burg rekrutiert … in ihrer Burg konnten sehr viele rekrutiert werden, als ich sie einnahm.“ Ungekaufte Kreaturen gehören dem Eroberer. | 18.11. | im Test (Schalter `threatSpend`: Eine Stadt, vor der ein überlegener Held gesehen wurde, baut nur noch Mauern und was die wartenden Truppen bezahlt lässt; Rohstoffe werden für Truppen verkauft. Die Ursache in der Partie war aber W2: Kreaturen für 24.425 Gold lagen bei 20 Gold in der Kasse) |
 
 ## Gebäude und Orte auf der Karte
 
@@ -121,6 +126,11 @@ Letzte Änderung: 17.11.2026
 | S10 | **Eine verlorene Armee freikaufen, wenn Gold übrig ist.** Kapitulation kostet den Rekrutierungspreis der Armee; der Held wartet mit ihr bis zum Wochenende in der Taverne. | 18.11. (eigener Befund) | im Test (Schalter `surrender` Stufe 2: nur echte Armeen, nur mit Gold, das nach dem Kauf aller wartenden Truppen übrig bleibt, nie am letzten Wochentag ohne eigenen Zug, und das Tor wird für den Rückkehrer frei gemacht – in der ersten Probepartie waren beide Städte besetzt und 66.000 Gold verfielen) |
 | S11 | **Der beste Held führt die Armee.** Der Hauptheld flieht aus einer verlorenen Schlacht mit Stufe, Zaubern und Artefakten und wartet bis zum Wochenende in der Taverne. Bisher holte ihn niemand zurück: Die Truppen daheim führte, wer gerade die meisten hielt – ein Held der Stufe 1 (in einer Partie verlor so einer 173.000 gegen 222.000, der Gegner verlor 4.000; sein Vorgänger der Stufe 12 saß in der Taverne). | 18.11. (eigener Befund) | **Standard seit 18.11.** (`veterans` 2, seltene Lage, in gestellten Partien geprüft – `FAI_TEST_FLEE`): Ein erfahrener Held aus der Taverne wird sofort angeheuert, wenn er klar der bessere Anführer ist (niemand führt, oder fünf Stufen über dem jetzigen und ein Zehntel mehr wert für die Armee) – dort, wo die meisten Truppen stehen; er übernimmt sie und führt eine Woche lang unangefochten, während der Rest zu ihm gebracht wird |
 | S12 | **Zurückliegen heißt: die Schlacht suchen.** In verlorenen Partien war unsere Hauptarmee bis Tag 84 die größere und wurde nie eingesetzt; wir schlagen große gegnerische Armeen erst bei 3,5-facher Überlegenheit, der Gegner unsere bei 1,6-facher. | 18.11. (eigener Befund) | im Test (Schalter `boldBehind`: Für jede Stadt, die der Gegner mehr hält – Diebesgilde und gesehene Städte –, sinkt der verlangte Vorsprung gegen einen Gegnerhelden um ein Zehntel, von 1,3 bis 1,05. Zählwerk dazu: Tage, an denen ein mindestens gleich starker Gegnerheld in Tagesreichweite stand und nicht angegriffen wurde) |
+| S13 | **Die letzte Burg nicht mit dem letzten Helden verlassen**, sondern den Heimvorteil nutzen. | 18.11. | offen (in der Partie zog der letzte Held mit 17.203 an Tag 31 los, um die zweite Stadt zurückzuholen; in der Hauptstadt blieben 5.763 und ungekaufte Kreaturen im Wert von rund 40.000 – zusammen wären es rund 60.000 hinter Mauern gegen 67.000 gewesen) |
+| S14 | **Keine Stadt mit Türmen leer lassen:** „zumindest 1 Tier-1-Einheit wäre eine gute Idee gewesen, da so die 3 Türme einmal angreifen können.“ | 18.11. | im Test (Schalter `towerGuard`: In einer Stadt mit Zitadelle oder Burg wird die billigste Kreatur gekauft, und ein Held, der die Truppen mitnimmt, lässt eine Kreatur zurück. Ein Fort allein hat keine Türme) |
+| S15 | **Die 7-Tage-Regel berücksichtigen:** Ohne Stadt ist das Spiel nach sieben Tagen verloren. | 18.11. | teilweise (ohne Stadt zählt jede Stadt „alles“; in der Partie pendelte der letzte Held trotzdem fünf Tage durch ein Tor, statt eine der beiden Städte anzugreifen – Ursache offen) |
+| S16 | **Skelettfarm:** viele verlustarme Kämpfe für die Nekromantie, Skelettwandler nutzen. | 18.11. | offen (Nekromantie zählt als Fähigkeit, Skelette fallen nebenbei an) |
+| S17 | **Dämonenfarm:** bewusst schwache Stufe-1-Einheiten im Kampf opfern, um sie mit den Grubenlords als Dämonen wiederzubeleben. Dazu: Futter nach Trefferpunkten pro Gold einkaufen, passende schwache Wachen als Farmkämpfe aussuchen, den letzten Gegner stehen lassen, bis alle Grubenlords gezaubert haben. | 18.11. | offen |
 
 ---
 
@@ -181,3 +191,29 @@ Damit beim Umsetzen nichts verloren geht, hier die Kernsätze im Wortlaut:
 
 Die Punkte vom 15. und 16.11. sind oben sinngemäß eingetragen (Quelle: Gesprächsnotizen und Roadmap
 des Projekts). Fehlt etwas oder ist etwas falsch wiedergegeben, wird es hier nachgetragen.
+
+## Wörtliche Anmerkungen des Nutzers vom 18.11.2026 (nach seiner ersten Partie gegen FairAI)
+
+> „obwohl sie mich kommen sah, hat sie wenige einheiten in ihrer burg rekrutiert. sie ist außerdem
+> mit ihrem letzten helden aus ihrer letzten burg geflohen statt in ihr zu bleiben und den
+> heimvorteil zu nützen. generell hatte sie das ganze spiel über wenige einheiten und in ihrer burg
+> konnten sehr viele rekrutiert werden als ich sie einnahm. ich konnte sie auch ohne kampf einnehmen,
+> da sie keine einheiten zur verteidigung zurückgelassen hat. zumindest 1 tier 1 einheit wäre eine
+> gute idee gewesen, da so die 3 türme einmal angreifen können."
+
+> „außerdem habe ich den eindruck, dass sie bei kämpfen gegen neutrale einheiten nicht durchrechnet,
+> wie sie diese mithilfe ihrer bogenschützen, vielen 1er stacks an einheiten und defensiv spielen
+> gewinnen kann ohne verluste zu erleiden oder nur 1-2 1er stacks dabei verliert."
+
+> „es könnte auch sein, dass die KI noch nicht berücksichtigt, dass sie nach 7 tagen ohne burg
+> automatisch verliert."
+
+> „aber sachen wie demon- und skelettfarmen, bessere battle AI die kämpfe verlustfrei gewinnen kann
+> wenn es einen weg gibt und das verwenden aller zauber kommt noch, oder?"
+
+> „bei demonfarming opfert man bewusst schwache tier 1 einheiten im kampf, um sie als dämonen
+> wiederzubeleben"
+
+Die Partie (Zufallskarte, 1 gegen 1, 36 Tage, FairAI mit Conflux) ist ausgewertet in der Roadmap des
+Projekts, Abschnitt „Erste Partie des Nutzers“.
+

@@ -329,6 +329,11 @@ void Params::loadOverrides(int playerIndex)
 	read("boatGuards", boatGuards);
 	read("breakoutLoss", breakoutLoss);
 	read("idleBuild", idleBuild);
+	read("saveFor", saveFor);
+	read("saveDays", saveDays);
+	read("saveMinScore", saveMinScore);
+	read("towerGuard", towerGuard);
+	read("threatSpend", threatSpend);
 	read("idleGold", idleGold);
 	read("idleRho", idleRho);
 	read("idleReserve", idleReserve);
@@ -408,10 +413,17 @@ AdventureAI::~AdventureAI() = default;
 ResourceSet AdventureAI::spendable() const
 {
 	ResourceSet stock = cb->getResourceAmount();
-	if(today - earmarkDay > 3)
-		return stock;
-	for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
-		stock[res] = std::max<TResource>(0, stock[res] - earmark[res]);
+	if(today - earmarkDay <= 3)
+	{
+		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			stock[res] = std::max<TResource>(0, stock[res] - earmark[res]);
+	}
+	if(params.saveFor && today - savingsDay <= 1)
+	{
+		// (saveFor) what a town saves for its best building is not there for anything else
+		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			stock[res] = std::max<TResource>(0, stock[res] - savings[res]);
+	}
 	return stock;
 }
 
@@ -8405,6 +8417,38 @@ bool AdventureAI::makeRoom(const CGTownInstance * town, const CArmedInstance * a
 
 void AdventureAI::leaveGarrison(const CGHeroInstance * hero, const CGTownInstance * town)
 {
+	// (towerGuard) A town with arrow towers never stands empty: one creature makes the attacker fight,
+	// and the towers shoot while he does. The hero leaves one of its cheapest kind.
+	if(params.towerGuard && town->fortLevel() >= CGTownInstance::CITADEL && !town->getGarrisonHero() && town->stacksCount() == 0)
+	{
+		SlotID cheapest;
+		double cheapestValue = std::numeric_limits<double>::max();
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(!stack || !stack->getCreature() || (stack->getCount() < 2 && hero->stacksCount() < 2))
+				continue;
+			const double v = stack->getCreature()->getAIValue();
+			if(v < cheapestValue)
+			{
+				cheapestValue = v;
+				cheapest = slot;
+			}
+		}
+		const CStackInstance * stack = cheapest.validSlot() ? hero->getStackPtr(cheapest) : nullptr;
+		const SlotID target = stack ? town->getSlotFor(stack->getCreatureID()) : SlotID();
+		if(stack && target.validSlot())
+		{
+			logAi->info("FairAI %s day %d: %s leaves one %s in %s for the towers", me.toString(), today, hero->getNameTranslated(),
+				stack->getCreature()->getJsonKey(), town->getNameTranslated());
+			if(stack->getCount() >= 2)
+				cb->splitStack(hero, town, cheapest, target, 1);
+			else
+				cb->mergeOrSwapStacks(hero, town, cheapest, target);
+			gateway.waitTillFree();
+			if(statsFile)
+				stats[phaseOf(today)]["towerGuard"] += 1;
+		}
+	}
 	// Raiders take empty towns for free. While enemy heroes are about, leave the weakest stacks
 	// behind until the garrison is worth a share of the hero's army.
 	if(params.garrisonShare <= 0 || town->getGarrisonHero())
@@ -8922,6 +8966,16 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 void AdventureAI::buildInTown(const CGTownInstance * town)
 {
 	const CTown * info = town->getTown();
+	// (saveFor, threatSpend) a hero that beats what the town holds was seen near it: troops come first
+	const bool danger = (params.saveFor || params.threatSpend) && townInDanger(town);
+	// (saveFor) what this town saved is its own to spend today (confirmed again below if the building
+	// still cannot be paid); a town in danger needs the gold of any saver
+	if(params.saveFor && today - savingsDay <= 1 && (savingsTown == town->id || danger))
+	{
+		if(danger)
+			logAi->debug("FairAI %s day %d: %s is in danger - the savings for a building are released", me.toString(), today, town->getNameTranslated());
+		savingsDay = -100;
+	}
 	const ResourceSet have = spendable();
 	// When creatures, not gold, are the bottleneck, gold is cheap: income is worth less and gold
 	// costs hurt less, while dwellings are worth more. Rare resources keep their value.
@@ -8947,6 +9001,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 		EBuildingState state;
 		double score;
 		std::string reason;
+		bool income = false; ///< the goal behind this option raises our gold income (a hall, or what a hall needs)
 	};
 	std::map<BuildingID, Option> options; // best score per buildable candidate
 
@@ -8989,9 +9044,26 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 		double score = chainValue / (chainCost + 1000.0);
 		if(state == EBuildingState::NO_RESOURCES)
 			score *= 0.9;
+		// does the goal, or the step towards it, raise our gold income? (a hall brings more gold than the one it replaces)
+		auto raisesIncome = [&](BuildingID id)
+		{
+			const CBuilding * building = info->buildings.at(id).get();
+			int more = building->produce[GameResID::GOLD];
+			if(building->upgrade != BuildingID::NONE)
+			{
+				auto base = info->buildings.find(building->upgrade);
+				if(base != info->buildings.end())
+					more -= base->second->produce[GameResID::GOLD];
+			}
+			return more > 0;
+		};
+		const bool income = raisesIncome(goal) || raisesIncome(candidate);
 		auto existing = options.find(candidate);
+		// (a step is a step towards income if any goal behind it is - whichever goal scores best)
+		const bool incomeBefore = existing != options.end() && existing->second.income;
 		if(existing == options.end() || existing->second.score < score)
-			options[candidate] = Option{candidate, state, score, info->buildings.at(goal)->getNameTranslated()};
+			options[candidate] = Option{candidate, state, score, info->buildings.at(goal)->getNameTranslated(), income};
+		options[candidate].income = options[candidate].income || income || incomeBefore;
 	}
 
 	std::vector<Option> ranked;
@@ -9109,18 +9181,202 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 			armyFirstLog = today;
 			return;
 		}
-		if(option.state == EBuildingState::NO_RESOURCES && !buyResourcesFor(town, info->buildings.at(option.build)->resources, false, &keep))
-			continue;
-		if(!spendable().canAfford(info->buildings.at(option.build)->resources))
+		const ResourceSet & price = info->buildings.at(option.build)->resources;
+		if(params.threatSpend && danger)
+		{
+			// (threatSpend) the enemy is coming: only walls, and what leaves the troops waiting here paid for
+			const bool walls = option.build == BuildingID::FORT || option.build == BuildingID::CITADEL || option.build == BuildingID::CASTLE;
+			int64_t waiting = 0;
+			for(const auto & entry : town->creatures)
+				if(entry.first > 0 && !entry.second.empty())
+					waiting += static_cast<int64_t>(entry.first) * entry.second.back().toCreature()->getRecruitCost(GameResID::GOLD);
+			if(!walls && static_cast<int64_t>(spendable()[GameResID::GOLD]) - price[GameResID::GOLD] < waiting)
+			{
+				if(threatSpendLog != today)
+					logAi->info("FairAI %s day %d: %s is in danger - %s waits, troops for %lld gold come first", me.toString(), today, town->getNameTranslated(),
+						info->buildings.at(option.build)->getNameTranslated(), static_cast<long long>(waiting));
+				threatSpendLog = today;
+				continue;
+			}
+		}
+		// (saveFor) another town saves for something lesser than this: its savings may pay for it
+		const bool otherSaves = params.saveFor && today - savingsDay <= 1 && savingsTown != town->id;
+		const int savedDay = savingsDay;
+		if(otherSaves && option.score > savingsScore)
+			savingsDay = -100;
+		bool pays = (option.state != EBuildingState::NO_RESOURCES || buyResourcesFor(town, price, false, &keep)) && spendable().canAfford(price);
+		// (saveFor) Only for what raises our income - a hall or what a hall needs: that gold comes
+		// back within days. (Saving for every best building left the main hero with a smaller army:
+		// 110,000 against 125,000 on day 45 in 16 games, because nothing was bought on 12 to 32 days.)
+		if(!pays && params.saveFor && option.score >= params.saveMinScore && logAi->isDebugEnabled() && saveCheckLog != today)
+		{
+			saveCheckLog = today;
+			logAi->debug("FairAI %s day %d: %s in %s cannot be paid (score %.2f, raises income: %s, town in danger: %s, another town saves: %s)", me.toString(), today,
+				info->buildings.at(option.build)->getNameTranslated(), town->getNameTranslated(), option.score, option.income ? "yes" : "no", danger ? "yes" : "no",
+				otherSaves ? "yes" : "no");
+		}
+		if(!pays && params.saveFor && (option.income || params.saveFor >= 2) && option.score >= params.saveMinScore && !danger
+			&& !(otherSaves && option.score <= savingsScore))
+		{
+			// What is missing, in gold: the gold itself and what the market asks for the other resources
+			// (-1: a resource is missing and nobody sells it)
+			const IMarket * market = resourceMarket();
+			auto shortfall = [&]() -> int64_t
+			{
+				const ResourceSet stock = spendable();
+				int64_t gold = static_cast<int64_t>(stock[GameResID::GOLD]) - price[GameResID::GOLD];
+				int64_t bought = 0;
+				for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+				{
+					const int lack = res == GameResID::GOLD ? 0 : price[res] - stock[res];
+					if(lack <= 0)
+						continue;
+					int give = 0;
+					int get = 0;
+					if(!market || !market->getOffer(GameResID::GOLD, res, give, get, EMarketMode::RESOURCE_RESOURCE) || give <= 0 || get <= 0)
+						return -1;
+					bought += static_cast<int64_t>((lack + get - 1) / get) * give;
+				}
+				return std::max<int64_t>(0, bought + (bought > 0 ? 1000 : 0) - gold);
+			};
+			int64_t missing = shortfall();
+			if(missing > 0)
+			{
+				// surplus wood, ore and rare resources are sold for it
+				ResourceSet keepToo = keep;
+				for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+					if(res != GameResID::GOLD)
+						keepToo[res] = std::max(keepToo[res], price[res]);
+				// (only when that pays for the building today: a sale that leaves it a day away gains nothing)
+				if(sellForGold(missing, keepToo, true) > 0)
+				{
+					pays = (cb->canBuildStructure(town, option.build) == EBuildingState::ALLOWED || buyResourcesFor(town, price, false, &keep)) && spendable().canAfford(price);
+					missing = pays ? 0 : shortfall();
+				}
+			}
+			if(!pays && savingsLog != today && logAi->isDebugEnabled())
+				logAi->debug("FairAI %s day %d: %s in %s lacks %lld gold, income %.0f a week - %s", me.toString(), today, info->buildings.at(option.build)->getNameTranslated(),
+					town->getNameTranslated(), static_cast<long long>(missing), economy.weeklyIncome,
+					missing > 0 && economy.weeklyIncome > 0 && static_cast<double>(missing) * 7.0 / economy.weeklyIncome <= params.saveDays ? "saving" : "too far to save for");
+			if(!pays && missing > 0 && economy.weeklyIncome > 0 && static_cast<double>(missing) * 7.0 / economy.weeklyIncome <= params.saveDays)
+			{
+				savings = price;
+				savingsDay = today;
+				savingsTown = town->id;
+				savingsBuilding = option.build;
+				savingsScore = option.score;
+				if(savingsLog != today)
+					logAi->info("FairAI %s day %d: saving for %s in %s (score %.2f): %lld gold missing, %.1f days of income", me.toString(), today,
+						info->buildings.at(option.build)->getNameTranslated(), town->getNameTranslated(), option.score, static_cast<long long>(missing),
+						static_cast<double>(missing) * 7.0 / economy.weeklyIncome);
+				savingsLog = today;
+				if(statsFile)
+					stats[phaseOf(today)]["savingDays"] += 1;
+				return;
+			}
+		}
+		if(!pays)
+		{
+			if(otherSaves)
+				savingsDay = savedDay;
 			continue; // the rest is put aside (see earmark)
+		}
+		if(otherSaves && savingsDay != savedDay)
+			logAi->debug("FairAI %s day %d: %s in %s (score %.2f) is paid from what was saved for a building that scores %.2f", me.toString(), today,
+				info->buildings.at(option.build)->getNameTranslated(), town->getNameTranslated(), option.score, savingsScore);
 		++attempts;
 		logAi->info("FairAI %s day %d: building %s in %s (for %s, score %.2f)", me.toString(), today,
 			info->buildings.at(option.build)->getNameTranslated(), town->getNameTranslated(), option.reason, option.score);
 		cb->buildBuilding(town, option.build);
+		if(otherSaves)
+			savingsDay = savedDay; // the saver goes on saving (and counts again tomorrow)
 		if(town->hasBuilt(option.build))
 			return;
 		logAi->warn("FairAI %s: building %s was rejected", me.toString(), info->buildings.at(option.build)->getNameTranslated());
 	}
+}
+
+const IMarket * AdventureAI::resourceMarket() const
+{
+	// any own town with a marketplace will do
+	for(const auto * t : perception.ownTowns())
+	{
+		if(t->hasBuiltResourceMarketplace())
+		{
+			if(const IMarket * market = cb->getMarket(t->id))
+				return market;
+		}
+	}
+	return nullptr;
+}
+
+int64_t AdventureAI::sellForGold(int64_t goldWanted, const ResourceSet & keep, bool onlyIfEnough)
+{
+	const IMarket * market = resourceMarket();
+	if(goldWanted <= 0 || !market)
+		return 0;
+	if(onlyIfEnough)
+	{
+		// what the surplus would bring
+		int64_t possible = 0;
+		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+		{
+			const int surplus = res == GameResID::GOLD ? 0 : static_cast<int>(spendable()[res]) - keep[res];
+			int give = 0;
+			int get = 0;
+			if(surplus > 0 && market->getOffer(res, GameResID::GOLD, give, get, EMarketMode::RESOURCE_RESOURCE) && give > 0 && get > 0)
+				possible += static_cast<int64_t>(surplus / give) * get;
+		}
+		if(possible < goldWanted)
+			return 0;
+	}
+	const int64_t before = cb->getResourceAmount()[GameResID::GOLD];
+	int64_t expected = 0;
+	for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+	{
+		if(res == GameResID::GOLD || expected >= goldWanted)
+			continue;
+		const int surplus = static_cast<int>(spendable()[res]) - keep[res];
+		int give = 0;
+		int get = 0;
+		if(surplus <= 0 || !market->getOffer(res, GameResID::GOLD, give, get, EMarketMode::RESOURCE_RESOURCE) || give <= 0 || get <= 0)
+			continue;
+		const int64_t lots = std::min<int64_t>(surplus / give, (goldWanted - expected + get - 1) / get);
+		if(lots <= 0)
+			continue;
+		logAi->info("FairAI %s day %d: selling %lld %s for %lld gold", me.toString(), today, static_cast<long long>(lots * give), res.toResource()->getJsonKey(),
+			static_cast<long long>(lots * get));
+		cb->trade(market->getObjInstanceID(), EMarketMode::RESOURCE_RESOURCE, res, GameResID(GameResID::GOLD), static_cast<int>(lots * give));
+		gateway.waitTillFree();
+		expected += lots * get;
+	}
+	const int64_t gained = static_cast<int64_t>(cb->getResourceAmount()[GameResID::GOLD]) - before;
+	if(statsFile && gained > 0)
+		stats[phaseOf(today)]["soldForGold"] += static_cast<double>(gained);
+	return gained;
+}
+
+bool AdventureAI::townInDanger(const CGTownInstance * town) const
+{
+	// what the town holds today, behind its walls
+	double holds = 0;
+	for(const auto & slot : town->Slots())
+		holds += stackValue(slot.second.get());
+	if(const auto * guard = town->getGarrisonHero())
+		holds += static_cast<double>(guard->getArmyStrength());
+	if(const auto * visitor = town->getVisitingHero(); visitor && visitor->tempOwner == me)
+		holds += static_cast<double>(visitor->getArmyStrength());
+	holds *= defenceWalls(town);
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		if(object.type != Obj::HERO || !isEnemy(object.owner) || today - object.lastSeenDay > 3)
+			continue;
+		const double strength = observedDanger(object) * heroFactor(object);
+		// two days of march
+		if(strength > holds && enemyDistance(id, object.visitablePos, strength, town->visitablePos(), 40) <= 40)
+			return true;
+	}
+	return false;
 }
 
 bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark, const ResourceSet * keep)
@@ -9210,8 +9466,49 @@ void AdventureAI::manageTowns(bool endOfTurn)
 		updateEconomy();
 		buildInTown(town);
 		// troops in the garrison defend the town and wait for the main hero
-		const int64_t reserve = economy.rho > 1.5 ? 0 : 1000;
+		int64_t reserve = economy.rho > 1.5 ? 0 : 1000;
+		if(params.threatSpend && townInDanger(town))
+		{
+			// (threatSpend) the enemy is coming: every gold piece into the troops that wait here, and
+			// wood, ore and the rest are sold for them (they are no use to a town that falls)
+			reserve = 0;
+			int64_t waiting = 0;
+			ResourceSet keep;
+			for(const auto & entry : town->creatures)
+			{
+				if(entry.first == 0 || entry.second.empty())
+					continue;
+				const CCreature * type = entry.second.back().toCreature();
+				waiting += static_cast<int64_t>(entry.first) * type->getRecruitCost(GameResID::GOLD);
+				for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+					if(res != GameResID::GOLD)
+						keep[res] += static_cast<int>(entry.first) * type->getRecruitCost(res);
+			}
+			const int64_t lack = waiting - static_cast<int64_t>(spendable()[GameResID::GOLD]);
+			if(lack > 0)
+				sellForGold(lack, keep, false);
+		}
 		recruitInTown(town, town->getUpperArmy(), reserve);
+		if(params.towerGuard && endOfTurn && town->fortLevel() >= CGTownInstance::CITADEL && town->getUpperArmy()->stacksCount() == 0)
+		{
+			// (towerGuard) nothing stands in a town with towers: the cheapest creature for sale is bought,
+			// whatever the gold is put aside for
+			for(size_t level = 0; level < town->creatures.size(); ++level)
+			{
+				const auto & entry = town->creatures[level];
+				if(entry.first == 0 || entry.second.empty())
+					continue;
+				const CreatureID creature = entry.second.back();
+				if(!cb->getResourceAmount().canAfford(creature.toCreature()->getFullRecruitCost()))
+					continue;
+				logAi->info("FairAI %s day %d: one %s is bought for the towers of %s", me.toString(), today, creature.toCreature()->getJsonKey(), town->getNameTranslated());
+				cb->recruitCreatures(town, town->getUpperArmy(), creature, 1, static_cast<int>(level));
+				gateway.waitTillFree();
+				if(statsFile)
+					stats[phaseOf(today)]["towerGuard"] += 1;
+				break;
+			}
+		}
 		if(params.spareStock)
 		{
 			// (spareStock) what the garrison has no slot for: the hero in the gate buys it, or one is hired for it
@@ -9643,7 +9940,10 @@ void AdventureAI::defendTowns()
 			}
 		}
 		if(threatened)
+		{
+			savingsDay = -100; // (saveFor) the enemy stands before a town: nothing is saved for a building now
 			recruitInTown(town, town->getUpperArmy(), 0);
+		}
 	}
 }
 

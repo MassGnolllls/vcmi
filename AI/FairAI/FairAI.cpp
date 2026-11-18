@@ -17,6 +17,12 @@
 #include "Adventure/AdventureAI.h"
 
 #include "../../lib/AsyncRunner.h"
+#include "../../lib/StartInfo.h"
+#include "../../lib/VCMIDirs.h"
+#include "../../lib/logging/CLogger.h"
+#include <vstd/DateUtils.h>
+#include <fstream>
+#include <mutex>
 #include "../../lib/UnlockGuard.h"
 #include "../../lib/mapObjects/CGDwelling.h"
 #include "../../lib/CCreatureHandler.h"
@@ -66,6 +72,111 @@ std::string FairAIGateway::getBattleAIName() const
 	return "FairAI";
 }
 
+namespace
+{
+
+/// A protocol of our own for every game a human takes part in. The client's log is overwritten
+/// with every start of the game; this file is kept (the newest 40 games), so a game can still be
+/// looked at days later. Only what FairAI writes itself, from the debug level up.
+class GameProtocol : public ILogTarget
+{
+	std::mutex mutex;
+	std::ofstream file;
+	time_t game = 0;
+
+public:
+	void open(time_t startTime, const std::string & mapName)
+	{
+		std::lock_guard<std::mutex> lock(mutex);
+		if(file.is_open() && game == startTime)
+			return;
+		if(file.is_open())
+			file.close();
+		game = startTime;
+		try
+		{
+			namespace fs = boost::filesystem;
+			const fs::path folder = VCMIDirs::get().userLogsPath() / "FairAI";
+			fs::create_directories(folder);
+			// the oldest protocols make room
+			std::vector<fs::path> old;
+			for(fs::directory_iterator it(folder), end; it != end; ++it)
+			{
+				if(fs::is_regular_file(it->path()) && it->path().filename().string().rfind("FairAI_", 0) == 0)
+					old.push_back(it->path());
+			}
+			std::sort(old.begin(), old.end());
+			for(size_t i = 0; i + 39 < old.size(); ++i)
+			{
+				boost::system::error_code ignored;
+				fs::remove(old[i], ignored);
+			}
+			const std::string stamp = vstd::getFormattedDateTime(startTime, "%Y-%m-%d_%H-%M-%S");
+			std::string map;
+			for(char c : mapName)
+			{
+				if(map.size() >= 30)
+					break;
+				map += std::isalnum(static_cast<unsigned char>(c)) ? c : '_';
+			}
+			const fs::path path = folder / (std::string("FairAI_") + stamp + (map.empty() ? "" : "_" + map) + ".txt");
+			file.open(path.string(), std::ios::out | std::ios::app);
+			if(file.is_open())
+				file << "=== FairAI game protocol, " << GameConstants::VCMI_VERSION << ", game started " << stamp << " ===" << std::endl;
+		}
+		catch(const std::exception &)
+		{
+			// no protocol then: the game goes on
+		}
+	}
+
+	void write(const LogRecord & record) override
+	{
+		if(record.level < ELogLevel::DEBUG || record.message.compare(0, 6, "FairAI") != 0)
+			return;
+		std::lock_guard<std::mutex> lock(mutex);
+		if(!file.is_open())
+			return;
+		static const char * const names[] = {"-", "TRACE", "DEBUG", "INFO", "WARN", "ERROR"};
+		const auto time = record.timeStamp.time_of_day();
+		char clock[16];
+		std::snprintf(clock, sizeof(clock), "%02d:%02d:%02d", static_cast<int>(time.hours()), static_cast<int>(time.minutes()), static_cast<int>(time.seconds()));
+		const int level = static_cast<int>(record.level);
+		file << clock << ' ' << (level >= 0 && level < 6 ? names[level] : "?") << ' ' << record.message << '\n';
+		if(record.level >= ELogLevel::INFO)
+			file.flush();
+	}
+};
+
+/// One protocol for all FairAI players of this process; the logger owns it (the library stays
+/// loaded until the game is closed).
+GameProtocol * gameProtocol = nullptr;
+std::mutex gameProtocolMutex;
+
+void openGameProtocol(const CCallback & cb)
+{
+	if(std::getenv("FAI_NO_PROTOCOL"))
+		return;
+	const StartInfo * start = cb.getStartInfo();
+	if(!start)
+		return;
+	bool humanPlays = std::getenv("FAI_PROTOCOL") != nullptr; // (the test bench can ask for one)
+	for(const auto & entry : start->playerInfos)
+		humanPlays = humanPlays || entry.second.isControlledByHuman();
+	if(!humanPlays)
+		return; // AI against AI (test bench): the client's own log is kept by whoever runs it
+	std::lock_guard<std::mutex> lock(gameProtocolMutex);
+	if(!gameProtocol)
+	{
+		auto target = std::make_unique<GameProtocol>();
+		gameProtocol = target.get();
+		CLogger::getLogger(CLoggerDomain("ai"))->addTarget(std::move(target));
+	}
+	gameProtocol->open(start->startTime, start->mapname);
+}
+
+}
+
 void FairAIGateway::initGameInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CCallback> CB)
 {
 	cb = CB;
@@ -75,6 +186,7 @@ void FairAIGateway::initGameInterface(std::shared_ptr<Environment> ENV, std::sha
 	playerID = *cb->getPlayerID();
 	cb->waitTillRealize = true;
 
+	openGameProtocol(*cb);
 	perception = std::make_unique<Perception>(cb, playerID);
 	adventure = std::make_unique<AdventureAI>(*this, cb, *perception, playerID);
 	logAi->info("FairAI initialised for player %s", playerID.toString());

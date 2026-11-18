@@ -193,8 +193,23 @@ private:
 	std::map<ObjectInstanceID, RoundTrip> roundTrip;
 	ResourceSet earmark;                                     ///< resources put aside for a planned purchase (a boat)
 	int earmarkDay = -100;                                   ///< day the earmark was (re)confirmed; it lapses after a few days
-	/// What towns and heroes may spend: our resources minus the earmark
+	/// What towns and heroes may spend: our resources minus the earmark and minus what a town saves for its best building
 	ResourceSet spendable() const;
+	ResourceSet savings;                                     ///< (saveFor) price of the building a town saves for
+	int savingsDay = -100;                                   ///< day the savings were (re)confirmed; they lapse the day after next
+	ObjectInstanceID savingsTown;                            ///< the town that saves
+	BuildingID savingsBuilding = BuildingID::NONE;           ///< what it saves for
+	double savingsScore = 0;                                 ///< score of that building: a better building elsewhere may take the gold
+	int savingsLog = -100;                                   ///< day the savings were last logged
+	int saveCheckLog = -100;                                 ///< day the last "cannot be paid" line was logged
+	/// (saveFor, threatSpend) Sell resources beyond \p keep at a marketplace until \p goldWanted more gold is in the chest. Returns the gold gained
+	/// (\p onlyIfEnough: nothing is sold unless the surplus brings all of it)
+	int64_t sellForGold(int64_t goldWanted, const ResourceSet & keep, bool onlyIfEnough);
+	/// (threatSpend) An enemy hero that beats what the town holds was seen near it in the last days
+	bool townInDanger(const CGTownInstance * town) const;
+	/// A marketplace of ours that trades resources (nullptr: none)
+	const IMarket * resourceMarket() const;
+	int threatSpendLog = -100;                               ///< day the last "troops come first" line was logged
 	int lastBoatDay = -100;                                  ///< day we last bought a boat
 	bool seaWanted = false;                                  ///< a hero ran out of land: a town shipyard is worth building
 	/// A hero with nothing left to do on its landmass: buy a boat (own town with a shipyard, or the
