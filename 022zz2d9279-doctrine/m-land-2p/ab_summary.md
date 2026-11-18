@@ -6,7 +6,7 @@ Paired against `new`: mean difference over the games both played (95% CI). score
 |---|---|---|---|---|---|---|---|---|---|
 | new | `{}` | 24 | 15 | 8 | 0.659 ± 0.191 | - | 0.649 ± 0.191 | - | 24 |
 | nWFHC | `{"magicWorth": 1, "fetchByShare": 1, "noChase": 1, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 15 | 9 | 0.625 ± 0.198 | -0.034 ± 0.221 | 0.625 ± 0.198 | -0.024 ± 0.223 | 24 |
-| nKFHP | `{"breakout": 1, "fetchByShare": 1, "noChase": 1, "passage": 1, "regionValue": 8000}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nKFHP | `{"breakout": 1, "fetchByShare": 1, "noChase": 1, "passage": 1, "regionValue": 8000}` | 24 | 15 | 9 | 0.625 ± 0.198 | -0.034 ± 0.221 | 0.625 ± 0.198 | -0.024 ± 0.223 | 24 |
 | nKWPC | `{"breakout": 1, "magicWorth": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nTFPC | `{"townWorth": 1, "fetchByShare": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nTWHP | `{"townWorth": 1, "magicWorth": 1, "noChase": 1, "passage": 1, "regionValue": 8000}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |

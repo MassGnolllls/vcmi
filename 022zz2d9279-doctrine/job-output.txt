@@ -88,3 +88,26 @@ match   14 FairAI as red of 2: victory winner=red day=115 score=1.00 [201.7s]
 match   15 FairAI as blue of 2: victory winner=blue day=139 score=1.00 [245.0s]
 match   11 FairAI as blue of 2: victory winner=blue day=227 score=1.00 [437.1s]
 match   19 FairAI as blue of 2: victory winner=blue day=119 score=1.00 [167.2s]
+match   16 FairAI as red of 2: victory winner=red day=195 score=1.00 [284.9s]
+match   17 FairAI as blue of 2: victory winner=red day=159 score=0.00 [267.5s]
+match   18 FairAI as red of 2: victory winner=blue day=155 score=0.00 [321.9s]
+match   20 FairAI as red of 2: victory winner=blue day=156 score=0.00 [282.1s]
+match   21 FairAI as blue of 2: victory winner=red day=135 score=0.00 [261.8s]
+match   23 FairAI as blue of 2: victory winner=blue day=140 score=1.00 [273.6s]
+match   22 FairAI as red of 2: victory winner=blue day=154 score=0.00 [351.1s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 24 -> FairAI won 15, lost 9  (win rate 62%, 95% CI 43%-79%)
+- day limit reached: 0 (material lead for FairAI in 0)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 144 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/6b0cea2d47/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 60 --out /home/alex/fairai/runs/022zz2d9279-doctrine/m-land-2p/nKWPC-s60 --pool long1-m-land-2p --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7000 --ai-params {"breakout": 1, "magicWorth": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    3 FairAI as blue of 2: victory winner=blue day=112 score=1.00 [198.0s]
+match    1 FairAI as blue of 2: victory winner=red day=134 score=0.00 [210.5s]
+match    5 FairAI as blue of 2: victory winner=blue day=131 score=1.00 [214.4s]
+match    0 FairAI as red of 2: victory winner=red day=132 score=1.00 [239.8s]
+match    4 FairAI as red of 2: victory winner=red day=182 score=1.00 [299.4s]
