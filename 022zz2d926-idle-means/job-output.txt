@@ -280,3 +280,23 @@ match   18 FairAI as red of 2: timeout winner= day=151 score=0.45 [326.5s]
 - average length of decided games: 120 days
 - cheat flags raised: 0
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 57 --out /home/alex/fairai/runs/022zz2d926-idle-means/m-land-2p/nT-s57 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"townWorth": 1}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    5 FairAI as blue of 2: victory winner=blue day=132 score=1.00 [193.6s]
+match    2 FairAI as red of 2: timeout winner= day=151 score=0.32 [226.6s]
+match    0 FairAI as red of 2: timeout winner= day=151 score=0.60 [239.3s]
+match    1 FairAI as blue of 2: victory winner=red day=140 score=0.00 [241.6s]
+match    4 FairAI as red of 2: timeout winner= day=151 score=0.55 [261.9s]
+match    3 FairAI as blue of 2: timeout winner= day=151 score=0.06 [281.6s]
+match    6 FairAI as red of 2: victory winner=blue day=131 score=0.00 [201.7s]
+match    8 FairAI as red of 2: victory winner=blue day=116 score=0.00 [180.5s]
+match    9 FairAI as blue of 2: victory winner=blue day=144 score=1.00 [210.0s]
+match    7 FairAI as blue of 2: timeout winner= day=151 score=0.00 [234.9s]
+match   11 FairAI as blue of 2: victory winner=red day=120 score=0.00 [193.0s]
+match   10 FairAI as red of 2: timeout winner= day=151 score=0.89 [267.2s]
+match   14 FairAI as red of 2: victory winner=red day=90 score=1.00 [117.9s]
+match   15 FairAI as blue of 2: victory winner=blue day=126 score=1.00 [180.0s]
+match   12 FairAI as red of 2: timeout winner= day=151 score=0.63 [249.5s]
+match   13 FairAI as blue of 2: victory winner=red day=144 score=0.00 [235.4s]
+match   16 FairAI as red of 2: victory winner=red day=136 score=1.00 [187.1s]
+match   18 FairAI as red of 2: victory winner=blue day=82 score=0.00 [153.3s]
+match   17 FairAI as blue of 2: timeout winner= day=151 score=0.06 [209.1s]
