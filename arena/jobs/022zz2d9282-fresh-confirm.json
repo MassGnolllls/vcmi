@@ -1,5 +1,5 @@
 {
- "note": "On fresh maps, played to day 300: the standard, the standard with townHeroes + secondArmy, and that with the six switches for the main army's time on top (townWorth, breakout, magicWorth, fetchByShare, noChase 1, passage - job d9279 takes them apart on the old maps). 48 maps from four templates, both seats: 96 games per config. Shows whether the standard holds on templates it was never tuned on, and whether the two packages help there too. Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays.",
+ "note": "On fresh maps, played to day 300 (48 maps from four templates, both seats: 96 games per config). new = the standard. nAKW = the pack the doctrine test (d9280) carries so far: townHeroes + secondArmy + nightWatch, breakout 2, magicWorth 1. Around it a 2 x 2: breakout 3 instead of 2 (K3: out of the corner after three slack days, doors, gaps - commit d3659de) and boldBehind (B: the main hero takes the battle at a smaller edge when behind in towns; +0.17 +- 0.16 in 24 local pairs). Shows what the standard and the pack are worth on templates they were never tuned on, and the two main effects from 384 games. Evaluate per category (matrix_summary.md), with arena/effects.py --factors '{\"K3\":{\"breakout\":3},\"B\":{\"boldBehind\":1}}' --within '{\"townHeroes\":1}' and arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays.",
  "script": "matrix.py",
  "args": [
   "play",
@@ -14,7 +14,7 @@
   "--seeds",
   "70",
   "--configs",
-  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}, \"doc\": {\"townHeroes\": 1, \"secondArmy\": 1, \"townWorth\": 1, \"breakout\": 1, \"magicWorth\": 1, \"fetchByShare\": 1, \"noChase\": 1, \"passage\": 1, \"regionValue\": 8000}}",
+  "{\"new\": {}, \"nAKW\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 2}, \"nAK3W\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 3}, \"nAKWB\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 2, \"boldBehind\": 1}, \"nAK3WB\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 3, \"boldBehind\": 1}}",
   "--shared-pool"
  ],
  "jobs": 9
