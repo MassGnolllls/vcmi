@@ -3203,7 +3203,8 @@ void AdventureAI::updateThreats()
 					static_cast<int64_t>(outcome.ownStrength), static_cast<int64_t>(std::lround(ownFactor * 100)),
 					static_cast<int64_t>(outcome.enemyStrength), static_cast<int64_t>(std::lround(theirFactor * 100)),
 					outcome.gone ? 1 : 0, static_cast<int64_t>(std::lround(outcome.ownLostShare * 100)), static_cast<int64_t>(std::lround(theirLost * 100)),
-					modelDistance, sightingAge});
+					modelDistance, sightingAge,
+					seen != enemySightings.end() && seen->second.army > 0 ? static_cast<int64_t>(seen->second.army) : -1});
 				const HeroTypeID type(outcome.hero);
 				const std::string reach = outcome.weAttack ? std::string() : (modelDistance < 0 ? std::string("; it was not among the threats we knew")
 					: boost::str(boost::format("; our reach model had it %.1f tiles away (sighting %d day(s) old)") % (modelDistance / 10.0) % sightingAge));

@@ -383,7 +383,9 @@ private:
 	/// And for attacks on us: how far away our reach model had that hero when our last turn ended, in
 	/// tenths of a tile (-1: not among the threats we knew, 9999: further than 60 tiles), and the age
 	/// of the sighting in days - what the model said the night before the enemy proved it could reach us.
-	std::vector<std::array<int64_t, 12>> fightNotes;
+	/// Last: the army we had seen that hero with at its last sighting (-1: none) - against the army it
+	/// came with: Nullkiller2 hands troops along a chain of heroes before it strikes.
+	std::vector<std::array<int64_t, 13>> fightNotes;
 	std::map<int, std::map<int, std::pair<int, int>>> threatDistanceSeen; ///< (calibration) own hero (object id) -> enemy hero type -> (model distance x 10 at our last turn end, age of the sighting)
 	std::map<int, double> ownFactorSeen; ///< (calibration) own hero (object id) -> its commander factor when last looked at
 	std::map<int, int> defeatedDay;             ///< hero type -> day we beat it

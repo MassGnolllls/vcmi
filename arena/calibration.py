@@ -32,6 +32,7 @@ def main() -> int:
     args = ap.parse_args()
     rows = collections.defaultdict(list)
     reach = collections.defaultdict(list)
+    grown = []
     games = unseen = 0
     for folder in args.folders:
         for results in sorted(folder.rglob("results.jsonl")):
@@ -49,6 +50,8 @@ def main() -> int:
                         day, attack, siege, own, own_factor, their, their_factor, won, own_lost, their_lost = fight[:10]
                         if not attack and own >= args.min and len(fight) > 11:
                             reach[("at the walls" if siege else "open field")].append((fight[10], fight[11], won, own * own_lost / 100.0))
+                        if not attack and own >= args.min and len(fight) > 12 and fight[12] > 0:
+                            grown.append(their / fight[12])
                         if min(own, their) < args.min:
                             continue
                         if own_factor <= 0 or their_factor <= 0:
@@ -85,6 +88,10 @@ def main() -> int:
             part = [a for a in attacks if low <= a[0] < high]
             if part:
                 print(f"| {label} | {len(part)} | {100 * len(part) / len(attacks):.0f} % | {100 * sum(a[2] for a in part) / len(part):.0f} % | {sum(a[3] for a in part) / 1000:.0f} |")
+    if grown:
+        grown.sort()
+        print(f"\nattackers we had seen before: the army they came with against the army we last saw them with, {len(grown)} attacks: "
+              f"median {grown[len(grown) // 2]:.2f}, upper quartile {grown[3 * len(grown) // 4]:.2f}, a tenth above {grown[9 * len(grown) // 10]:.2f}")
     return 0
 
 
