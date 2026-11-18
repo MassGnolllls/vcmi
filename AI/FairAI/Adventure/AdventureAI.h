@@ -45,6 +45,7 @@ class CGDwelling;
 class CArmedInstance;
 class IMarket;
 struct CPathsInfo;
+struct CGPath;
 struct CGPathNode;
 struct Component;
 class CStackBasicDescriptor;
@@ -421,6 +422,8 @@ private:
 	bool huntWanted = false;     ///< some enemy still has towns we have not found (updateThreats)
 	bool campaignMode = false;   ///< the main hero is clearly the strongest force we know of (updateThreats; parameter leaderFocus)
 	bool refillMode = false; ///< campaign interrupted: the main hero fetches the troops that wait in our towns
+	ObjectInstanceID musterTown; ///< (muster) the town of ours whose troops the main hero is to fetch, however far it is
+	int musterLog = -1;
 	/// this hero is the main hero on campaign: long marches, the enemy's towns first, no errands
 	bool campaign(const CGHeroInstance * hero) const;
 	/// attack, defence, spell power and knowledge of an enemy hero: as shown to us, else as its class and the day suggest
@@ -452,7 +455,9 @@ private:
 	/// (secondArmy) the field strength a second leader needs; below zero: no second army now
 	double secondArmyBar() const;
 	void updateSecondLeaders();
-	std::shared_ptr<CPathsInfo> computePaths(const CGHeroInstance * hero, bool ignoreGuards) const;
+	std::shared_ptr<CPathsInfo> computePaths(const CGHeroInstance * hero, bool ignoreGuards, int horizon = 0) const;
+	/// (debugging aid) where the ways of `paths` come nearest to `to`, and what stands around that tile
+	std::string stuckAt(const CPathsInfo & paths, const int3 & to, const CPathsInfo * freeWay = nullptr) const;
 
 	std::vector<Target> collectTargets(const CGHeroInstance * hero, const CPathsInfo & paths, const CPathsInfo & freePaths);
 	double objectValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const;
@@ -587,6 +592,11 @@ private:
 
 	/// Moves the hero one step towards `tile`. Returns false if no step could be made.
 	bool stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths);
+	/// (passOwn) `blocker`, a hero of ours standing on the way of `mover`, steps off that way; true if it moved
+	bool makeWay(const CGHeroInstance * blocker, const CGHeroInstance * mover, const CGPath & way);
+	bool makingWay = false; ///< a hero is being moved aside: its steps do not ask others to make way in turn
+	std::set<int3> wedgedToday; ///< (passOwn) tiles where a hero of ours stands that could not step aside today: no way past it today
+	bool madeWay = false;   ///< the last step moved another hero out of the way (progress, though the hero itself stands where it stood)
 
 	// ---- towns and armies
 	void buildInTown(const CGTownInstance * town);

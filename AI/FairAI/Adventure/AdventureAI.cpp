@@ -57,6 +57,7 @@
 #include "../../../lib/networkPacks/Component.h"
 #include "../../../lib/pathfinder/CGPathNode.h"
 #include "../../../lib/pathfinder/PathfinderOptions.h"
+#include "../../../lib/pathfinder/PathfindingRules.h"
 #include "../../../lib/mapping/TerrainTile.h"
 #include "../../../lib/TerrainHandler.h"
 #include "../../../lib/RoadHandler.h"
@@ -359,6 +360,10 @@ void Params::loadOverrides(int playerIndex)
 	read("regionValue", regionValue);
 	read("mainHorizon", mainHorizon);
 	read("refillShare", refillShare);
+	read("passOwn", passOwn);
+	read("muster", muster);
+	read("musterShare", musterShare);
+	read("musterBoost", musterBoost);
 	read("supplyRuns", supplyRuns);
 	read("armyFirst", armyFirst);
 	read("townAmbush", townAmbush);
@@ -589,7 +594,39 @@ void AdventureAI::updateSecondLeaders()
 	secondLeaders = now;
 }
 
-std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * hero, bool ignoreGuards) const
+namespace
+{
+/// (passOwn) A hero of ours on the road is not the end of the road: it moves on, or steps aside when
+/// another hero of ours has to pass (AdventureAI::makeWay). The game's rule ends every way at a hero,
+/// whoever it belongs to. Left as it is: a hero in a town gate (the gate is the end of a way anyway),
+/// one on a tile a monster guards, and one that cannot move any more today on a tile reached today.
+class OwnHeroesGiveWay : public MovementAfterDestinationRule
+{
+	PlayerColor owner;
+	const std::set<int3> & wedged; ///< heroes that could not step aside today
+
+public:
+	OwnHeroesGiveWay(PlayerColor owner, const std::set<int3> & wedged)
+		: owner(owner), wedged(wedged)
+	{
+	}
+
+protected:
+	BlockingReason getBlockingReason(const PathNodeInfo & source, const CDestinationNodeInfo & destination, const PathfinderConfig * config,
+		const CPathfinderHelper * helper) const override
+	{
+		if(destination.action == EPathNodeAction::BLOCKING_VISIT && destination.nodeHero && destination.nodeObject == destination.nodeHero
+			&& destination.nodeHero->tempOwner == owner && destination.node->layer == EPathfindingLayer::LAND && !destination.guarded
+			&& ((destination.nodeHero->movementPointsRemaining() > 0 && !wedged.count(destination.node->coord)) || destination.turn > 0))
+		{
+			return BlockingReason::NONE;
+		}
+		return MovementAfterDestinationRule::getBlockingReason(source, destination, config, helper);
+	}
+};
+}
+
+std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * hero, bool ignoreGuards, int horizon) const
 {
 	auto result = std::make_shared<CPathsInfo>(cb->getMapSize(), hero);
 	auto config = std::make_shared<SingleHeroPathfinderConfig>(*result, *cb, hero);
@@ -601,9 +638,95 @@ std::shared_ptr<CPathsInfo> AdventureAI::computePaths(const CGHeroInstance * her
 	config->options.useTeleportOneWayRandom = false;
 	config->options.useTeleportWhirlpool = false;
 	config->options.canUseCast = params.moveSpells != 0;
-	config->options.turnLimit = static_cast<uint8_t>(std::clamp(travelHorizon(hero) + 1, 1, 250));
+	if(params.passOwn && !config->rules.empty())
+		config->rules.back() = std::make_shared<OwnHeroesGiveWay>(me, wedgedToday); // in place of the game's rule for moving on from a tile
+	// (horizon: days of march the caller asks about, where that is more than the hero looks ahead by itself)
+	// (muster) the main hero's ways reach the town whose troops it is to fetch; other targets count as far as before (collectTargets)
+	if(musterTown.hasValue() && hero->id == mainHero)
+		horizon = std::max(horizon, 30);
+	config->options.turnLimit = static_cast<uint8_t>(std::clamp(std::max(travelHorizon(hero), horizon) + 1, 1, 250));
 	cb->calculatePaths(config);
 	return result;
+}
+
+std::string AdventureAI::stuckAt(const CPathsInfo & paths, const int3 & to, const CPathsInfo * freeWay) const
+{
+	const int3 size = cb->getMapSize();
+	int3 best(-1, -1, -1);
+	int bestDistance = std::numeric_limits<int>::max();
+	// with a way that leaves the guards aside: the first tile of it that the ways of `paths` do not reach
+	if(freeWay)
+	{
+		const CGPathNode * first = nullptr;
+		const CGPathNode * before = nullptr;
+		for(const CGPathNode * n = freeWay->getPathInfo(to); n; n = n->theNodeBefore)
+		{
+			const CGPathNode * mine = paths.getPathInfo(n->coord);
+			if(mine && mine->reachable())
+			{
+				before = n;
+				break;
+			}
+			first = n;
+		}
+		if(first)
+		{
+			std::string around;
+			for(const auto & [id, object] : perception.knownObjects())
+			{
+				const int3 & at = object.visitablePos;
+				if(at.z != first->coord.z || std::abs(at.x - first->coord.x) > 1 || std::abs(at.y - first->coord.y) > 1)
+					continue;
+				around += boost::str(boost::format(" [object %d%s at %s%s]") % object.type.getNum()
+					% (object.owner == me ? " own" : object.owner.isValidPlayer() ? " foreign" : "") % at.toString() % (object.visibleNow ? "" : ", not in sight"));
+			}
+			const CGPathNode * mine = paths.getPathInfo(first->coord);
+			return boost::str(boost::format("the way without guards leaves what is within reach at %s (day %d of it) for %s (there: accessible %d, on the free way action %d); next to that tile:%s")
+				% (before ? before->coord.toString() : std::string("?")) % (before ? static_cast<int>(before->turns) : -1) % first->coord.toString()
+				% (mine ? static_cast<int>(mine->accessible) : -1) % static_cast<int>(first->action) % (around.empty() ? std::string(" nothing known") : around));
+		}
+	}
+	for(int x = 0; x < size.x; ++x)
+	{
+		for(int y = 0; y < size.y; ++y)
+		{
+			const int3 tile(x, y, to.z);
+			const CGPathNode * node = paths.getPathInfo(tile);
+			if(!node || !node->reachable())
+				continue;
+			const int distance = std::max(std::abs(x - to.x), std::abs(y - to.y));
+			if(distance < bestDistance)
+			{
+				bestDistance = distance;
+				best = tile;
+			}
+		}
+	}
+	if(best.x < 0)
+		return "no tile on that level within reach";
+	std::string around;
+	int unseen = 0;
+	for(int dx = -2; dx <= 2; ++dx)
+	{
+		for(int dy = -2; dy <= 2; ++dy)
+		{
+			const int3 tile(best.x + dx, best.y + dy, best.z);
+			if(!cb->isInTheMap(tile))
+				continue;
+			if(!cb->isVisible(tile))
+				++unseen;
+		}
+	}
+	for(const auto & [id, object] : perception.knownObjects())
+	{
+		const int3 & at = object.visitablePos;
+		if(at.z != best.z || std::abs(at.x - best.x) > 2 || std::abs(at.y - best.y) > 2)
+			continue;
+		around += boost::str(boost::format(" [object %d%s at %s%s]") % object.type.getNum()
+			% (object.owner == me ? " own" : object.owner.isValidPlayer() ? " foreign" : "") % at.toString() % (object.visibleNow ? "" : ", not in sight"));
+	}
+	return boost::str(boost::format("nearest tile within reach %s, %d from the goal; within two tiles of it:%s; unseen tiles there %d") % best.toString() % bestDistance
+		% (around.empty() ? std::string(" nothing known") : around) % unseen);
 }
 
 int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
@@ -636,6 +759,7 @@ void AdventureAI::playTurn()
 	const auto turnStart = std::chrono::steady_clock::now();
 	today = cb->getDate(Date::DAY);
 	failedToday.clear();
+	wedgedToday.clear();
 	fledToday.clear();
 	reservedBy.clear();
 	pocketExits.clear();
@@ -1428,6 +1552,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		// points spent without any of these are no progress: a hero outside a gate that our other hero
 		// blocks would otherwise "meet" that hero again and again until the day is over.
 		bool progress = sent && (hero->visitablePos() != posBefore || hero->getArmyStrength() != ownArmyBefore);
+		if(sent && madeWay)
+			progress = true; // (passOwn) a hero of ours stepped off the way: the next step is the hero's own
 		if(sent && !progress && hero->movementPointsRemaining() != mpBefore && !best.object.hasValue())
 			progress = true; // no object to check: trust the movement
 		if(sent && hero->visitablePos().dist2d(posBefore) > 2.5)
@@ -1687,6 +1813,84 @@ bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths
 	return false;
 }
 
+bool AdventureAI::makeWay(const CGHeroInstance * blocker, const CGHeroInstance * mover, const CGPath & way)
+{
+	const ObjectInstanceID blockerId = blocker->id;
+	const int3 here = blocker->visitablePos();
+	const int3 moverPos = mover->visitablePos();
+	std::set<int3> onWay;
+	for(const auto & node : way.nodes)
+		onWay.insert(node.coord);
+	// the nearest tile off that way which the blocker reaches today without passing the hero it makes
+	// way for - open ground rather than another narrow place
+	auto paths = computePaths(blocker, false);
+	const int3 size = cb->getMapSize();
+	int3 best(-1, -1, -1);
+	float bestCost = std::numeric_limits<float>::max();
+	bool bestOpen = false;
+	for(int x = std::max(0, here.x - 9); x < std::min(size.x, here.x + 10); ++x)
+	{
+		for(int y = std::max(0, here.y - 9); y < std::min(size.y, here.y + 10); ++y)
+		{
+			const int3 tile(x, y, here.z);
+			if(tile == here || onWay.count(tile))
+				continue;
+			const CGPathNode * node = paths->getPathInfo(tile);
+			if(!node || !node->reachable() || node->turns > 0 || node->action != EPathNodeAction::NORMAL || node->accessible != EPathAccessibility::ACCESSIBLE)
+				continue;
+			const bool open = !inPass(tile, *paths, &here);
+			if(!(open && !bestOpen) && !(open == bestOpen && node->cost < bestCost))
+				continue;
+			bool pastMover = false;
+			bool plain = true;
+			for(const CGPathNode * n = node->theNodeBefore; n && n->theNodeBefore; n = n->theNodeBefore)
+			{
+				pastMover = pastMover || n->coord == moverPos;
+				plain = plain && n->action == EPathNodeAction::NORMAL;
+			}
+			if(pastMover || !plain)
+				continue;
+			best = tile;
+			bestCost = node->cost;
+			bestOpen = open;
+		}
+	}
+	if(best.x < 0)
+	{
+		logAi->debug("FairAI %s: %s at %s stands in the way of %s and has nowhere to step aside today (mp %d)", me.toString(), blocker->getNameTranslated(),
+			here.toString(), mover->getNameTranslated(), blocker->movementPointsRemaining());
+		wedgedToday.insert(here);
+		return false;
+	}
+	logAi->debug("FairAI %s: %s at %s makes way for %s: to %s", me.toString(), blocker->getNameTranslated(), here.toString(), mover->getNameTranslated(), best.toString());
+	if(statsFile)
+		stats[phaseOf(today)]["madeWay"] += 1;
+	makingWay = true;
+	const int activeBefore = activeHero.load();
+	for(int i = 0; i < 24; ++i)
+	{
+		const CGHeroInstance * now = ownHero(blockerId);
+		if(!now || now->visitablePos() == best)
+			break;
+		const int3 before = now->visitablePos();
+		auto stepPaths = computePaths(now, false);
+		activeHero = blockerId.getNum();
+		const bool sent = stepTowards(now, best, *stepPaths);
+		if(sent)
+			gateway.waitTillFree();
+		activeHero = activeBefore;
+		perception.refresh();
+		now = ownHero(blockerId);
+		if(!sent || !now || now->visitablePos() == before)
+			break;
+	}
+	makingWay = false;
+	const CGHeroInstance * after = ownHero(blockerId);
+	if(after && after->visitablePos() == here)
+		wedgedToday.insert(here);
+	return after && after->visitablePos() != here;
+}
+
 bool AdventureAI::stepTowards(const CGHeroInstance * hero, const int3 & tile, const CPathsInfo & paths)
 {
 	CGPath path;
@@ -1697,6 +1901,19 @@ bool AdventureAI::stepTowards(const CGHeroInstance * hero, const int3 & tile, co
 	const CGPathNode & next = path.nodes[path.nodes.size() - 2];
 	if(next.turns > 0)
 		return false;
+
+	// (passOwn) a hero of ours stands on the next tile and the way leads on past it: it makes way first
+	madeWay = false;
+	if(params.passOwn && !makingWay && path.nodes.size() > 2)
+	{
+		for(const auto * other : perception.ownHeroes())
+		{
+			if(other->id == hero->id || other->isGarrisoned() || other->getVisitedTown() || other->visitablePos() != next.coord)
+				continue;
+			madeWay = makeWay(other, hero, path);
+			return madeWay;
+		}
+	}
 
 	if(next.action == EPathNodeAction::TELEPORT_NORMAL || next.action == EPathNodeAction::TELEPORT_BLOCKING_VISIT
 		|| next.action == EPathNodeAction::TELEPORT_BATTLE)
@@ -3556,6 +3773,60 @@ void AdventureAI::updateThreats()
 		}
 		else
 			refillMode = false;
+		// (muster) What waits in one town and is worth a good part of the leader's army is fetched by
+		// the leader, however far that town is. The leader looks four days ahead and the capital is
+		// further from the middle of the game on; in games played to the end 60 to 80 % of our army
+		// stood in garrisons from then on, and games were lost with more troops than the enemy had.
+		const ObjectInstanceID musterBefore = musterTown;
+		musterTown = ObjectInstanceID();
+		if(params.muster && leader && today >= 14)
+		{
+			const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+			const double share = (campaignMode ? 2.0 : 1.0) * params.musterShare;
+			double bestStock = 0;
+			const CGTownInstance * bestTown = nullptr;
+			for(const auto * town : perception.ownTowns())
+			{
+				if(leader->getVisitedTown() == town)
+					continue;
+				double stock = townTroops(town, leader);
+				if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
+					stock = std::max(0.0, stock - left->second);
+				// the town the leader is already marching to stays its goal down to half the bar
+				const double bar = (town->id == musterBefore ? 0.5 : 1.0) * share * army;
+				if(stock >= bar && stock > bestStock)
+				{
+					bestStock = stock;
+					bestTown = town;
+				}
+			}
+			// what a courier is bringing is not fetched
+			if(bestTown && supply && !supply->returning && !supply->waiting && supply->town == bestTown->id)
+				bestTown = nullptr;
+			// a town within the days the leader looks ahead anyway is judged as ever: the long view is
+			// for the town beyond them (and stays on that town until the leader has been there)
+			if(bestTown && bestTown->id != musterBefore)
+			{
+				auto way = computePaths(leader, false, 30);
+				const CGPathNode * node = way->getPathInfo(bestTown->visitablePos());
+				if(node && node->reachable() && node->turns <= std::max(params.maxTravelTurns, params.mainHorizon))
+					bestTown = nullptr;
+			}
+			if(bestTown)
+				musterTown = bestTown->id;
+			if(musterTown != musterBefore)
+			{
+				if(bestTown && musterTown.hasValue())
+				{
+					logAi->info("FairAI %s day %d: muster - %.0f wait in %s, the main hero leads %.0f: it goes there for them", me.toString(), today, bestStock,
+						bestTown->getNameTranslated(), army);
+					if(statsFile)
+						stats[phaseOf(today)]["fetchFar"] += 1;
+				}
+				else
+					logAi->info("FairAI %s day %d: muster over", me.toString(), today);
+			}
+		}
 	}
 	// Does an enemy still have towns we have not found? Every enemy in the game has at least one
 	// (or is about to drop out); the thieves' guild ranks the players by their number of towns.
@@ -4598,6 +4869,7 @@ void AdventureAI::planSupplyRun()
 	const CGTownInstance * bestTown = nullptr;
 	const CGHeroInstance * bestCarrier = nullptr;
 	double bestStock = 0;
+	double allStock = 0;
 	for(const auto * town : perception.ownTowns())
 	{
 		// a hero of ours in the gate carries; one in the garrison comes out when the gate is free
@@ -4614,11 +4886,17 @@ void AdventureAI::planSupplyRun()
 		if(carrier)
 			supplyPossible = true;
 		const double stock = townTroops(town, leader);
+		allStock += stock;
 		if(stock < std::max(carrier ? 1500.0 : 3000.0, params.supplyShare * army) || stock <= bestStock)
 			continue;
 		bestTown = town;
 		bestCarrier = carrier;
 		bestStock = stock;
+	}
+	if(!bestTown && allStock >= params.supplyShare * army && supplyLog != today)
+	{
+		logAi->debug("FairAI %s day %d: troops worth %.0f wait in our towns, in none of them enough for a run (the leader's army %.0f)", me.toString(), today, allStock, army);
+		supplyLog = today;
 	}
 	if(!bestTown || leader->getVisitedTown() == bestTown)
 		return;
@@ -4629,10 +4907,38 @@ void AdventureAI::planSupplyRun()
 		// the leader walked home itself: nine days out of thirty, and the town it had just taken
 		// fell behind its back. Only when the leader is near enough for a run and not next door (by
 		// its own way to the town; the courier's way is checked when it has loaded).
-		auto leaderPaths = computePaths(leader, false);
+		auto leaderPaths = computePaths(leader, false, params.supplyDays);
 		const CGPathNode * back = leaderPaths->getPathInfo(bestTown->visitablePos());
 		if(!back || !back->reachable() || back->turns < 1 || back->turns > params.supplyDays)
+		{
+			if(supplyLog != today && back && back->reachable() && back->turns >= 1)
+				logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s, no hero of ours stands there and the leader is %d days away", me.toString(), today, bestStock,
+					bestTown->getNameTranslated(), static_cast<int>(back->turns));
+			else if(supplyLog != today && !(back && back->reachable()) && logAi->isDebugEnabled())
+			{
+				// (what bars the way? the same question with the guards left aside, and without a limit of days)
+				auto freeWay = computePaths(leader, true, 60);
+				const CGPathNode * open = freeWay->getPathInfo(bestTown->visitablePos());
+				logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s (%s), no hero of ours stands there and the leader at %s has no way there (leaving guards aside: %s; %s)", me.toString(), today, bestStock,
+					bestTown->getNameTranslated(), bestTown->visitablePos().toString(), leader->visitablePos().toString(),
+					open && open->reachable() ? (boost::format("%d days") % static_cast<int>(open->turns)).str() : "no way either",
+					open && open->reachable() ? stuckAt(*leaderPaths, bestTown->visitablePos(), freeWay.get()) : stuckAt(*freeWay, bestTown->visitablePos()));
+			}
+			supplyLog = today;
 			return;
+		}
+		// (muster) A load that is a good part of what the leader leads, and that an enemy hero seen
+		// lately could beat, does not spend a night on the road with a courier: the leader comes for
+		// it. (Couriers were lost with 542,000 and 610,000 on two days of one game, and with 114,000
+		// to 309,000 in three others - one in twelve runs is caught.)
+		if(params.muster && bestStock >= params.musterShare * army && bestStock < oppositionHeroes)
+		{
+			if(supplyLog != today)
+				logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s - too much to send by courier over %d night(s) (the leader leads %.0f, the strongest enemy hero seen lately counts %.0f)",
+					me.toString(), today, bestStock, bestTown->getNameTranslated(), static_cast<int>(back->turns), army, oppositionHeroes);
+			supplyLog = today;
+			return;
+		}
 		// A hero of ours that reaches the town today or tomorrow is called there (a light one: not a
 		// leader, not one that holds an army of its own) ...
 		{
@@ -4664,7 +4970,14 @@ void AdventureAI::planSupplyRun()
 		// ... else a courier is hired in the tavern, for a load worth the 2,500 gold
 		if(bestStock < 5000 || !bestTown->hasBuilt(BuildingID::TAVERN) || static_cast<int>(perception.ownHeroes().size()) >= params.maxHeroes
 			|| spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + params.heroGoldReserve)
+		{
+			if(supplyLog != today)
+				logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s, nobody to carry them (%s)", me.toString(), today, bestStock, bestTown->getNameTranslated(),
+					bestStock < 5000 ? "not worth a hired hero" : !bestTown->hasBuilt(BuildingID::TAVERN) ? "no tavern" :
+					static_cast<int>(perception.ownHeroes().size()) >= params.maxHeroes ? "we have as many heroes as we may" : "no gold for a hero");
+			supplyLog = today;
 			return;
+		}
 		const CGHeroInstance * best = nullptr;
 		for(const auto * candidate : cb->getAvailableHeroes(bestTown))
 		{
@@ -4698,16 +5011,33 @@ void AdventureAI::planSupplyRun()
 	if(!carrier || carrier->isGarrisoned())
 		return;
 	// is the leader within reach, and the road safe for what the courier will carry?
-	auto paths = computePaths(carrier, false);
+	auto paths = computePaths(carrier, false, params.supplyDays);
 	const CGPathNode * node = paths->getPathInfo(leader->visitablePos());
 	// (safeParts) the courier must arrive the same day: nothing of weight spends a night on the road
 	if(!node || !node->reachable() || node->turns > (params.safeParts ? 0 : params.supplyDays))
 	{
+		std::string why = node && node->reachable() ? (boost::format("%d days") % static_cast<int>(node->turns)).str() : "no way";
+		if(!(node && node->reachable()) && logAi->isDebugEnabled())
+		{
+			// (what bars the way? the same question with the guards left aside, and without a limit of days)
+			auto freeWay = computePaths(carrier, true, 60);
+			const CGPathNode * open = freeWay->getPathInfo(leader->visitablePos());
+			why += boost::str(boost::format("; from %s to %s; leaving guards aside: %s; %s") % carrier->visitablePos().toString() % leader->visitablePos().toString()
+				% (open && open->reachable() ? (boost::format("%d days") % static_cast<int>(open->turns)).str() : "no way either")
+				% (open && open->reachable() ? stuckAt(*paths, leader->visitablePos(), freeWay.get()) : stuckAt(*freeWay, leader->visitablePos())));
+		}
 		logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s, the leader is out of reach (%s)", me.toString(), today, bestStock,
-			bestTown->getNameTranslated(), node && node->reachable() ? (boost::format("%d days") % static_cast<int>(node->turns)).str() : "no way");
+			bestTown->getNameTranslated(), why);
 		return;
 	}
 	const double carried = static_cast<double>(carrier->getArmyStrength()) + bestStock;
+	// (muster) see above: such a load travels only when it arrives today
+	if(params.muster && node->turns > 0 && bestStock >= params.musterShare * army && carried < oppositionHeroes)
+	{
+		logAi->debug("FairAI %s day %d: troops worth %.0f wait in %s - too much to send by courier over %d night(s) (the leader leads %.0f, the strongest enemy hero seen lately counts %.0f)",
+			me.toString(), today, bestStock, bestTown->getNameTranslated(), static_cast<int>(node->turns), army, oppositionHeroes);
+		return;
+	}
 	if(threatAt(leader->visitablePos(), ObjectInstanceID(), true) > fieldStrength(leader) + carried
 		|| supplyRoadThreat(node) > carried)
 	{
@@ -5595,6 +5925,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
 				troops = std::max(0.0, troops - left->second);
 			double value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor * reinforcementBoost(troops) * fetchFactor(hero);
+			// (muster) the stock that calls the main hero home, however far: it counts in full and several times over
+			if(town->id == musterTown)
+				value = troops * params.goldPerArmyValue * params.reinforceFactor * armyFactor * std::max(reinforcementBoost(troops), params.musterBoost);
 			if(!hero->hasSpellbook() && town->hasBuilt(BuildingID::MAGES_GUILD_1))
 				value += 300;
 			// (magicFocus) spells waiting in the guild for a hero that can learn them
@@ -5732,10 +6065,17 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	const int horizon = travelHorizon(hero);
 	const int exploreHorizon = campaign(hero) || (isMain(hero) && params.mainHorizon > params.exploreMaxTurns) ? horizon : params.exploreMaxTurns;
 
+	// (muster) the town whose troops the main hero is to fetch counts however far it is
+	int3 musterTile(-1, -1, -1);
+	if(musterTown.hasValue() && isMain(hero))
+	{
+		if(auto it = known.find(musterTown); it != known.end())
+			musterTile = it->second.visitablePos;
+	}
 	auto reachable = [&](const CPathsInfo & p, const int3 & tile) -> const CGPathNode *
 	{
 		const CGPathNode * node = p.getPathInfo(tile);
-		if(!node || !node->reachable() || node->turns > horizon)
+		if(!node || !node->reachable() || (node->turns > horizon && tile != musterTile))
 			return nullptr;
 		return node;
 	};
@@ -6118,7 +6458,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const bool foreignTown = object.type == Obj::TOWN && object.owner != me;
 			// (townWorth) off campaign the main hero's long view is for foreign towns: a mine, a hero
 			// or a town of ours counts as far away as it did before
-			if(params.townWorth && isMain(hero) && !campaign(hero) && !foreignTown
+			if(params.townWorth && isMain(hero) && !campaign(hero) && !foreignTown && id != musterTown
 				&& node->turns > std::max(params.maxTravelTurns, params.mainHorizon))
 			{
 				++rejected["far"];
@@ -6139,7 +6479,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			}
 			// On campaign the main hero has one job - the enemy's towns. Errands are done only on the
 			// way; our own towns call it back only when they cannot hold.
-			if(campaign(hero) && !foreignTown && !foreignHero)
+			if(campaign(hero) && !foreignTown && !foreignHero && id != musterTown)
 			{
 				bool needed = false;
 				if(object.type == Obj::TOWN)
