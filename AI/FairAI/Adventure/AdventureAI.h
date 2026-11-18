@@ -199,7 +199,8 @@ private:
 	/// A hero with nothing left to do on its landmass: buy a boat (own town with a shipyard, or the
 	/// shipyard the hero stands at - where a human could do the same) or head for a shipyard.
 	/// Returns true if a boat was bought (paths must be recomputed).
-	bool seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets);
+	bool seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets, const CPathsInfo * freePaths = nullptr);
+	int boatGuardLog = -1;
 	std::map<ObjectInstanceID, double> townLeftover;         ///< own town -> troop value the main hero left behind on its last visit (not a reason to come back)
 	/// Troops the main hero could pick up in an own town: garrison, a garrison hero's army, creatures for sale
 	double townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const;

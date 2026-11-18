@@ -25,6 +25,7 @@ struct Params
 	double resourceNeedFactor = 3.0;   ///< resource piles we need for a blocked building are worth up to 1 + this
 	double patienceStep = 0.03;        ///< safety ratio reduction per idle day of the main hero
 	double worstCaseRatio = 1.1;       ///< no fight against wandering monsters with an army worth less than this times the largest stack the range shown on the map allows (0: off - the rule until 18.11.2026, which lost 8 of 367 such fights outright; always on since: a fight that may be lost outright is not a risk worth a mine)
+	int boatGuards = 0;                ///< 1: a hero that has run out of land and finds the only shipyard in reach behind a guard fights that guard when the simulated battle says it can (on an island of 123 tiles the main hero stood in its town from day 6 to day 14: 50 to 99 troglodytes watched the shipyard and "opened" nothing). Off: in two probe games the hero then sailed on day 6 with 4,000, straight to the enemy's capital across the water, and was dead by day 11 - going to sea needs a rule about where to land first
 	double minSafetyRatio = 1.15;
 	double safetyRatioHero = 1.05;     ///< same against enemy heroes and towns (exact armies, our combat AI is better)
 	double safetyRatioSecondary = 2.5; ///< same for scouts and collectors

@@ -325,6 +325,7 @@ void Params::loadOverrides(int playerIndex)
 	read("breakoutSlackDays", breakoutSlackDays);
 	read("breakoutReady", breakoutReady);
 	read("worstCaseRatio", worstCaseRatio);
+	read("boatGuards", boatGuards);
 	read("breakoutLoss", breakoutLoss);
 	read("idleBuild", idleBuild);
 	read("idleGold", idleGold);
@@ -1147,7 +1148,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			bool somethingToDo = false;
 			for(const auto & t : targets)
 				somethingToDo = somethingToDo || (t.description != "retreat" && t.description != "flee");
-			if(!somethingToDo && boatAttempts < 2 && seekBoat(hero, *paths, targets))
+			if(!somethingToDo && boatAttempts < 2 && seekBoat(hero, *paths, targets, freePaths.get()))
 			{
 				++boatAttempts;
 				continue; // a boat is waiting: plan again
@@ -1539,7 +1540,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 	}
 }
 
-bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets)
+bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets, const CPathsInfo * freePaths)
 {
 	if(!params.boats || hero->inBoat())
 		return false;
@@ -1628,6 +1629,59 @@ bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths
 		{
 			yard->getBoatCost(earmark);
 			earmarkDay = today;
+		}
+	}
+	else if(freePaths && params.boatGuards)
+	{
+		// (boatGuards) No shipyard we can walk to - but one behind a guard: that guard stands between us and the
+		// sea, and beating it is the way on. (On an island of 123 tiles the main hero stood in its
+		// town from day 6 to day 14 with nothing to do: 50 to 99 troglodytes watched the shipyard,
+		// "opened" nothing and were "not worth it" until the fight cost less than its experience
+		// gave. The enemy held four towns by day 28.) Judged by the simulated battle.
+		const auto known = perception.knownObjects();
+		Target fight;
+		fight.travel = 1e9;
+		for(const auto & [id, object] : known)
+		{
+			if(object.type != Obj::SHIPYARD)
+				continue;
+			const CGPathNode * free = freePaths->getPathInfo(object.visitablePos);
+			if(!free || !free->reachable() || free->turns > params.maxTravelTurns)
+				continue;
+			// the guard nearest to us on that way
+			const CGObjectInstance * first = nullptr;
+			for(const CGPathNode * n = free; n; n = n->theNodeBefore)
+			{
+				if(!cb->isVisible(n->coord))
+					continue;
+				for(const CGObjectInstance * guard : cb->getGuardingCreatures(n->coord))
+					first = guard;
+			}
+			auto it = first ? known.find(first->id) : known.end();
+			if(it == known.end() || it->second.type != Obj::MONSTER)
+				continue;
+			const CGPathNode * node = paths.getPathInfo(it->second.visitablePos);
+			if(!node || !node->reachable() || node->turns > params.maxTravelTurns || node->cost >= fight.travel
+				|| failedToday.count({hero->id.getNum(), it->second.visitablePos}))
+				continue;
+			const double loss = monsterLoss(hero, it->second, true);
+			if(loss < 0)
+				continue;
+			fight.tile = it->second.visitablePos;
+			fight.object = it->first;
+			fight.value = std::max(3000.0, 2.0 * loss);
+			fight.loss = loss;
+			fight.travel = node->cost;
+			fight.score = (fight.value - fight.loss) / (fight.travel + params.travelOffset);
+			fight.description = "monster";
+		}
+		if(fight.object.hasValue())
+		{
+			if(boatGuardLog != today)
+				logAi->info("FairAI %s day %d: %s has run out of land - the guard at %s stands between it and the shipyard (forecast loss %.0f)", me.toString(), today,
+					hero->getNameTranslated(), fight.tile.toString(), fight.loss);
+			boatGuardLog = today;
+			targets.push_back(fight);
 		}
 	}
 	return false;
