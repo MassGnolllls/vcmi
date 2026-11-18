@@ -9,7 +9,7 @@ Paired against `nB`: mean difference over the games both played (95% CI). score 
 | nQ | `{"townHeroes": 1}` | 24 | 5 | 5 | 0.493 ± 0.158 | -0.103 ± 0.199 | 0.440 ± 0.161 | -0.119 ± 0.223 | 24 |
 | nQLB | `{"townHeroes": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 24 | 10 | 4 | 0.651 ± 0.163 | +0.055 ± 0.256 | 0.565 ± 0.179 | +0.006 ± 0.268 | 24 |
 | nC | `{"supplyRuns": 1}` | 24 | 4 | 6 | 0.463 ± 0.158 | -0.133 ± 0.194 | 0.440 ± 0.157 | -0.119 ± 0.198 | 24 |
-| nCLB | `{"supplyRuns": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nCLB | `{"supplyRuns": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 24 | 6 | 8 | 0.387 ± 0.167 | -0.209 ± 0.242 | 0.333 ± 0.167 | -0.226 ± 0.241 | 24 |
 | nCQB | `{"supplyRuns": 1, "townHeroes": 1, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nCQL | `{"supplyRuns": 1, "townHeroes": 1, "garrisonShare": 0.12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nT | `{"townWorth": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
