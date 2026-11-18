@@ -1,0 +1,12 @@
+{
+ "note": "Maps for the other kinds of map (pool long1 of matrix_long.json: small land, medium islands, free-for-all and teams with four players, large land) - made only where they are missing; job d9285 plays them to the end.",
+ "script": "matrix.py",
+ "args": [
+  "gen",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_kinds300.json"
+ ],
+ "jobs": 1
+}

@@ -1,0 +1,73 @@
+{
+ "pool": "long1",
+ "mods": "",
+ "note": "the other kinds of map of matrix_long.json (same pool, same maps), played to the end: day limit 300 (large maps 400) instead of 90 to 200",
+ "categories": [
+  {
+   "name": "s-land-2p",
+   "template": "2SM4d",
+   "size": "s",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 12,
+   "seed": 41000,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  },
+  {
+   "name": "m-islands-2p",
+   "template": "2SM4d",
+   "size": "m",
+   "levels": 1,
+   "water": "islands",
+   "players": 2,
+   "count": 6,
+   "seed": 41400,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  },
+  {
+   "name": "m-ffa-4p",
+   "template": "2SM4d(2)",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 4,
+   "count": 6,
+   "seed": 41500,
+   "days": 300,
+   "timeout": 9000,
+   "stall": 300
+  },
+  {
+   "name": "m-teams-4p",
+   "template": "2SM4d(2)",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 4,
+   "teams": "0,1,0,1",
+   "count": 6,
+   "seed": 41600,
+   "days": 300,
+   "timeout": 9000,
+   "stall": 300
+  },
+  {
+   "name": "l-land-2p",
+   "template": "Jebus Cross",
+   "size": "l",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 41700,
+   "days": 400,
+   "timeout": 9000,
+   "stall": 300
+  }
+ ]
+}
