@@ -1,9 +1,12 @@
 {
  "job": "022zz2d9282-fresh-confirm",
- "state": "running",
+ "state": "done",
  "commit": "82c5d85633d394cbf095f07b69171521ec75a813",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-18T15:25:35",
- "note": "On fresh maps, played to day 300 (48 maps from four templates, both seats: 96 games per config) - a ladder. new = the standard. nW = with magicWorth 1 (an enemy hero's magic from measurement): the one switch the doctrine test d9280 carries clearly (+0.13 +- 0.10 after 257 of 384 games; townHeroes + secondArmy + nightWatch 0.00, breakout 2 +0.08, passage -0.10, noChase 1 -0.08). nWB = that with boldBehind (the main hero takes the battle at a smaller edge when behind in towns; +0.17 +- 0.16 on the standard and +0.17 on a pack in 24 local pairs each). nWBK = that with breakout 3 (out of the corner after three slack days, doors, gaps; commit d3659de). nWBKG = that with the armies doctrine and the muster (townHeroes + secondArmy + nightWatch + gather 2; commit f3a8b24). Each rung against the one below it, paired by game. Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays."
+ "note": "On fresh maps, played to day 300 (48 maps from four templates, both seats: 96 games per config) - a ladder. new = the standard. nW = with magicWorth 1 (an enemy hero's magic from measurement): the one switch the doctrine test d9280 carries clearly (+0.13 +- 0.10 after 257 of 384 games; townHeroes + secondArmy + nightWatch 0.00, breakout 2 +0.08, passage -0.10, noChase 1 -0.08). nWB = that with boldBehind (the main hero takes the battle at a smaller edge when behind in towns; +0.17 +- 0.16 on the standard and +0.17 on a pack in 24 local pairs each). nWBK = that with breakout 3 (out of the corner after three slack days, doors, gaps; commit d3659de). nWBKG = that with the armies doctrine and the muster (townHeroes + secondArmy + nightWatch + gather 2; commit f3a8b24). Each rung against the one below it, paired by game. Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays.",
+ "returncode": 0,
+ "finished": "2026-11-18T20:11:02",
+ "minutes": 285.4
 }
