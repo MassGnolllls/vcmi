@@ -147,6 +147,8 @@ def cmd_play(args) -> int:
                 cmd += ["--mods", mods]
             if args.keep_logs:
                 cmd += ["--keep-logs"]
+            if args.shared_pool:
+                cmd += ["--shared-pool"]
             print(f"== {cat['name']}", flush=True)
             subprocess.run(cmd)
             port += 100
@@ -181,6 +183,7 @@ def main() -> int:
     p.add_argument("--base-port", type=int, default=7000)
     p.add_argument("--keep-logs", action="store_true")
     p.add_argument("--summary-only", action="store_true")
+    p.add_argument("--shared-pool", action="store_true", help="all configurations of a category through one pool of parallel games")
     args = ap.parse_args()
     return cmd_gen(args) if args.cmd == "gen" else cmd_play(args)
 

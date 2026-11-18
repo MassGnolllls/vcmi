@@ -14,7 +14,8 @@
   "--seeds",
   "70",
   "--configs",
-  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}, \"doc\": {\"townHeroes\": 1, \"secondArmy\": 1, \"townWorth\": 1, \"breakout\": 1, \"magicWorth\": 1, \"fetchByShare\": 1, \"noChase\": 1, \"passage\": 1, \"regionValue\": 8000}}"
+  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}, \"doc\": {\"townHeroes\": 1, \"secondArmy\": 1, \"townWorth\": 1, \"breakout\": 1, \"magicWorth\": 1, \"fetchByShare\": 1, \"noChase\": 1, \"passage\": 1, \"regionValue\": 8000}}",
+  "--shared-pool"
  ],
  "jobs": 6
 }

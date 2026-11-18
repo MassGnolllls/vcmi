@@ -493,7 +493,26 @@ bool AdventureAI::exploringStalled() const
 	if(now == seenTilesOn.end() || before == seenTilesOn.begin())
 		return false;
 	--before; // the last count from two weeks ago or earlier
-	return now->second < 0.9 * mapTiles && now->second - before->second < 0.02 * mapTiles;
+	if(now->second >= 0.9 * mapTiles || now->second - before->second >= 0.02 * mapTiles)
+		return false;
+	if(params.breakout >= 2)
+	{
+		// (breakout 2) A way out that has just been opened is walked through first: for three days
+		// after a guard on the way out fell, and for as long as new land keeps showing (half a per
+		// cent of the map in three days), nobody is shut in. Version 1 went from one way out to the
+		// next - eight guards in sixteen days in a probe game, across the whole map, before the
+		// hero walked through any of the gaps.
+		if(today < breakoutPauseUntil)
+			return false;
+		auto lately = seenTilesOn.upper_bound(today - 3);
+		if(lately != seenTilesOn.begin())
+		{
+			--lately;
+			if(now->second - lately->second >= 0.005 * mapTiles)
+				return false;
+		}
+	}
+	return true;
 }
 
 double AdventureAI::secondArmyBar() const
@@ -5809,10 +5828,25 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hero->getNameTranslated(), exploringStalled() ? "yes" : "no", foreignTownTargeted ? "yes" : "no", ways.empty() ? " none" : ways);
 			breakoutDebugDay = today;
 		}
+		if(params.breakout >= 2)
+		{
+			// a guard we counted as a way out is gone: the gap is open, walk through it first
+			for(auto id : breakoutExits)
+			{
+				if(!known.count(id))
+				{
+					breakoutPauseUntil = today + 3;
+					logAi->info("FairAI %s day %d: a way out is open - no further ways out are forced before day %d", me.toString(), today, breakoutPauseUntil);
+					breakoutExits.clear();
+					break;
+				}
+			}
+		}
 		if(params.breakout && leads(hero) && exploringStalled() && !foreignTownTargeted)
 		{
 			const double worth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
 			int exits = 0;
+			breakoutExits.clear();
 			for(const auto & [guard, share] : wayOut)
 			{
 				const double part = std::clamp(share / 0.3, 0.0, 1.0);
@@ -5820,6 +5854,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					continue;
 				unlockValue[guard] += worth * part;
 				strategicUnlock[guard] += worth * part;
+				breakoutExits.insert(guard);
 				++exits;
 			}
 			if(breakoutLogDay != today)

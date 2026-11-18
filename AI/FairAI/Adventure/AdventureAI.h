@@ -306,6 +306,8 @@ private:
 	void noteStep(const Target & best);
 	void closeStatsDay();
 	int breakoutLogDay = -1;
+	int breakoutPauseUntil = 0;              ///< (breakout 2) no ways out are forced before this day: one has just been opened
+	std::set<ObjectInstanceID> breakoutExits; ///< (breakout 2) the guards counted as ways out at the last look
 	std::map<int, int> seenTilesOn; ///< (breakout) tiles of the map uncovered at the start of each of our days
 	int mapTiles = 0;
 	bool exploringStalled() const;

@@ -16,6 +16,7 @@ Typical use:
 The client must be built from the FairAI fork (it contains the --arena-* options).
 """
 import argparse
+import collections
 import json
 import math
 import os
@@ -392,6 +393,9 @@ def cmd_play(args) -> int:
             jobs.append((match_id, map_name, seats, mine, seed))
             match_id += 1
 
+    if getattr(args, "variants", ""):
+        return play_variants(args, jobs, len(maps), out_dir)
+
     print(f"playing {len(jobs)} matches on {len(maps)} maps with {args.jobs} parallel job(s)")
     records = []
     with ThreadPoolExecutor(max_workers=args.jobs) as pool, open(out_dir / "results.jsonl", "a") as sink:
@@ -413,6 +417,46 @@ def cmd_play(args) -> int:
     print(summary)
     return 0
 
+
+
+def play_variants(args, jobs, map_count: int, root: Path) -> int:
+    """Several parameter sets of the AI under test on the same games, all through ONE pool of
+    parallel games: no configuration waits for the last long game of the one before it (played one
+    after the other, a third of the machine's time went into such waits). The games are dealt out
+    map by map across all variants, so every variant advances at the same pace and a test can be
+    read while it runs. Each variant gets its own folder <out>/<name>-s<seed>, as ab_test.py names them."""
+    variants = json.loads(args.variants)
+    block = max(30, len(jobs) + 5)  # ports: one block per variant
+    tasks = []
+    folders = {}
+    for index, (name, params) in enumerate(variants.items()):
+        folder = root / f"{name}-s{args.seed}"
+        folder.mkdir(parents=True, exist_ok=True)
+        folders[name] = folder
+        own = argparse.Namespace(**vars(args))
+        own.ai_params = json.dumps(params) if params else ""
+        own.base_port = args.base_port + index * block
+        for job in jobs:
+            tasks.append((job[0], index, name, own, job, folder))
+    tasks.sort(key=lambda task: (task[0], task[1]))
+    print(f"playing {len(tasks)} matches ({len(variants)} variants x {len(jobs)} on {map_count} maps) with {args.jobs} parallel job(s)", flush=True)
+    records = collections.defaultdict(list)
+    with ThreadPoolExecutor(max_workers=args.jobs) as pool:
+        futures = {pool.submit(play_match, own, *job, folder): name for _, _, name, own, job, folder in tasks}
+        for fut in as_completed(futures):
+            name = futures[fut]
+            rec = fut.result()
+            records[name].append(rec)
+            with open(folders[name] / "results.jsonl", "a") as sink:
+                sink.write(json.dumps(rec) + "\n")
+            res = rec.get("result", {})
+            score = rec.get("score")
+            print(f"{name}: match {rec['match']:4d} {args.ai} as {','.join(rec.get('mine') or [])} of {len(rec.get('seats') or {})}: "
+                  f"{res.get('outcome', rec.get('error'))} winner={res.get('winner', '-')} day={res.get('day', '-')} "
+                  f"score={'-' if score is None else format(score, '.2f')} [{rec['wallSec']}s]", flush=True)
+    for name, folder in folders.items():
+        (folder / "summary.md").write_text(summarize(sorted(records[name], key=lambda r: r["match"]), args.ai, args.opponent) + "\n")
+    return 0
 
 
 # ----------------------------------------------------------------------------- battles
@@ -604,6 +648,7 @@ def main() -> int:
     p.add_argument("--keep-logs", action="store_true")
     p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the AI under test")
     p.add_argument("--opponent-params", default="", help="FairAI parameter overrides (JSON) for the opponent")
+    p.add_argument("--variants", default="", help="JSON object name -> FairAI parameter overrides: play all of them through one pool of games; --out is then the folder that holds one sub-folder per variant")
     p.add_argument("--out", required=True)
 
     gb = sub.add_parser("genbattles", help="generate battle scenarios and battle-only maps")

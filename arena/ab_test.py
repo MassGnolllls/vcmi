@@ -138,12 +138,30 @@ def main() -> int:
     ap.add_argument("--opponent", default="Nullkiller2")
     ap.add_argument("--summary-only", action="store_true", help="only rewrite ab_summary.md from existing runs")
     ap.add_argument("--keep-existing", action="store_true", help="do not replay a config/seed that already has results (add configs to an earlier test)")
+    ap.add_argument("--shared-pool", action="store_true", help="play all configurations through one pool of parallel games instead of one after the other")
     args, play_args = ap.parse_known_args()
     configs = json.loads(args.configs)
     seeds = [int(s) for s in args.seeds.split(",") if s.strip()]
     out = Path(args.out)
     out.mkdir(parents=True, exist_ok=True)
-    if not args.summary_only:
+    if not args.summary_only and args.shared_pool:
+        # all configurations through one pool of games (see run_tournament.play_variants)
+        for seed in seeds:
+            todo = {}
+            for name, params in configs.items():
+                done = out / f"{name}-s{seed}" / "results.jsonl"
+                if args.keep_existing and done.exists() and done.stat().st_size > 0:
+                    print(f"keeping {name}-s{seed}", flush=True)
+                else:
+                    todo[name] = params
+            if todo:
+                cmd = [sys.executable, str(HERE / "run_tournament.py"), "play", "--client", args.client,
+                       "--ai", args.ai, "--opponent", args.opponent, "--jobs", str(args.jobs), "--seed", str(seed),
+                       "--out", str(out), "--variants", json.dumps(todo), *play_args]
+                print("$ " + " ".join(cmd), flush=True)
+                subprocess.run(cmd, check=False)
+            (out / "ab_summary.md").write_text(summarise(out, configs, seeds))
+    elif not args.summary_only:
         for seed in seeds:
             for name, params in configs.items():
                 done = out / f"{name}-s{seed}" / "results.jsonl"
