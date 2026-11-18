@@ -960,6 +960,25 @@ void AdventureAI::closeStatsDay()
 	phase["heavy"] += heavyHeroes;
 	phase["campaign"] += campaignMode ? 1 : 0;
 	phase["gold"] += cb->getResourceAmount(GameResID::GOLD);
+	{
+		// how we stand against the strongest enemy hero seen lately, and what we know to strike at
+		int enemyTowns = 0;
+		for(const auto & [id, object] : perception.knownObjects())
+			enemyTowns += object.type == Obj::TOWN && isEnemy(object.owner) ? 1 : 0;
+		phase["enemyTowns"] += enemyTowns;
+		if(oppositionHeroes <= 0)
+			phase["noOpposition"] += 1;
+		else if(main)
+		{
+			const double ratio = fieldStrength(main) / oppositionHeroes;
+			if(ratio >= 2.0)
+				phase["twice"] += 1;       // the main hero counts twice the strongest enemy hero seen in three weeks
+			else if(ratio >= 1.3)
+				phase["ahead"] += 1;       // ... or at least the edge it asks for
+			else if(ratio < 0.8)
+				phase["behind"] += 1;
+		}
+	}
 
 	std::string text = "{";
 	bool firstPhase = true;
