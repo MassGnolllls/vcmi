@@ -27,6 +27,9 @@ Figures (ours unless marked "enemy"):
                           game lets the attacker meet the hero in the gate outside the walls (thousands;
                           results written by clients built after 18.11.2026 11:00)
   gkill                   army value of map guards destroyed (thousands)
+  mkill, mlost            big armies beaten and lost: battles won against / lost by a hero of level 8 or more
+                          with 30,000 or more (the main armies, as a rule)
+  alost                   army lost in attacks of ours that failed (thousands)
   days                    length of the game
 """
 import argparse
@@ -40,7 +43,7 @@ from pathlib import Path
 
 COLORS = ["red", "blue", "tan", "green", "orange", "purple", "teal", "pink"]
 COLUMNS = ["army", "towns", "heroes", "income", "mines", "explored", "level", "gold", "dwellings", "guardFights", "guardLosses", "mainArmy", "garrisons"]
-FIGURES = ["score", "won", "lost", "t42", "t84", "et84", "main84", "garr84", "gold84", "heroes84", "expl42", "gain", "loss", "free", "gdef", "caught", "gate", "gkill", "days"]
+FIGURES = ["score", "won", "lost", "t42", "t84", "et84", "main84", "garr84", "gold84", "heroes84", "expl42", "gain", "loss", "free", "gdef", "caught", "gate", "gkill", "mkill", "mlost", "alost", "days"]
 THOUSANDS = {"main84", "garr84", "gold84"}
 # What FairAI's main hero spent its days on (results written by clients built after 18.11.2026 08:55 carry
 # these statistics, by four-week phase): share of the days 29 to 84 by the kind most of its steps went to -
@@ -109,8 +112,20 @@ def figures(record):
     garrison_lost = 0
     caught = 0
     gate = 0
+    main_kills = 0
+    main_losses = 0
+    attack_lost = 0
     for b in result.get("playerBattles", []):
         day, att, dfn, a0, d0, alost, dlost, winner, town, dhero = b[:10]
+        alvl, dlvl = (b[10], b[11]) if len(b) > 11 else (0, 0)
+        if COLORS[att] == me:
+            if winner == 0 and dlvl >= 8 and d0 >= 30000:
+                main_kills += 1
+            if winner == 1:
+                attack_lost += alost
+                main_losses += 1 if alvl >= 8 and a0 >= 30000 else 0
+        elif COLORS[dfn] == me and winner == 0 and dlvl >= 8 and d0 >= 30000:
+            main_losses += 1
         if COLORS[dfn] == me:
             if town:
                 enemy_won_at_towns += 1 if winner == 0 else 0
@@ -152,6 +167,7 @@ def figures(record):
         "heroes84": at(result, me, 84, "heroes"), "expl42": at(result, me, 42, "explored"),
         "gain": gain, "loss": loss, "free": max(0, enemy_gain - enemy_won_at_towns),
         "gdef": garrison_lost / 1000.0, "caught": caught / 1000.0, "gate": gate / 1000.0, "gkill": battles.get("guardKills", 0) / 1000.0,
+        "mkill": float(main_kills), "mlost": float(main_losses), "alost": attack_lost / 1000.0,
         "days": result.get("day", 0),
     }
 
@@ -185,7 +201,7 @@ def fmt(name, value):
         return f"{value / 1000:.0f}k"
     if name in ("score", "won", "lost"):
         return f"{value:.3f}" if name == "score" else f"{value:.2f}"
-    if name in ("gdef", "caught", "gate", "gkill"):
+    if name in ("gdef", "caught", "gate", "gkill", "alost"):
         return f"{value:.0f}k"
     if name in ("days", "expl42"):
         return f"{value:.0f}"
@@ -302,7 +318,7 @@ def main() -> int:
                 effect = statistics.mean(a) - statistics.mean(b)
                 half = 1.96 * math.sqrt(statistics.pvariance(a) / len(a) + statistics.pvariance(b) / len(b))
             scale = 1000.0 if f in THOUSANDS else 1.0
-            unit = "k" if f in THOUSANDS or f in ("gdef", "caught", "gate", "gkill") else ""
+            unit = "k" if f in THOUSANDS or f in ("gdef", "caught", "gate", "gkill", "alost") else ""
             digits = 3 if f == "score" else (2 if f in ("won", "lost", "t42", "t84", "et84", "heroes84", "gain", "loss", "free") else 0)
             mark = "**" if abs(effect) > half and half > 0 else ""
             cells.append(f"{mark}{effect / scale:+.{digits}f}{unit} ±{half / scale:.{digits}f}{mark}")
