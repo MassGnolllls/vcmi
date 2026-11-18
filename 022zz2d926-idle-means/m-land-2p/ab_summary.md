@@ -5,7 +5,7 @@ Paired against `nB`: mean difference over the games both played (95% CI). score 
 | config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|---|---|
 | nB | `{"secondArmy": 1}` | 24 | 10 | 5 | 0.596 ± 0.169 | - | 0.560 ± 0.178 | - | 24 |
-| nL | `{"garrisonShare": 0.12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nL | `{"garrisonShare": 0.12}` | 24 | 4 | 5 | 0.409 ± 0.140 | -0.187 ± 0.230 | 0.381 ± 0.146 | -0.179 ± 0.231 | 24 |
 | nQ | `{"townHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nQLB | `{"townHeroes": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nC | `{"supplyRuns": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
