@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d9278-mmai-prep",
+ "state": "failed",
+ "commit": "6b0cea2d471c544fc4458b1d2194220154db559e",
+ "host": "DESKTOP-EFJ0RGH",
+ "finished": "2026-11-18T09:52:40",
+ "error": "preparation failed: download of https://github.com/microsoft/onnxruntime/releases/download/v1.18.1/onnxruntime-linux-x64-1.18.1.tgz failed: HTTP Error 404: Not Found",
+ "note": "Only the preparation for MMAI on this PC (mod archive, ONNX Runtime, MMAI added to the build), then a step that takes seconds: shows whether both downloads work, and which one does not, without waiting for a whole test. d9271 failed with 'HTTP Error 404' without naming the download."
+}
