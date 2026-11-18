@@ -343,6 +343,7 @@ void Params::loadOverrides(int playerIndex)
 	read("surrenderMinArmy", surrenderMinArmy);
 	read("nightWatch", nightWatch);
 	read("boldBehind", boldBehind);
+	read("primaryByArmy", primaryByArmy);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
@@ -1603,6 +1604,23 @@ double AdventureAI::guardDanger(const int3 & tile) const
 	return danger;
 }
 
+double AdventureAI::primaryPointValue(const CGHeroInstance * hero, int which, bool leader) const
+{
+	// (primaryByArmy) A point of attack or defence is worth what it adds to the army the hero leads:
+	// field strength goes with sqrt((1 + 0.05 attack)(1 + 0.05 defence)), so one point adds about
+	// 1.7 per cent at ten points - 3,400 army value to an army of 200,000, for every battle to come.
+	// The flat 700 gold was a fair price for a hero with 30,000; the enemy's main hero counts 1.9
+	// times its army, ours 1.5 times.
+	const double flat = leader ? params.primarySkillValueMain : params.primarySkillValueOther;
+	if(!params.primaryByArmy || !leader || !hero || which > 1)
+		return flat;
+	const int now = hero->getPrimSkillLevel(which == 0 ? PrimarySkill::ATTACK : PrimarySkill::DEFENSE);
+	const double step = std::sqrt((1.0 + 0.05 * (now + 1)) / (1.0 + 0.05 * std::max(0, now))) - 1.0;
+	// the army it leads now and in the weeks to come (a leader's army doubles within a month)
+	const double army = std::max(60000.0, 2.0 * static_cast<double>(hero->getArmyStrength()));
+	return std::max(flat, step * army * params.goldPerArmyValue);
+}
+
 double AdventureAI::heroEdgeNow() const
 {
 	// (boldBehind) Time works for whoever holds more towns. Level with the enemy or ahead, the main
@@ -2598,9 +2616,8 @@ double AdventureAI::rewardValue(const CGHeroInstance * hero, const Rewardable::R
 		value += std::max(0, reward.calculateMovePoints(hero) - hero->movementPointsRemaining()) * (main ? params.moveValueMain : 0.33 * params.moveValueMain);
 
 	// skills
-	const double primary = main ? params.primarySkillValueMain : params.primarySkillValueOther;
-	for(int points : reward.primary)
-		value += points * primary;
+	for(size_t which = 0; which < reward.primary.size(); ++which)
+		value += reward.primary[which] * primaryPointValue(hero, static_cast<int>(which), main);
 	for(const auto & [skill, level] : reward.secondary)
 	{
 		const int has = hero->getSecSkillLevel(skill);
@@ -4977,17 +4994,19 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 	case Obj::TREE_OF_KNOWLEDGE:
 		return visitedByHero() ? 0 : (main ? 1500 : 300);
 	case Obj::MARLETTO_TOWER:
-	case Obj::GARDEN_OF_REVELATION:
+		return visitedByHero() ? 0 : primaryPointValue(hero, 1, main);
 	case Obj::MERCENARY_CAMP:
+		return visitedByHero() ? 0 : primaryPointValue(hero, 0, main);
+	case Obj::GARDEN_OF_REVELATION:
 	case Obj::STAR_AXIS:
 		return visitedByHero() ? 0 : primary;
 	case Obj::ARENA:
-		return visitedByHero() ? 0 : 2 * primary;
+		return visitedByHero() ? 0 : 2 * primaryPointValue(hero, 0, main);
 	case Obj::SCHOOL_OF_MAGIC:
 	case Obj::SCHOOL_OF_WAR:
 		if(visitedByHero() || !main || spendable()[GameResID::GOLD] < 3000)
 			return 0;
-		return 2 * primary - 1000;
+		return (object.type == Obj::SCHOOL_OF_WAR ? primaryPointValue(hero, 0, main) + primary : 2 * primary) - 1000;
 	case Obj::WITCH_HUT:
 		return visitedByHero() ? 0 : (main ? 1000 : 300);
 	case Obj::SHRINE_OF_MAGIC_INCANTATION:
@@ -6503,7 +6522,7 @@ double AdventureAI::artifactValue(const CGHeroInstance * hero, const CArtifact *
 		{
 		case BonusType::PRIMARY_SKILL:
 			if(bonus.subtype == BonusSubtypeID(PrimarySkill::ATTACK) || bonus.subtype == BonusSubtypeID(PrimarySkill::DEFENSE))
-				value += v * skillPoint * scope;
+				value += v * (params.primaryByArmy ? primaryPointValue(hero, bonus.subtype == BonusSubtypeID(PrimarySkill::ATTACK) ? 0 : 1, fighter) : skillPoint) * scope;
 			else if(bonus.subtype == BonusSubtypeID(PrimarySkill::SPELL_POWER))
 				value += v * skillPoint * (0.25 + 0.75 * reliance);
 			else
