@@ -3,5 +3,11 @@
   "note": "Horn of the Abyss for VCMI 1.7 (Cove, Factory, Bulwark), the version the VCMI launcher installs",
   "url": "https://github.com/vcmi-mods/horn-of-the-abyss",
   "commit": "6ca6dca06a9ae71a52c8d0e08881a6227726fc7e"
+ },
+ "mmai": {
+  "note": "MMAI battle AI: its models and settings (mod version 1.5 for VCMI 1.7), the archive the VCMI launcher installs. Data only; the library that runs the models is pinned in tools.json",
+  "archive": "https://github.com/vcmi-mods/mmai/releases/download/vcmi-1.7-latest/mod.zip",
+  "sha256": "59aef1bbd76a02131f31c7e997111f1736a22e1c39c99df48b26feb5bf8bdb84",
+  "folder": "mmai"
  }
 }

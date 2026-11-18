@@ -7,7 +7,10 @@ Loop:
   3. run the next job with a frozen copy of the build, uploading progress every few minutes
   4. publish results (small files only, no logs) to branch `fairai-results` of the same fork
 
-The worker only ever runs code from the fork's `fairai` branch.
+The worker only ever runs code from the fork's `fairai` branch. Two exceptions, each allowed by the
+owner of the PC and pinned in the fork so that nothing else can arrive: mods (mods.json: Horn of the
+Abyss, the MMAI models) and the ONNX Runtime library MMAI needs (tools.json). They are fetched without
+the stored token, checked against the pinned content and kept inside the worker's own folder.
 
 Job file (arena/jobs/<id>.json):
   {"script": "run_tournament.py", "args": ["play", "--client", "{client}", ..., "--out", "{out}", "--jobs", "{jobs}"],
@@ -17,6 +20,7 @@ Placeholders: {client} vcmiclient of the frozen build, {out} output directory, {
 Setup: arena/worker/setup-wsl.sh. Start: python3 ~/fairai/vcmi/arena/worker/worker.py
 """
 import datetime
+import hashlib
 import json
 import os
 import shutil
@@ -84,13 +88,14 @@ def update_source() -> str:
     return target
 
 
-def frozen_build(commit: str) -> Path:
+def frozen_build(commit: str, needs=()) -> Path:
     snap = SNAPS / commit[:10]
-    if (snap / "vcmiclient").exists():
+    if (snap / "vcmiclient").exists() and all((snap / n).exists() for n in needs):
         return snap
     log("building ...")
     run(["cmake", "--build", BUILD, f"-j{os.cpu_count() or 2}"])
     SNAPS.mkdir(parents=True, exist_ok=True)
+    shutil.rmtree(snap, ignore_errors=True)  # a copy of this commit made before the build could do what the job needs
     # hard-linked copy: later rebuilds replace files and leave this copy intact
     run(["cp", "-al", BUILD / "bin", snap])
     for old in sorted(SNAPS.iterdir(), key=lambda p: p.stat().st_mtime)[:-3]:
@@ -177,9 +182,73 @@ def vcmi_mods_dir() -> Path:
     return Path(base) / "vcmi" / "Mods"
 
 
+def fetch(url: str, dest: Path, limit: int = 400_000_000) -> None:
+    """Plain HTTPS download: no token, no credentials of any kind. Only URLs pinned in the fork get here."""
+    import urllib.request
+    if not url.startswith("https://github.com/"):
+        raise RuntimeError(f"refusing to download from {url}")
+    request = urllib.request.Request(url, headers={"User-Agent": "fairai-worker"})
+    total = 0
+    with urllib.request.urlopen(request, timeout=120) as response, open(dest, "wb") as out:
+        while True:
+            chunk = response.read(1 << 20)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > limit:
+                raise RuntimeError(f"{url}: larger than {limit} bytes")
+            out.write(chunk)
+
+
+def sha256_file(path: Path) -> str:
+    digest = hashlib.sha256()
+    with open(path, "rb") as f:
+        for chunk in iter(lambda: f.read(1 << 20), b""):
+            digest.update(chunk)
+    return digest.hexdigest()
+
+
+def safe_relative(name: str) -> Path:
+    """A path from an archive, to be written below a folder of ours: nothing absolute, nothing that climbs out."""
+    parts = [part for part in name.replace("\\", "/").split("/") if part not in ("", ".")]
+    if not parts or name.startswith("/") or any(part == ".." or ":" in part for part in parts):
+        raise RuntimeError(f"archive holds an unsafe path: {name!r}")
+    return Path(*parts)
+
+
+def install_mod_archive(name: str, spec: dict, target: Path) -> None:
+    """A mod published as one archive (what the VCMI launcher downloads), pinned by its SHA-256."""
+    import zipfile
+    tmp = vcmi_mods_dir() / f".{name}-download"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    try:
+        archive = tmp / "archive.zip"
+        fetch(spec["archive"], archive)
+        got = sha256_file(archive)
+        if got != spec["sha256"]:
+            raise RuntimeError(f"mod {name}: archive has SHA-256 {got}, pinned is {spec['sha256']}")
+        prefix = spec["folder"].strip("/") + "/"
+        out = tmp / "mod"
+        with zipfile.ZipFile(archive) as z:
+            for info in z.infolist():
+                if info.is_dir() or not info.filename.startswith(prefix):
+                    continue
+                dest = out / safe_relative(info.filename[len(prefix):])
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(z.read(info))
+        if not (out / "mod.json").exists():
+            raise RuntimeError(f"mod {name}: no {prefix}mod.json in the archive")
+        (out / ".fairai-commit").write_text(spec["sha256"] + "\n")
+        shutil.rmtree(target, ignore_errors=True)
+        out.rename(target)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 def ensure_mods(names) -> None:
     """Install the mods a job needs, exactly as pinned in mods.json next to this file (public
-    repository and commit). The stored token is never offered to those repositories."""
+    repository and commit, or archive and checksum). The stored token is never offered to those places."""
     if not names:
         return
     pinned = json.loads((SRC / "arena" / "worker" / "mods.json").read_text())
@@ -187,7 +256,13 @@ def ensure_mods(names) -> None:
         spec = pinned[name]  # a job cannot ask for anything that is not pinned in the fork
         target = vcmi_mods_dir() / name
         marker = target / ".fairai-commit"
-        if marker.exists() and marker.read_text().strip() == spec["commit"]:
+        if marker.exists() and marker.read_text().strip() == spec.get("commit", spec.get("sha256")):
+            continue
+        if "archive" in spec:
+            log(f"installing mod {name} ({spec['archive']}, SHA-256 {spec['sha256'][:12]})")
+            vcmi_mods_dir().mkdir(parents=True, exist_ok=True)
+            install_mod_archive(name, spec, target)
+            log(f"mod {name} installed in {target}")
             continue
         log(f"installing mod {name} ({spec['url']} at {spec['commit'][:10]}), this may take a while")
         tmp = vcmi_mods_dir() / f".{name}-download"
@@ -213,6 +288,67 @@ def ensure_mods(names) -> None:
         log(f"mod {name} installed in {target}")
 
 
+def ensure_onnxruntime() -> Path:
+    """The library MMAI computes its models with, from the release pinned in tools.json. Only the files
+    named there are taken from the archive, each only if its content is the pinned one."""
+    import tarfile
+    spec = json.loads((SRC / "arena" / "worker" / "tools.json").read_text())["onnxruntime"]
+    wanted = dict(spec["files"])
+    pin = hashlib.sha256(json.dumps([spec["archive"], spec["files"], spec.get("links", {})], sort_keys=True).encode()).hexdigest()
+    target = ROOT / "onnxruntime"
+    marker = target / ".fairai-pin"
+    if marker.exists() and marker.read_text().strip() == pin:
+        return target
+    log(f"installing ONNX Runtime ({spec['archive']})")
+    tmp = ROOT / ".onnxruntime-download"
+    shutil.rmtree(tmp, ignore_errors=True)
+    tmp.mkdir(parents=True)
+    try:
+        archive = tmp / "archive.tgz"
+        fetch(spec["archive"], archive)
+        out = tmp / "root"
+        with tarfile.open(archive) as tar:
+            for member in tar:
+                if not member.isfile():
+                    continue
+                rel = member.name.split("/", 1)[1] if "/" in member.name else member.name  # below the archive's top folder
+                if rel not in wanted:
+                    continue
+                data = tar.extractfile(member).read()
+                got = hashlib.sha256(data).hexdigest()
+                if got != wanted[rel]:
+                    raise RuntimeError(f"ONNX Runtime: {rel} has SHA-256 {got}, pinned is {wanted[rel]}")
+                dest = out / safe_relative(rel)
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                dest.write_bytes(data)
+                if rel.startswith("lib/"):
+                    dest.chmod(0o755)
+                del wanted[rel]
+        if wanted:
+            raise RuntimeError("ONNX Runtime: the archive lacks " + ", ".join(sorted(wanted)))
+        for link, to in spec.get("links", {}).items():
+            os.symlink(to, out / safe_relative(link))
+        (out / ".fairai-pin").write_text(pin + "\n")
+        shutil.rmtree(target, ignore_errors=True)
+        out.rename(target)
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    log(f"ONNX Runtime installed in {target}")
+    return target
+
+
+def ensure_mmai_build(onnxruntime: Path) -> None:
+    """Add the MMAI battle AI to the build as a plug-in. ENABLE_MMAI_DEFINE=OFF keeps the compiler flags of
+    everything else as they are: only MMAI itself is compiled."""
+    cache = BUILD / "CMakeCache.txt"
+    text = cache.read_text(errors="replace") if cache.exists() else ""
+    if "ENABLE_MMAI:BOOL=ON" in text and f"ONNXRUNTIME_ROOT:PATH={onnxruntime}\n" in text:
+        return
+    log("adding MMAI to the build")
+    run(["cmake", "-S", SRC, "-B", BUILD, "-DENABLE_MMAI=ON", "-DENABLE_MMAI_DEFINE=OFF", f"-DONNXRUNTIME_ROOT={onnxruntime}",
+         f"-DONNXRUNTIME_INCLUDE_DIR={onnxruntime / 'include'}", f"-DONNXRUNTIME_LIBRARY={onnxruntime / 'lib' / 'libonnxruntime.so'}"])
+
+
 def job_withdrawn(job_id: str) -> bool:
     """A running job is stopped when its file disappears from the branch (checked at every sync).
     Only a clear answer counts: network trouble never cancels a job."""
@@ -228,8 +364,24 @@ def job_withdrawn(job_id: str) -> bool:
 def run_job(path: Path, commit: str) -> None:
     job_id = path.stem
     job = json.loads(path.read_text())
-    ensure_mods(job.get("mods", []))
-    snap = frozen_build(commit)
+    mods = job.get("mods", [])
+    needs = []
+    try:
+        ensure_mods(mods)
+        if "mmai" in mods:
+            ensure_mmai_build(ensure_onnxruntime())
+            needs.append("AI/libMMAI.so")
+    except Exception as e:  # a download that does not match its pin, no network: this job cannot run - the next one can
+        log(f"job {job_id}: cannot prepare what it needs: {e}")
+        result_dir = RESULTS / job_id
+        result_dir.mkdir(parents=True, exist_ok=True)
+        (result_dir / "status.json").write_text(json.dumps({
+            "job": job_id, "state": "failed", "commit": commit, "host": socket.gethostname(),
+            "finished": datetime.datetime.now().isoformat(timespec="seconds"),
+            "error": f"preparation failed: {e}"[:500], "note": job.get("note", "")}, indent=1))
+        publish(f"{job_id}: failed (preparation)")
+        return
+    snap = frozen_build(commit, needs)
     out = RUNS / job_id
     shutil.rmtree(out, ignore_errors=True)
     out.mkdir(parents=True, exist_ok=True)

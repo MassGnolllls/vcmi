@@ -346,7 +346,11 @@ endif()
 if(ENABLE_BATTLE_AI)
 	add_definitions(-DENABLE_BATTLE_AI)
 endif()
-if(ENABLE_MMAI)
+# FairAI: the definition matters only where AI libraries are linked statically and in the launcher.
+# A build that adds MMAI later as a plug-in (the test worker) turns it off: with it every file of the
+# project would be compiled again.
+option(ENABLE_MMAI_DEFINE "Pass -DENABLE_MMAI to all targets (static AI libraries, launcher)" ON)
+if(ENABLE_MMAI AND ENABLE_MMAI_DEFINE)
 	add_definitions(-DENABLE_MMAI)
 endif()
 

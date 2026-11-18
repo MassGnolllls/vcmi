@@ -1,0 +1,24 @@
+{
+ "onnxruntime": {
+  "note": "ONNX Runtime 1.18.1 for Linux x64 from Microsoft's official releases - the version and place VCMI's build instructions name (docs/developers/Building_Linux.md). MMAI computes its models with it. Pinned by the content of every file that is used: a file that differs is not written to disk",
+  "archive": "https://github.com/microsoft/onnxruntime/releases/download/v1.18.1/onnxruntime-linux-x64-1.18.1.tgz",
+  "files": {
+   "include/cpu_provider_factory.h": "0de52d129c718c07ee71a16b4953d8d483df019746a11caad77a0650a2f4ed47",
+   "include/onnxruntime_c_api.h": "1e12ca259f96f6311bc7a4f66d8c61a7c158eeb1c341dd39be9dd1ebf1ef5b75",
+   "include/onnxruntime_cxx_api.h": "d9cad7709965b906989befe4ba3633d9c8998005e07179ff5a4b7aaefb907a95",
+   "include/onnxruntime_cxx_inline.h": "73d09b8c547fec8bd750cfd6cdfb02926dcd379713257e170a64be6b37275abf",
+   "include/onnxruntime_float16.h": "ecdcb4a53176c8b3bbcf674788fcf5ec923fb2b5c762c3f6cfb56fdb6c259aa1",
+   "include/onnxruntime_lite_custom_op.h": "d8976ed39791d958ee6a5242ed12d3a8fb875f95718a489811339c1f95436279",
+   "include/onnxruntime_run_options_config_keys.h": "730910e9e78af536d0a4a5a72d408ab793bbe232054a5a4596c8200e45f3c99c",
+   "include/onnxruntime_session_options_config_keys.h": "8e2dacd0f5360075555f2a7b38451550c39e9b976b023fac7577c6e0be766f78",
+   "include/onnxruntime_training_c_api.h": "c7d7f04669b9cfc70bc1efa8e29057744ca6943f8be6b2a9ed5cad5ea66bb306",
+   "include/onnxruntime_training_cxx_api.h": "7ea1ce73b019a83075d7212f458354d1f721f3d9a7c2cadca4545a0772c4ceef",
+   "include/onnxruntime_training_cxx_inline.h": "4797532bc436044e9565575fc95adcc1bf6fce4961cd905a28fd013cb8e2ce14",
+   "include/provider_options.h": "cb7206ffd06ba31b9f7e5f6089a6206f0c720c10c3adcc61db7f829c86691cfc",
+   "lib/libonnxruntime.so.1.18.1": "1147caa734d19f7549f90a659aa9ca444366eeb80a596900d19d242145a9f4c9"
+  },
+  "links": {
+   "lib/libonnxruntime.so": "libonnxruntime.so.1.18.1"
+  }
+ }
+}
