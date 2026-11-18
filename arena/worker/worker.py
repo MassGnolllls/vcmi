@@ -189,15 +189,18 @@ def fetch(url: str, dest: Path, limit: int = 400_000_000) -> None:
         raise RuntimeError(f"refusing to download from {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "fairai-worker"})
     total = 0
-    with urllib.request.urlopen(request, timeout=120) as response, open(dest, "wb") as out:
-        while True:
-            chunk = response.read(1 << 20)
-            if not chunk:
-                break
-            total += len(chunk)
-            if total > limit:
-                raise RuntimeError(f"{url}: larger than {limit} bytes")
-            out.write(chunk)
+    try:
+        with urllib.request.urlopen(request, timeout=120) as response, open(dest, "wb") as out:
+            while True:
+                chunk = response.read(1 << 20)
+                if not chunk:
+                    break
+                total += len(chunk)
+                if total > limit:
+                    raise RuntimeError(f"{url}: larger than {limit} bytes")
+                out.write(chunk)
+    except OSError as e:  # which download it was belongs in the job's status: nobody reads the worker's own log from afar
+        raise RuntimeError(f"download of {url} failed: {e}") from e
 
 
 def sha256_file(path: Path) -> str:

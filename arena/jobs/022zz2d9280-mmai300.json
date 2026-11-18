@@ -1,0 +1,29 @@
+{
+ "note": "Second try of d9271 (its preparation failed with 'HTTP Error 404' without saying for which download; the error now names it). Where FairAI stands against Nullkiller2 with the MMAI battle AI, played to the end: the twelve medium land maps, both seats, day limit 300; the standard and the standard with townHeroes + secondArmy (the pair that scored 0.61 against 0.48 in d926). So far there is one series of 24 games to day 150 against this opponent (9 won, 6 lost, 9 open). First job that needs MMAI on the worker: the mod archive (mods.json) and the ONNX Runtime (tools.json), both allowed by the owner on 18.11.; if either cannot be had as pinned the job fails and the next one runs.",
+ "script": "matrix.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long300.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "62",
+  "--only",
+  "m-land-2p",
+  "--ai",
+  "FairAI+FairAI",
+  "--opponent",
+  "Nullkiller2+MMAI",
+  "--configs",
+  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}}"
+ ],
+ "jobs": 6
+}
