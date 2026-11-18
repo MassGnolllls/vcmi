@@ -254,6 +254,7 @@ void Params::loadOverrides(int playerIndex)
 	read("defenceWallsFort", defenceWallsFort);
 	read("defenceWallsCitadel", defenceWallsCitadel);
 	read("fleeGain", fleeGain);
+	read("standFast", standFast);
 	read("antiOscillation", antiOscillation);
 	read("boats", boats);
 	read("townDefenceValue", townDefenceValue);
@@ -632,6 +633,7 @@ void AdventureAI::playTurn()
 	const auto turnStart = std::chrono::steady_clock::now();
 	today = cb->getDate(Date::DAY);
 	failedToday.clear();
+	fledToday.clear();
 	reservedBy.clear();
 	pocketExits.clear();
 	trail.clear();
@@ -1190,8 +1192,11 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 				targets.push_back(t);
 			}
 		}
-		if(targets.empty() && isMain(hero) && !hero->getVisitedTown())
+		if(targets.empty() && isMain(hero) && !hero->getVisitedTown() && !fledToday.count(heroId))
 		{
+			// (a hero that fled today stays where the flight ended: turning round for home with what
+			// movement is left ends in the open, nearer to the threat - a main hero of 350,000 was
+			// beaten that way two tiles from the gate it had fled from in the morning)
 			// nothing to do: wait in the nearest own town, where garrison and walls help
 			// (trappedHome) Threatened where it stands, with nothing safe in reach and nowhere to flee
 			// to: standing still helps nothing - the nights on the way home are no worse than this one,
@@ -1337,6 +1342,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 				mainBestValueToday = std::max(mainBestValueToday, best.value);
 		}
 
+		if(best.description == "flee")
+			fledToday.insert(heroId);
 		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside" || best.description == "way out"
 			|| best.description == "fortress";
 		if(params.antiOscillation)
@@ -6518,7 +6525,40 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 							flee.travel = node->cost;
 						}
 					}
-			if(bestDistance > here + params.fleeGain)
+			// (standFast) Behind the walls of a town of ours, or with such a town within today's march,
+			// the open field is no refuge: every tile we could flee to is in the enemy's reach as well.
+			bool sheltered = false;
+			if(params.standFast)
+			{
+				sheltered = defenceAt(hero, heroPos) > 1.05 * ownStrength;
+				if(!sheltered)
+				{
+					const CGTownInstance * shelter = nullptr;
+					double shelterDefence = 1.05 * ownStrength;
+					float shelterCost = 0;
+					for(const auto * town : perception.ownTowns())
+					{
+						const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+						if(!node || !node->reachable() || node->turns > 0 || failedToday.count({heroNum, town->visitablePos()}))
+							continue;
+						if(const auto * visitor = town->getVisitingHero(); visitor && visitor != hero)
+							continue; // the gate is taken
+						const double defence = defenceAt(hero, town->visitablePos());
+						if(defence > shelterDefence)
+						{
+							shelter = town;
+							shelterDefence = defence;
+							shelterCost = node->cost;
+						}
+					}
+					if(shelter)
+					{
+						sheltered = true;
+						addTarget(shelter->visitablePos(), shelter->id, heroWorth * params.retreatValue * 0.6, 0, shelterCost, "home");
+					}
+				}
+			}
+			if(bestDistance > here + params.fleeGain && !sheltered)
 				addTarget(flee.tile, ObjectInstanceID(), heroWorth * params.retreatValue * 0.5, 0, flee.travel, "flee");
 			logAi->debug("FairAI %s: %s threatened (%.0f vs defence %.0f) and no safe tile today; threat distance here %.1f, best reachable %.1f",
 				me.toString(), hero->getNameTranslated(), threatAt(heroPos, ObjectInstanceID(), cautious), defenceAt(hero, heroPos), here,

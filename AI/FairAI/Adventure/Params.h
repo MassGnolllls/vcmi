@@ -66,6 +66,7 @@ struct Params
 	double defenceWallsFort = 1.3;     ///< our own town with a fort: defenders count this much more
 	double defenceWallsCitadel = 1.5;  ///< same with a citadel or castle
 	double fleeGain = 4;               ///< trapped (no safe tile today): flee only if the threats' path distance grows by this much
+	int standFast = 0;                 ///< 1: a hero that is threatened with nothing safe in reach does not flee out of a town of ours whose walls and garrison add to its defence, and with such a town within today's march it goes there instead of fleeing into the open: the tiles it could flee to are within the enemy's reach as well, and there it fights without walls. (Logged: a main hero of 350,000 retook its town, fled from it before an army of 734,000 for six steps, turned round for home and was beaten in the open two tiles from the gate.) Off until a test shows a gain
 	double townDefenceValue = 10000;   ///< value of returning to a threatened own town
 	int townGuard = 1;                 ///< 1: town defence weighs the town's own means, the main hero only makes round trips from a town that needs it and clears the gate of our other heroes (0: old rules)
 	double wallsFactor = 1.5;          ///< sieges: defenders behind town walls count this much more
