@@ -382,3 +382,38 @@ nAKFC: match   23 FairAI as blue of 2: victory winner=blue day=106 score=1.00 [1
 nAKWH: match   23 FairAI as blue of 2: victory winner=blue day=117 score=1.00 [225.3s]
 nATFH: match   23 FairAI as blue of 2: victory winner=blue day=112 score=1.00 [225.0s]
 nATKP: match   23 FairAI as blue of 2: victory winner=blue day=94 score=1.00 [181.9s]
+nAHPC: match   23 FairAI as blue of 2: victory winner=blue day=215 score=1.00 [458.5s]
+nATKWFHPC: match   23 FairAI as blue of 2: victory winner=blue day=109 score=1.00 [222.7s]
+nATWC: match   23 FairAI as blue of 2: victory winner=red day=250 score=0.00 [564.0s]
+# A/B test (16 configs, seeds 60)
+
+Paired against `new`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| new | `{}` | 24 | 14 | 7 | 0.650 ± 0.183 | - | 0.655 ± 0.181 | - | 24 |
+| nWFHC | `{"magicWorth": 1, "fetchByShare": 1, "noChase": 1, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 13 | 11 | 0.542 ± 0.204 | -0.109 ± 0.251 | 0.542 ± 0.204 | -0.113 ± 0.252 | 24 |
+| nKFHP | `{"breakout": 2, "fetchByShare": 1, "noChase": 1, "passage": 1, "regionValue": 8000}` | 24 | 10 | 14 | 0.417 ± 0.201 | -0.234 ± 0.241 | 0.417 ± 0.201 | -0.238 ± 0.243 | 24 |
+| nKWPC | `{"breakout": 2, "magicWorth": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 13 | 11 | 0.542 ± 0.204 | -0.109 ± 0.268 | 0.542 ± 0.204 | -0.113 ± 0.268 | 24 |
+| nTFPC | `{"townWorth": 1, "townAmbush": 1, "fetchByShare": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 10 | 14 | 0.417 ± 0.201 | -0.234 ± 0.240 | 0.417 ± 0.201 | -0.238 ± 0.239 | 24 |
+| nTWHP | `{"townWorth": 1, "townAmbush": 1, "magicWorth": 1, "noChase": 1, "passage": 1, "regionValue": 8000}` | 24 | 11 | 12 | 0.474 ± 0.200 | -0.176 ± 0.261 | 0.470 ± 0.200 | -0.185 ± 0.259 | 24 |
+| nTKHC | `{"townWorth": 1, "townAmbush": 1, "breakout": 2, "noChase": 1, "guardKillValue": 0.08, "expValueMain": 1.0}` | 23 | 16 | 6 | 0.729 ± 0.182 | +0.094 ± 0.223 | 0.720 ± 0.182 | +0.081 ± 0.218 | 23 |
+| nTKWF | `{"townWorth": 1, "townAmbush": 1, "breakout": 2, "magicWorth": 1, "fetchByShare": 1}` | 24 | 17 | 7 | 0.708 ± 0.186 | +0.058 ± 0.246 | 0.708 ± 0.186 | +0.054 ± 0.244 | 24 |
+| nAHPC | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "noChase": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 10 | 14 | 0.417 ± 0.201 | -0.234 ± 0.285 | 0.417 ± 0.201 | -0.238 ± 0.285 | 24 |
+| nAWFP | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "magicWorth": 1, "fetchByShare": 1, "passage": 1, "regionValue": 8000}` | 23 | 19 | 4 | 0.826 ± 0.158 | +0.148 ± 0.269 | 0.826 ± 0.158 | +0.143 ± 0.265 | 23 |
+| nAKFC | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "breakout": 2, "fetchByShare": 1, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 13 | 10 | 0.551 ± 0.200 | -0.099 ± 0.303 | 0.542 ± 0.204 | -0.113 ± 0.299 | 24 |
+| nAKWH | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "breakout": 2, "magicWorth": 1, "noChase": 1}` | 24 | 14 | 9 | 0.603 ± 0.196 | -0.048 ± 0.248 | 0.589 ± 0.199 | -0.065 ± 0.253 | 24 |
+| nATFH | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "townWorth": 1, "townAmbush": 1, "fetchByShare": 1, "noChase": 1}` | 24 | 13 | 11 | 0.542 ± 0.204 | -0.109 ± 0.270 | 0.542 ± 0.204 | -0.113 ± 0.268 | 24 |
+| nATWC | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "townWorth": 1, "townAmbush": 1, "magicWorth": 1, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 17 | 7 | 0.708 ± 0.186 | +0.058 ± 0.263 | 0.708 ± 0.186 | +0.054 ± 0.259 | 24 |
+| nATKP | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "townWorth": 1, "townAmbush": 1, "breakout": 2, "passage": 1, "regionValue": 8000}` | 24 | 13 | 11 | 0.542 ± 0.204 | -0.109 ± 0.261 | 0.542 ± 0.204 | -0.113 ± 0.256 | 24 |
+| nATKWFHPC | `{"townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "townWorth": 1, "townAmbush": 1, "breakout": 2, "magicWorth": 1, "fetchByShare": 1, "noChase": 1, "passage": 1, "regionValue": 8000, "guardKillValue": 0.08, "expValueMain": 1.0}` | 24 | 10 | 14 | 0.417 ± 0.201 | -0.234 ± 0.286 | 0.417 ± 0.201 | -0.238 ± 0.281 | 24 |
+
+# Matrix test: 1 map categories, configs new, nWFHC, nKFHP, nKWPC, nTFPC, nTWHP, nTKHC, nTKWF, nAHPC, nAWFP, nAKFC, nAKWH, nATFH, nATWC, nATKP, nATKWFHPC, seeds 60
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | new (games, score, decided) | nWFHC (games, score, decided) | nKFHP (games, score, decided) | nKWPC (games, score, decided) | nTFPC (games, score, decided) | nTWHP (games, score, decided) | nTKHC (games, score, decided) | nTKWF (games, score, decided) | nAHPC (games, score, decided) | nAWFP (games, score, decided) | nAKFC (games, score, decided) | nAKWH (games, score, decided) | nATFH (games, score, decided) | nATWC (games, score, decided) | nATKP (games, score, decided) | nATKWFHPC (games, score, decided) | nWFHC − new | nKFHP − new | nKWPC − new | nTFPC − new | nTWHP − new | nTKHC − new | nTKWF − new | nAHPC − new | nAWFP − new | nAKFC − new | nAKWH − new | nATFH − new | nATWC − new | nATKP − new | nATKWFHPC − new |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-land-2p | 24, 0.650 ± 0.183, 14 won 7 lost | 24, 0.542 ± 0.204, 13 won 11 lost | 24, 0.417 ± 0.201, 10 won 14 lost | 24, 0.542 ± 0.204, 13 won 11 lost | 24, 0.417 ± 0.201, 10 won 14 lost | 24, 0.474 ± 0.200, 11 won 12 lost | 23, 0.729 ± 0.182, 16 won 6 lost | 24, 0.708 ± 0.186, 17 won 7 lost | 24, 0.417 ± 0.201, 10 won 14 lost | 23, 0.826 ± 0.158, 19 won 4 lost | 24, 0.551 ± 0.200, 13 won 10 lost | 24, 0.603 ± 0.196, 14 won 9 lost | 24, 0.542 ± 0.204, 13 won 11 lost | 24, 0.708 ± 0.186, 17 won 7 lost | 24, 0.542 ± 0.204, 13 won 11 lost | 24, 0.417 ± 0.201, 10 won 14 lost | -0.109 ± 0.251 (24) | -0.234 ± 0.241 (24) | -0.109 ± 0.268 (24) | -0.234 ± 0.240 (24) | -0.176 ± 0.261 (24) | +0.094 ± 0.223 (23) | +0.058 ± 0.246 (24) | -0.234 ± 0.285 (24) | +0.148 ± 0.269 (23) | -0.099 ± 0.303 (24) | -0.048 ± 0.248 (24) | -0.109 ± 0.270 (24) | +0.058 ± 0.263 (24) | -0.109 ± 0.261 (24) | -0.234 ± 0.286 (24) |
+| **mean of categories** | 0.650 | 0.542 | 0.417 | 0.542 | 0.417 | 0.474 | 0.729 | 0.708 | 0.417 | 0.826 | 0.551 | 0.603 | 0.542 | 0.708 | 0.542 | 0.417 | -0.109 (all games: -0.109 ± 0.251) | -0.234 (all games: -0.234 ± 0.241) | -0.109 (all games: -0.109 ± 0.268) | -0.234 (all games: -0.234 ± 0.240) | -0.176 (all games: -0.176 ± 0.261) | +0.094 (all games: +0.094 ± 0.223) | +0.058 (all games: +0.058 ± 0.246) | -0.234 (all games: -0.234 ± 0.285) | +0.148 (all games: +0.148 ± 0.269) | -0.099 (all games: -0.099 ± 0.303) | -0.048 (all games: -0.048 ± 0.248) | -0.109 (all games: -0.109 ± 0.270) | +0.058 (all games: +0.058 ± 0.263) | -0.109 (all games: -0.109 ± 0.261) | -0.234 (all games: -0.234 ± 0.286) |
+
