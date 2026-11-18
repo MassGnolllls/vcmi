@@ -18,5 +18,5 @@ Paired against `nB`: mean difference over the games both played (95% CI). score 
 | nTQL | `{"townWorth": 1, "townHeroes": 1, "garrisonShare": 0.12}` | 24 | 6 | 4 | 0.523 ± 0.159 | -0.074 ± 0.204 | 0.464 ± 0.164 | -0.095 ± 0.223 | 24 |
 | nTCB | `{"townWorth": 1, "supplyRuns": 1, "secondArmy": 1}` | 24 | 8 | 8 | 0.500 ± 0.173 | -0.096 ± 0.231 | 0.476 ± 0.174 | -0.083 ± 0.233 | 24 |
 | nTCL | `{"townWorth": 1, "supplyRuns": 1, "garrisonShare": 0.12}` | 24 | 11 | 7 | 0.552 ± 0.191 | -0.045 ± 0.272 | 0.548 ± 0.190 | -0.012 ± 0.269 | 24 |
-| nTCQ | `{"townWorth": 1, "supplyRuns": 1, "townHeroes": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nTCQ | `{"townWorth": 1, "supplyRuns": 1, "townHeroes": 1}` | 24 | 5 | 7 | 0.469 ± 0.167 | -0.128 ± 0.243 | 0.452 ± 0.156 | -0.107 ± 0.237 | 24 |
 | nTCQLB | `{"townWorth": 1, "supplyRuns": 1, "townHeroes": 1, "garrisonShare": 0.12, "secondArmy": 1}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
