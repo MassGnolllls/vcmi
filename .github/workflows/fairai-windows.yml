@@ -4,8 +4,15 @@ name: FairAI Windows build
 # The resulting zip is available as an artifact of the workflow run.
 # Only on request (Actions tab > FairAI Windows build > Run workflow, or `gh workflow run`):
 # a build on every push meant some forty builds a day, most of them cancelled by the next push.
+# With "publish" the package also becomes the public download of this fork (release
+# "fairai-latest"), where the installer script in AI/FairAI/windows fetches it without a login.
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: 'Publish the package as release fairai-latest (public download)'
+        type: boolean
+        default: true
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
@@ -14,6 +21,8 @@ concurrency:
 jobs:
   build:
     name: Build (${{ matrix.platform }})
+    permissions:
+      contents: write # the release "fairai-latest" (see the step that publishes the package)
     strategy:
       matrix:
         include:
@@ -302,6 +311,25 @@ jobs:
         compression-level: 9
         path: |
           ${{github.workspace}}/out/build/${{matrix.preset}}/${{ env.VCMI_PACKAGE_FILE_NAME }}.${{ matrix.extension }}
+
+    # The package under fixed names in the release "fairai-latest" of this repository, with its
+    # SHA-256 and the commit it was built from. Each run replaces the files of the run before.
+    - name: Publish package as release fairai-latest
+      if: ${{ matrix.pack == 1 && inputs.publish }}
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        cd "${{github.workspace}}/out/build/${{matrix.preset}}"
+        cp "${{ env.VCMI_PACKAGE_FILE_NAME }}.${{ matrix.extension }}" VCMI-FairAI-windows-x64.zip
+        sha256sum VCMI-FairAI-windows-x64.zip | cut -d' ' -f1 > VCMI-FairAI-windows-x64.sha256
+        printf '%s\n' "${{ github.sha }}" > VCMI-FairAI-version.txt
+        if ! gh release view fairai-latest --repo "${{ github.repository }}" > /dev/null 2>&1; then
+          gh release create fairai-latest --repo "${{ github.repository }}" --target "${{ github.sha }}" --prerelease \
+            --title "VCMI 1.7.5 with FairAI - Windows x64 (latest build)" \
+            --notes "Built by the workflow 'FairAI Windows build'. VCMI-FairAI-version.txt names the commit the files were built from."
+        fi
+        gh release upload fairai-latest --repo "${{ github.repository }}" --clobber \
+          VCMI-FairAI-windows-x64.zip VCMI-FairAI-windows-x64.sha256 VCMI-FairAI-version.txt
 
     - name: Upload AAB Artifact
       id: upload_aab
