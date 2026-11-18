@@ -293,6 +293,11 @@ private:
 	std::map<ObjectInstanceID, uint16_t> entryMasks;
 	/// fortification level of towns (visible on the map), remembered while we see them
 	std::map<ObjectInstanceID, int> townFortLevel;
+	int breakoutLogDay = -1;
+	std::map<int, int> seenTilesOn; ///< (breakout) tiles of the map uncovered at the start of each of our days
+	int mapTiles = 0;
+	bool exploringStalled() const;
+	int breakoutDebugDay = -1;
 	int trappedLog = -1; ///< day of the last "marching home" line (log only)
 	std::set<ObjectInstanceID> scoutsToday; ///< secondary heroes exploring without the territory limit
 	/// Strength our hero is expected to lose to moat and arrow towers before the walls fall

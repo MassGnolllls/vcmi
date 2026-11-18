@@ -317,6 +317,9 @@ void Params::loadOverrides(int playerIndex)
 	read("armyFit", armyFit);
 	read("fastKeeper", fastKeeper);
 	read("passage", passage);
+	read("breakout", breakout);
+	read("idleBuild", idleBuild);
+	read("idleGold", idleGold);
 	read("idleRho", idleRho);
 	read("idleReserve", idleReserve);
 	read("manaValueMain", manaValueMain);
@@ -472,6 +475,20 @@ bool AdventureAI::contested(const CGTownInstance * town) const
 	return enemySeenNear(town->visitablePos(), 7, 24);
 }
 
+bool AdventureAI::exploringStalled() const
+{
+	// (breakout) Two weeks that uncovered less than a fiftieth of the map, with a tenth of it or more
+	// still unseen: whatever there is left to explore without a fight is not worth the way.
+	if(today < 21 || mapTiles <= 0)
+		return false;
+	auto now = seenTilesOn.find(today);
+	auto before = seenTilesOn.upper_bound(today - 14);
+	if(now == seenTilesOn.end() || before == seenTilesOn.begin())
+		return false;
+	--before; // the last count from two weeks ago or earlier
+	return now->second < 0.9 * mapTiles && now->second - before->second < 0.02 * mapTiles;
+}
+
 double AdventureAI::secondArmyBar() const
 {
 	// What a second army must be able to beat on its own: the strongest enemy hero seen in the last
@@ -601,6 +618,18 @@ void AdventureAI::playTurn()
 			now[town->id] = known != townGainedDay.end() ? known->second : (today <= 1 ? -1000 : today);
 		}
 		townGainedDay = std::move(now);
+	}
+	if(params.breakout)
+	{
+		// (breakout) how much of the map we have uncovered, day by day
+		const int3 size = cb->getMapSize();
+		int seen = 0;
+		for(int z = 0; z < size.z; ++z)
+			for(int x = 0; x < size.x; ++x)
+				for(int y = 0; y < size.y; ++y)
+					seen += cb->isVisible(int3(x, y, z)) ? 1 : 0;
+		seenTilesOn[today] = seen;
+		mapTiles = size.x * size.y * size.z;
 	}
 	chooseMainHero();
 	if(std::getenv("FAI_CHECK_REACH"))
@@ -734,8 +763,13 @@ void AdventureAI::playTurn()
 	for(const auto * hero : perception.ownHeroes())
 		heroesLastTurn.insert(hero->id);
 
-	if(std::getenv("FAI_DUMP_MAP") && (today == 7 || today == 14 || today == 28))
-		dumpKnowledge();
+	if(const char * dump = std::getenv("FAI_DUMP_MAP"))
+	{
+		// FAI_DUMP_MAP=1: days 7, 14 and 28; FAI_DUMP_MAP=40,80: those days
+		const std::string days = std::string(",") + dump + ",";
+		if(days.find("," + std::to_string(today) + ",") != std::string::npos || (days == ",1," && (today == 7 || today == 14 || today == 28)))
+			dumpKnowledge();
+	}
 
 	const auto * main = ownHero(mainHero);
 	int mines = 0;
@@ -4749,6 +4783,7 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, const CPathsInfo & paths, const CPathsInfo & freePaths)
 {
 	std::vector<Target> out;
+	bool foreignTownTargeted = false; // (breakout) a town not ours is among this hero's targets
 	const auto known = perception.knownObjects();
 	const int3 heroPos = hero->visitablePos();
 	const int heroNum = hero->id.getNum();
@@ -5261,6 +5296,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 			}
 			// (heroes: whose - walking up to our own hero hands over troops, an enemy's is a hunt)
+			if(object.type == Obj::TOWN && object.owner != me && !isAlly(object.owner))
+				foreignTownTargeted = true;
 			addTarget(object.visitablePos, id, value, loss, travel, (bank ? "bank " : "object ") + std::to_string(object.type.getNum())
 				+ (object.type == Obj::HERO ? (object.owner == me ? " own" : " enemy") : ""));
 		}
@@ -5334,6 +5371,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		std::map<ObjectInstanceID, double> behindGuard;
 		std::map<ObjectInstanceID, double> fogBehind; // most tiles one step behind the guard would reveal
 		std::map<ObjectInstanceID, double> openEnd; // (passage) the land we know behind the guard ends in land we have not seen: how much of the map around there is unseen
+		std::map<ObjectInstanceID, double> wayOut; // (breakout) unseen land behind this guard: the largest share of the map around a place there that is unseen
 		for(int z = 0; z < size.z; ++z)
 		{
 			for(int x = 0; x < size.x; ++x)
@@ -5411,6 +5449,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 						if(g.guard.hasValue())
 						{
 							behindGuard[g.guard] = std::max(behindGuard[g.guard], value * unlockShare(g, free));
+							if(params.breakout)
+								wayOut[g.guard] = std::max(wayOut[g.guard], grid.boxShare(tile, 12));
 							if(g.count == 1)
 							{
 								fogBehind[g.guard] = std::max(fogBehind[g.guard], reveal);
@@ -5450,7 +5490,47 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				strategicUnlock[guard] += region;
 			}
 		}
-		else if(params.regionValue > 0 && isMain(hero))
+		// (breakout) Shut in: two weeks in which next to nothing of the map was uncovered, and no
+		// foreign town the hero could go for. Then the guards with unseen land behind them are the way to the
+		// rest of the map - to the towns the game is decided by -, and opening one is worth what
+		// such a town is worth, the more the later it is. Counted by how much of the map around the
+		// land behind the guard is unseen: a pocket of fog is not a region. (Without this an army of
+		// 200,000 to 700,000 stayed in its corner for a hundred days: 20 to 49 pit lords "opened"
+		// 358 gold and would have cost 1,700 of the army, so they were "not worth it", and so was
+		// every other way out.)
+		if(params.breakout && leads(hero) && breakoutDebugDay != today && logAi->isDebugEnabled())
+		{
+			std::string ways;
+			for(const auto & [guard, share] : wayOut)
+			{
+				auto it = known.find(guard);
+				ways += boost::str(boost::format(" [%s: %.2f, fog behind %.0f]") % (it != known.end() ? it->second.visitablePos.toString() : std::string("?")) % share % fogBehind[guard]);
+			}
+			logAi->debug("FairAI %s day %d: breakout check for %s: exploring stalled %s, a foreign town among the targets %s, ways out:%s", me.toString(), today,
+				hero->getNameTranslated(), exploringStalled() ? "yes" : "no", foreignTownTargeted ? "yes" : "no", ways.empty() ? " none" : ways);
+			breakoutDebugDay = today;
+		}
+		if(params.breakout && leads(hero) && exploringStalled() && !foreignTownTargeted)
+		{
+			const double worth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
+			int exits = 0;
+			for(const auto & [guard, share] : wayOut)
+			{
+				const double part = std::clamp(share / 0.3, 0.0, 1.0);
+				if(part < 0.2)
+					continue;
+				unlockValue[guard] += worth * part;
+				strategicUnlock[guard] += worth * part;
+				++exits;
+			}
+			if(breakoutLogDay != today)
+			{
+				logAi->info("FairAI %s day %d: %s is shut in (next to nothing uncovered in two weeks, no foreign town to go for): %d guard(s) with unseen land behind count as ways out worth up to %.0f",
+					me.toString(), today, hero->getNameTranslated(), exits, worth);
+				breakoutLogDay = today;
+			}
+		}
+		if(params.regionValue > 0 && isMain(hero) && !params.passage)
 		{
 			// A guard seen only from afar has no known tile behind it to stand on: count what shows
 			// from the guard's own place once it is gone. (Without this the guards on the way out
@@ -7388,7 +7468,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 	// gold. What they are worth per gold piece, in the measure of the building scores:
 	double troopGold = 0;
 	double troopScore = 0;
-	if(params.armyFirst)
+	if(params.armyFirst || params.idleBuild)
 	{
 		double troopValue = 0;
 		for(const auto * t : perception.ownTowns())
@@ -7409,10 +7489,38 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 	int attempts = 0;
 	for(const auto & option : ranked)
 	{
-		if(option.score < 0.25 || attempts >= 4)
+		if(attempts >= 4)
 			return;
+		if(option.score < 0.25)
+		{
+			// (idleBuild) Gold nobody needs is built with: what waits in our dwellings is paid for,
+			// idleGold more stays in the chest, and the building has a value at all. (Until now
+			// nothing below this score was ever built - in long games 100,000 to 250,000 gold lay
+			// unused while mage guilds above the first level and the like were missing.)
+			if(!params.idleBuild || option.score <= 0.01 || option.state != EBuildingState::ALLOWED)
+				continue;
+			const ResourceSet & price = info->buildings.at(option.build)->resources;
+			const ResourceSet chest = spendable();
+			const double left = static_cast<double>(chest[GameResID::GOLD]) - price[GameResID::GOLD] - troopGold;
+			if(left < params.idleGold)
+				continue;
+			// wood, ore and the rare resources: what this town's wanted buildings cost stays, and a stock for the others
+			bool spare = true;
+			for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			{
+				if(res == GameResID::GOLD || price[res] <= 0)
+					continue;
+				int reserve = (res == GameResID::WOOD || res == GameResID::ORE) ? 15 : 8;
+				for(const auto & wanted : ranked)
+					if(wanted.score >= 0.25)
+						reserve += info->buildings.at(wanted.build)->resources[res];
+				spare = spare && chest[res] - price[res] >= reserve;
+			}
+			if(!spare)
+				continue;
+		}
 		// a building that would leave troops unbought has to be worth more per gold than they are
-		if(params.armyFirst && option.score < troopScore
+		if(params.armyFirst && option.score >= 0.25 && option.score < troopScore
 			&& static_cast<double>(spendable()[GameResID::GOLD]) - info->buildings.at(option.build)->resources[GameResID::GOLD] < troopGold)
 		{
 			if(armyFirstLog != today)
