@@ -2361,6 +2361,90 @@ double AdventureAI::siteLoss(const CGHeroInstance * hero, const ObservedObject &
 	return 0;
 }
 
+std::vector<std::pair<CreatureID, int>> AdventureAI::dwellingGuards(const ObservedObject & object, const CGObjectInstance * instance) const
+{
+	// The rule of the game every player knows: a dwelling that breeds creatures of level 5 or higher
+	// is guarded by three weeks' growth of each kind it breeds - renewed every week, whoever owns it;
+	// the Elemental Conflux by twelve earth elementals, the Golem Factory by nine gold and six
+	// diamond golems. The game asks at the door ("... is guarded by a pack of ...; do you wish to
+	// fight?"), and FairAI answered yes whatever stood there: in 284 logged games 132 heroes walked
+	// into such guards and died - a courier with 250 into six efreet, the next hero into the same
+	// six a day later.
+	std::vector<std::pair<CreatureID, int>> guards;
+	if(object.type != Obj::CREATURE_GENERATOR1 && object.type != Obj::CREATURE_GENERATOR4)
+		return guards;
+	if(object.owner == me || isAlly(object.owner))
+		return guards;
+	// what it breeds: the first kind of every row - shown on the map; out of sight, as we saw it
+	std::vector<const CCreature *> kinds;
+	if(const auto * dwelling = dynamic_cast<const CGDwelling *>(instance))
+	{
+		for(const auto & level : dwelling->creatures)
+			if(!level.second.empty())
+				kinds.push_back(level.second.front().toCreature());
+	}
+	else if(auto seen = dwellingKinds.find(object.id); seen != dwellingKinds.end())
+	{
+		for(const CreatureID & kind : seen->second)
+			kinds.push_back(kind.toCreature());
+	}
+	const CCreature * earth = nullptr;
+	const CCreature * air = nullptr;
+	const CCreature * gold = nullptr;
+	const CCreature * diamond = nullptr;
+	bool high = false;
+	for(const CCreature * kind : kinds)
+	{
+		if(!kind)
+			continue;
+		const std::string & key = kind->getJsonKey();
+		if(key == "core:earthElemental")
+			earth = kind;
+		else if(key == "core:airElemental")
+			air = kind;
+		else if(key == "core:goldGolem")
+			gold = kind;
+		else if(key == "core:diamondGolem")
+			diamond = kind;
+		high = high || kind->getLevel() >= 5;
+	}
+	if(object.type == Obj::CREATURE_GENERATOR4 && earth && air)
+		guards.emplace_back(earth->getId(), 12);
+	else if(object.type == Obj::CREATURE_GENERATOR4 && gold && diamond)
+	{
+		guards.emplace_back(gold->getId(), 9);
+		guards.emplace_back(diamond->getId(), 6);
+	}
+	else if(high)
+	{
+		std::set<CreatureID> seen;
+		for(const CCreature * kind : kinds)
+		{
+			if(kind && kind->getGrowth() > 0 && seen.insert(kind->getId()).second)
+				guards.emplace_back(kind->getId(), 3 * kind->getGrowth());
+		}
+	}
+	return guards;
+}
+
+double AdventureAI::dwellingLoss(const CGHeroInstance * hero, const std::vector<std::pair<CreatureID, int>> & guards) const
+{
+	if(guards.empty())
+		return 0;
+	double strength = 0;
+	for(const auto & [creature, count] : guards)
+		strength += static_cast<double>(creature.toCreature()->getAIValue()) * count;
+	const double army = static_cast<double>(hero->getArmyStrength());
+	// (an army worth a third of the guards has no chance: no need to play the battle through)
+	if(army < 0.33 * strength)
+		return -1;
+	const FightForecast forecast = forecastGuards(hero, guards, "default", true);
+	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : (leads(hero) ? params.maxLossShare : params.maxLossShareSecondary);
+	if(!forecast.win || forecast.lossShare > limit)
+		return -1;
+	return (forecast.lossShare + forecast.manaShare) * army * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+}
+
 void AdventureAI::useSite(const CGHeroInstance * hero, ObjectInstanceID site)
 {
 	const CGObjectInstance * instance = perception.visibleObject(site);
@@ -4003,6 +4087,17 @@ void AdventureAI::rememberStaticObjects()
 			// walls and towers show on the map; they can grow, so look again whenever the town is in sight
 			if(const auto * town = dynamic_cast<const CGTownInstance *>(perception.visibleObject(id)))
 				townFortLevel[id] = town->fortLevel();
+		}
+		if((object.type == Obj::CREATURE_GENERATOR1 || object.type == Obj::CREATURE_GENERATOR4) && !dwellingKinds.count(id))
+		{
+			// what a dwelling breeds shows on the map: remembered for when it is out of sight (its guards follow from it)
+			if(const auto * dwelling = dynamic_cast<const CGDwelling *>(perception.visibleObject(id)))
+			{
+				auto & kinds = dwellingKinds[id];
+				for(const auto & level : dwelling->creatures)
+					if(!level.second.empty())
+						kinds.push_back(level.second.front());
+			}
 		}
 		if(object.type == Obj::HERO || (entryMasks.count(id) && teleportChannels.count(id)))
 			continue;
@@ -6058,6 +6153,26 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 				value = plan.value;
 				loss += plan.loss;
+			}
+			// a dwelling of high creatures: the fight against its guards (always on - without it heroes
+			// walk into certain death, see dwellingGuards)
+			if(object.type == Obj::CREATURE_GENERATOR1 || object.type == Obj::CREATURE_GENERATOR4)
+			{
+				const auto guards = dwellingGuards(object, instance);
+				if(!guards.empty())
+				{
+					const double fight = dwellingLoss(hero, guards);
+					if(fight < 0 || fight >= value)
+					{
+						++rejected["dwelling guards"];
+						continue;
+					}
+					double health = 0;
+					for(const auto & [creature, count] : guards)
+						health += static_cast<double>(creature.toCreature()->getMaxHealth()) * count;
+					value += health * expValue(hero);
+					loss += fight;
+				}
 			}
 			if(params.sites)
 			{

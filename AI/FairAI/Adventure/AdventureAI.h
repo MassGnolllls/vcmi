@@ -547,6 +547,11 @@ private:
 	/// the fight a visit means (a garrison of somebody else, the troglodytes of an abandoned mine):
 	/// expected loss in gold, 0 without a fight, -1 if it is too risky
 	double siteLoss(const CGHeroInstance * hero, const ObservedObject & object) const;
+	/// the guards of a dwelling that is not ours, by the rule of the game (nothing read from the building itself)
+	std::vector<std::pair<CreatureID, int>> dwellingGuards(const ObservedObject & object, const CGObjectInstance * instance) const;
+	std::map<ObjectInstanceID, std::vector<CreatureID>> dwellingKinds; ///< what each dwelling we have seen breeds (first kind of every row)
+	/// what beating them would cost this hero, in gold; -1: not to be won, or too dear
+	double dwellingLoss(const CGHeroInstance * hero, const std::vector<std::pair<CreatureID, int>> & guards) const;
 	/// the hero stands on the building it went for: what there is to do there
 	void useSite(const CGHeroInstance * hero, ObjectInstanceID site);
 	/// what a skill bought at a university is worth to this hero, in gold
