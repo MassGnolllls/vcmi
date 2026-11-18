@@ -340,6 +340,8 @@ void Params::loadOverrides(int playerIndex)
 	read("fetchShare", fetchShare);
 	read("heroForecast", heroForecast);
 	read("surrender", surrender);
+	read("surrenderMinArmy", surrenderMinArmy);
+	read("nightWatch", nightWatch);
 	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
 	read("regionValue", regionValue);
@@ -624,6 +626,7 @@ void AdventureAI::playTurn()
 		}
 		townGainedDay = std::move(now);
 	}
+	restoreNightWatch();
 	if(params.breakout || statsFile)
 	{
 		// (breakout) how much of the map we have uncovered, day by day
@@ -763,6 +766,7 @@ void AdventureAI::playTurn()
 	manageTowns(true);
 	buyTavernArmies();
 	defendTowns();
+	arrangeTowns();
 
 	heroesLastTurn.clear();
 	for(const auto * hero : perception.ownHeroes())
@@ -3570,6 +3574,31 @@ bool AdventureAI::surrenderWorth(int cost, double ownValue, double enemyLoss) co
 	const double gold = cb->getResourceAmount(GameResID::GOLD);
 	if(!tavern || cost + GameConstants::HERO_GOLD_COST > gold || static_cast<int>(perception.ownHeroes().size()) > params.maxHeroes)
 		return false;
+	if(params.surrender >= 2)
+	{
+		// (surrender 2) Buying an army free costs the gold its creatures cost to recruit. That is a
+		// good use of gold that lies idle - troops beyond what our dwellings grow - and a bad one of
+		// gold the troops waiting in our dwellings need (the first version bought handfuls of
+		// creatures free again and again while towns went unbuilt). So: a real army only, paid from
+		// what is left once everything that waits at home is paid for, and not twice within three days.
+		if(ownValue < params.surrenderMinArmy || cb->getDate(Date::DAY) - lastSurrenderDay.load() < 3)
+			return false;
+		// The tavern is dealt anew when the week ends, and the army with it: on a week's last day the
+		// hero can only come back if our own turn of today is still to come (players move in the
+		// order of their colours).
+		if((cb->getDate(Date::DAY) - 1) % 7 == 6)
+		{
+			bool turnToCome = cb->isPlayerMakingTurn(me);
+			for(int colour = 0; colour < me.getNum() && !turnToCome; ++colour)
+				turnToCome = cb->isPlayerMakingTurn(PlayerColor(colour));
+			if(!turnToCome)
+				return false;
+		}
+		if(gold - cost - GameConstants::HERO_GOLD_COST < waitingTroopGold.load())
+			return false;
+		// the army stays ours, the enemy's hero gets no experience for it, and ours keeps its levels
+		return (ownValue - 0.5 * enemyLoss) * params.goldPerArmyValue * economy.armyPremium > (cost + GameConstants::HERO_GOLD_COST) * economy.goldWeight * 0.8;
+	}
 	// Fighting on costs the army but hurts the enemy; surrendering costs gold. Army counts for more
 	// and gold for less when gold piles up (creatures, not gold, are what we lack then).
 	const double fightOn = (ownValue - enemyLoss) * params.goldPerArmyValue * economy.armyPremium;
@@ -3581,6 +3610,7 @@ void AdventureAI::noteSurrender(HeroTypeID hero)
 {
 	rehireHero = hero.getNum();
 	rehireDay = cb->getDate(Date::DAY);
+	lastSurrenderDay = cb->getDate(Date::DAY);
 }
 
 double AdventureAI::fetchFactor(const CGHeroInstance * hero) const
@@ -4041,7 +4071,19 @@ double AdventureAI::defenceAt(const CGHeroInstance * hero, const int3 & tile) co
 		for(const auto & slot : town->Slots())
 			garrison += stackValue(slot.second.get());
 		if(const auto * guard = town->getGarrisonHero(); guard && guard != hero)
-			garrison += static_cast<double>(guard->getArmyStrength());
+		{
+			if(params.nightWatch && guard->tempOwner == me && !hero->isGarrisoned())
+			{
+				// (nightWatch) Two heroes in one town: the one in the gate meets the attacker in the
+				// open, alone. By nightfall the better commander is inside with the best troops of
+				// both (arrangeTowns); the other one's troops are safe there, the hero itself is not.
+				if(commanderFactor(hero) <= commanderFactor(guard) * 1.02)
+					return strength;
+				garrison += static_cast<double>(guard->getArmyStrength()) * commanderFactor(hero);
+			}
+			else
+				garrison += static_cast<double>(guard->getArmyStrength());
+		}
 		strength = (strength + garrison) * defenceWalls(town);
 	}
 	return strength;
@@ -4340,6 +4382,16 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 	const int3 gate = town->visitablePos();
 	if(mainHero->visitablePos().z != gate.z || mainHero->visitablePos().dist2d(gate) > 10)
 		return;
+	leaveGate(town, mainHero->visitablePos(), mainHero->getNameTranslated());
+}
+
+bool AdventureAI::leaveGate(const CGTownInstance * town, const int3 & keepFree, const std::string & forWhom)
+{
+	// our hero in the gate steps onto the nearest free tile next to it (it needs movement points for that)
+	const CGHeroInstance * visitor = town->getVisitingHero();
+	if(!visitor || visitor->tempOwner != me)
+		return false;
+	const int3 gate = town->visitablePos();
 	auto paths = computePaths(visitor, false);
 	int3 best(-1);
 	float bestCost = std::numeric_limits<float>::max();
@@ -4348,7 +4400,7 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 		for(int dy = -1; dy <= 1; ++dy)
 		{
 			const int3 tile(gate.x + dx, gate.y + dy, gate.z);
-			if(tile == gate || tile == mainHero->visitablePos() || !cb->isInTheMap(tile))
+			if(tile == gate || tile == keepFree || !cb->isInTheMap(tile))
 				continue;
 			const CGPathNode * node = paths->getPathInfo(tile);
 			if(node && node->reachable() && node->turns == 0 && node->action == EPathNodeAction::NORMAL && node->cost < bestCost)
@@ -4359,11 +4411,160 @@ void AdventureAI::clearGate(const CGTownInstance * town, const CGHeroInstance * 
 		}
 	}
 	if(!best.isValid())
-		return;
+		return false;
 	logAi->debug("FairAI %s: %s leaves the gate of %s to let %s in", me.toString(), visitor->getNameTranslated(),
-		town->getNameTranslated(), mainHero->getNameTranslated());
+		town->getNameTranslated(), forWhom);
 	cb->moveHero(visitor, visitor->convertFromVisitablePos(best), false);
 	gateway.waitTillFree();
+	return !town->getVisitingHero();
+}
+
+double AdventureAI::commanderFactor(const CGHeroInstance * hero) const
+{
+	if(!hero)
+		return 1.0;
+	return fieldStrength(hero) / std::max(1.0, static_cast<double>(hero->getArmyStrength()));
+}
+
+namespace
+{
+std::map<CreatureID, int> armyKinds(const CArmedInstance * army)
+{
+	std::map<CreatureID, int> kinds;
+	for(const auto & [slot, stack] : army->Slots())
+	{
+		if(stack && stack->getCreature())
+			kinds[stack->getCreatureID()] += stack->getCount();
+	}
+	return kinds;
+}
+}
+
+void AdventureAI::arrangeTowns()
+{
+	if(!params.nightWatch)
+		return;
+	for(const auto * town : perception.ownTowns())
+	{
+		const CGHeroInstance * visitor = town->getVisitingHero();
+		const CGHeroInstance * guard = town->getGarrisonHero();
+		if(!visitor || !guard || visitor->tempOwner != me || guard->tempOwner != me)
+			continue;
+		// Whoever stands in the gate meets the attacker first - in the open field and alone (the
+		// game's rule for a town that holds a hero in the garrison and one in the gate). A hero that
+		// beats whatever can come is the best gate there is; anything less belongs behind the walls.
+		const double threat = threatAt(town->visitablePos());
+		if(threat <= 0 || fieldStrength(visitor) >= params.heroEdge * threat)
+			continue;
+		const bool visitorCommands = commanderFactor(visitor) > commanderFactor(guard) * 1.02;
+		const ObjectInstanceID insideId = visitorCommands ? visitor->id : guard->id;
+		const ObjectInstanceID outsideId = visitorCommands ? guard->id : visitor->id;
+		NightLoan loan;
+		loan.inside = insideId;
+		loan.outside = outsideId;
+		loan.insideHad = armyKinds(visitorCommands ? visitor : guard);
+		loan.outsideHad = armyKinds(visitorCommands ? guard : visitor);
+		const double before = static_cast<double>((visitorCommands ? visitor : guard)->getArmyStrength());
+		const double gateAlone = fieldStrength(visitor);
+		if(visitorCommands)
+		{
+			cb->swapGarrisonHero(town);
+			gateway.waitTillFree();
+		}
+		const CGHeroInstance * inside = ownHero(insideId);
+		const CGHeroInstance * outside = ownHero(outsideId);
+		if(!inside || !outside || town->getGarrisonHero() != inside || town->getVisitingHero() != outside)
+			continue; // the swap was refused: nothing pooled, nothing to undo
+		pickBestCreatures(inside, outside);
+		inside = ownHero(insideId);
+		outside = ownHero(outsideId);
+		if(!inside || !outside)
+			continue;
+		nightLoans.push_back(loan);
+		if(statsFile)
+			stats[phaseOf(today)]["nightWatch"] += 1;
+		logAi->info("FairAI %s day %d: night watch in %s (up to %.0f could come, the gate alone held %.0f) - %s commands inside the walls with %.0f (had %.0f), %s waits in the gate with %.0f",
+			me.toString(), today, town->getNameTranslated(), threat, gateAlone, inside->getNameTranslated(),
+			static_cast<double>(inside->getArmyStrength()), before, outside->getNameTranslated(), static_cast<double>(outside->getArmyStrength()));
+	}
+}
+
+void AdventureAI::restoreNightWatch()
+{
+	// What was pooled for the night goes back: every hero gets the kinds and numbers it had (less
+	// what fell, should the town have been attacked). A hero that fell leaves its share with the other.
+	for(const auto & loan : nightLoans)
+	{
+		const CGHeroInstance * inside = ownHero(loan.inside);
+		const CGHeroInstance * outside = ownHero(loan.outside);
+		if(!inside || !outside || !inside->getVisitedTown() || inside->getVisitedTown() != outside->getVisitedTown())
+			continue;
+		struct Party
+		{
+			const CGHeroInstance * hero;
+			const std::map<CreatureID, int> * had;
+		};
+		const std::array<Party, 2> parties = {Party{inside, &loan.insideHad}, Party{outside, &loan.outsideHad}};
+		auto surplus = [](const Party & party, const CreatureID & kind)
+		{
+			int have = 0;
+			for(const auto & [slot, stack] : party.hero->Slots())
+				have += stack && stack->getCreature() && stack->getCreatureID() == kind ? stack->getCount() : 0;
+			auto it = party.had->find(kind);
+			return have - (it != party.had->end() ? it->second : 0);
+		};
+		for(int guard = 0; guard < 40; ++guard)
+		{
+			gateway.checkInterruption();
+			bool acted = false;
+			// a kind one hero holds more of than it owned goes to the other: into its stack of that kind or a free slot
+			for(int side = 0; side < 2 && !acted; ++side)
+			{
+				const Party & from = parties[side];
+				const Party & to = parties[1 - side];
+				for(const auto & [slot, stack] : from.hero->Slots())
+				{
+					if(!stack || !stack->getCreature())
+						continue;
+					int move = std::min<int>(surplus(from, stack->getCreatureID()), stack->getCount());
+					if(from.hero->stacksCount() == 1 && move >= stack->getCount())
+						move = stack->getCount() - 1; // a hero keeps one creature
+					if(move <= 0)
+						continue;
+					const SlotID target = to.hero->getSlotFor(stack->getCreatureID());
+					if(!target.validSlot())
+						continue;
+					if(move >= stack->getCount())
+						cb->mergeOrSwapStacks(from.hero, to.hero, slot, target);
+					else
+						cb->splitStack(from.hero, to.hero, slot, target, to.hero->getStackCount(target) + move);
+					acted = true;
+					break;
+				}
+			}
+			if(acted)
+				continue;
+			// both armies full of the other's kinds: two whole stacks in the wrong army change places
+			SlotID wrong[2];
+			for(int side = 0; side < 2; ++side)
+			{
+				for(const auto & [slot, stack] : parties[side].hero->Slots())
+				{
+					if(stack && stack->getCreature() && surplus(parties[side], stack->getCreatureID()) >= stack->getCount())
+					{
+						wrong[side] = slot;
+						break;
+					}
+				}
+			}
+			if(!wrong[0].validSlot() || !wrong[1].validSlot())
+				break;
+			cb->swapCreatures(inside, outside, wrong[0], wrong[1]);
+		}
+		logAi->debug("FairAI %s day %d: after the night watch %s has %.0f again, %s %.0f", me.toString(), today, inside->getNameTranslated(),
+			static_cast<double>(inside->getArmyStrength()), outside->getNameTranslated(), static_cast<double>(outside->getArmyStrength()));
+	}
+	nightLoans.clear();
 }
 
 double AdventureAI::townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const
@@ -7224,6 +7425,19 @@ void AdventureAI::updateEconomy()
 		if(object.type == Obj::MINE && object.owner == me && object.subtype.getNum() == GameResID::GOLD)
 			e.weeklyIncome += 7000;
 	}
+	{
+		// (surrender 2) what the creatures waiting in our dwellings cost: gold that is spoken for
+		double waiting = 0;
+		for(const auto * t : perception.ownTowns())
+		{
+			for(const auto & entry : t->creatures)
+			{
+				if(entry.first > 0 && !entry.second.empty())
+					waiting += static_cast<double>(entry.first) * entry.second.back().toCreature()->getRecruitCost(GameResID::GOLD);
+			}
+		}
+		waitingTroopGold = waiting;
+	}
 	const double stock = spendable()[GameResID::GOLD];
 	e.rho = (e.weeklyIncome + 0.5 * stock) / std::max(500.0, e.weeklyRecruitCost);
 	e.armyPremium = std::clamp(e.rho, 1.0, 4.0);
@@ -7911,10 +8125,21 @@ void AdventureAI::hireHeroes()
 	if(waiting >= 0 && !rehire)
 		rehireHero = -1;
 
+	std::vector<const CGTownInstance *> taverns;
 	for(const auto * town : perception.ownTowns())
+		if(town->hasBuilt(BuildingID::TAVERN))
+			taverns.push_back(town);
+	if(rehire && params.surrender >= 2)
 	{
-		if(!town->hasBuilt(BuildingID::TAVERN))
-			continue;
+		// (surrender 2) the army we bought free comes back where the enemy is least likely to strike
+		// it again tomorrow (the first version hired it back next to the army it had surrendered to)
+		std::stable_sort(taverns.begin(), taverns.end(), [this](const CGTownInstance * a, const CGTownInstance * b)
+		{
+			return threatAt(a->visitablePos()) < threatAt(b->visitablePos());
+		});
+	}
+	for(const auto * town : taverns)
+	{
 		int heroes = static_cast<int>(perception.ownHeroes().size());
 		if(params.townHeroes)
 		{
@@ -7965,13 +8190,27 @@ void AdventureAI::hireHeroes()
 		bool parked = false;
 		if(visitor)
 		{
-			if(visitor->tempOwner != me || town->getGarrisonHero() || (today > 3 && !special) || !visitor->canBeMergedWith(*town))
+			if(visitor->tempOwner != me || (today > 3 && !special))
 				continue;
-			cb->swapGarrisonHero(town);
-			gateway.waitTillFree();
-			if(town->getVisitingHero())
-				continue; // swap refused
-			parked = true;
+			if(!town->getGarrisonHero() && visitor->canBeMergedWith(*town))
+			{
+				cb->swapGarrisonHero(town);
+				gateway.waitTillFree();
+				if(town->getVisitingHero())
+					continue; // swap refused
+				parked = true;
+			}
+			else if(params.surrender >= 2 && rehire && best->getHeroTypeID().getNum() == waiting)
+			{
+				// (surrender 2) Gate and garrison are both taken (a town's hero and a visitor), or their
+				// troops do not fit into one army: the visitor steps out of the gate. The army we paid
+				// for waits in the tavern only until the week ends - in the first probe game 66,000
+				// gold bought an army of 99,000 free and both our towns were full for the four days left.
+				if(!leaveGate(town, int3(-1), best->getNameTranslated()))
+					continue;
+			}
+			else
+				continue;
 		}
 
 		logAi->info("FairAI %s day %d: hiring %s (level %d) in %s%s", me.toString(), today, best->getNameTranslated(), static_cast<int>(best->level), town->getNameTranslated(),

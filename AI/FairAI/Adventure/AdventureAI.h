@@ -248,6 +248,10 @@ private:
 	double townNeed(const CGTownInstance * town, const CGHeroInstance * mainHero) const;
 	/// Our other hero stands in the gate the main hero wants to enter: move it into the garrison
 	void clearGate(const CGTownInstance * town, const CGHeroInstance * mainHero);
+	bool leaveGate(const CGTownInstance * town, const int3 & keepFree, const std::string & forWhom); ///< our hero in the gate steps onto a free tile next to it; true when the gate is free now
+	void arrangeTowns();                ///< (nightWatch) end of a turn: in a threatened town with two heroes of ours the better commander goes inside with the best troops of both
+	void restoreNightWatch();           ///< (nightWatch) start of a turn: the troops pooled for the night go back to whom they belong
+	double commanderFactor(const CGHeroInstance * hero) const; ///< what the hero adds to an army it leads (field strength per army value)
 	/// supply runs (parameter supplyRuns): a hero standing in a town brings what has grown there to the main hero
 	struct SupplyRun
 	{
@@ -365,6 +369,16 @@ private:
 	int contactDay = -1;         ///< day we first saw an enemy hero or town (-1: not yet)
 	std::atomic<int> rehireHero{-1}; ///< hero type that surrendered and waits in our tavern with its army
 	std::atomic<int> rehireDay{-100};
+	struct NightLoan
+	{
+		ObjectInstanceID inside;
+		ObjectInstanceID outside;
+		std::map<CreatureID, int> insideHad;  ///< what the hero inside owned before the troops were pooled
+		std::map<CreatureID, int> outsideHad;
+	};
+	std::vector<NightLoan> nightLoans;  ///< (nightWatch) pooled last night, to be undone this morning
+	std::atomic<int> lastSurrenderDay{-100};
+	std::atomic<double> waitingTroopGold{0}; ///< gold the creatures waiting in our dwellings cost (updated every turn; read by the battle thread)
 	std::map<PlayerColor, int> guildTownPlace; ///< thieves' guild: place of each player by number of towns (0 = most)
 	std::map<PlayerColor, int> guildBestHero;  ///< thieves' guild: each player's best hero (hero type)
 	bool huntWanted = false;     ///< some enemy still has towns we have not found (updateThreats)

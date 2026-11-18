@@ -45,7 +45,7 @@ THOUSANDS = {"main84", "garr84", "gold84"}
 # banks, other objects, safety moves, nothing -, share of days 29 to 112 on which exploring had stalled,
 # heroes leading a second army and heroes holding a town's troops (mean per day, days 29 to 112), and the
 # gold value of creatures left unbought per day (days 57 to 140) for want of a slot or of gold.
-BEHAVIOUR = ["mOwnTown", "mOwnHero", "mChase", "mTown", "mExplore", "mFight", "mObject", "mSafety", "mNone", "stall", "leaders", "heavy", "noSlot", "noGold"]
+BEHAVIOUR = ["mOwnTown", "mOwnHero", "mChase", "mTown", "mExplore", "mFight", "mObject", "mSafety", "mNone", "stall", "leaders", "heavy", "noSlot", "noGold", "watch"]
 
 
 def read_configs(folder: Path) -> dict:
@@ -133,7 +133,7 @@ def figures(record):
             for name, parts in kinds.items():
                 behaviour[name] = sum(total(part, middle) for part in parts) / total("days", middle)
         for name, source, phases in (("stall", "stalled", longer), ("leaders", "leaders", longer), ("heavy", "heavy", longer),
-                                     ("noSlot", "unboughtNoSlot", late), ("noGold", "unboughtNoGold", late)):
+                                     ("noSlot", "unboughtNoSlot", late), ("noGold", "unboughtNoGold", late), ("watch", "nightWatch", (1, 2, 3, 4))):
             value = per_day(source, phases)
             if value is not None:
                 behaviour[name] = value
