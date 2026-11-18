@@ -1,0 +1,4 @@
+m-skirmish: 12/12 maps ready in /home/alex/.local/share/vcmi/Maps/fresh1-m-skirmish
+m-balance: 12/12 maps ready in /home/alex/.local/share/vcmi/Maps/fresh1-m-balance
+m-blockbuster: 12/12 maps ready in /home/alex/.local/share/vcmi/Maps/fresh1-m-blockbuster
+m-longrun: 12/12 maps ready in /home/alex/.local/share/vcmi/Maps/fresh1-m-longrun
