@@ -6326,9 +6326,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		// on: ways out (guards with unseen land behind, doors) count what a town is worth, by how
 		// much of the map around the land behind them is unseen.
 		const double searchWorth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
-		bool searching = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today >= 14 && unseenShare >= 0.1;
-		// a way out just opened (its guard beaten, or a door gone through): look at what lies behind it
-		bool lookingBehind = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today < breakoutPauseUntil;
+		// On campaign - the leader far stronger than the strongest enemy hero seen lately - the search
+		// is on whatever towns are among the targets: the towns within reach are then mostly our own,
+		// lost behind our back, and the enemy's base lies in land we never looked at. (A leader of
+		// 430,000 to 1,400,000, three to five times the enemy's main hero for six weeks, took back the
+		// same three towns of ours again and again; the enemy's capital stood ten tiles beyond the
+		// open pass south of the centre, in the third of the map we had not seen by day 200. The
+		// enemy's main hero grew from 80,000 to 550,000 meanwhile, and the game was lost.)
+		const bool onCampaign = campaign(hero);
+		bool searching = params.breakout >= 4 && leads(hero) && (!foreignTownTargeted || onCampaign) && today >= 14 && unseenShare >= 0.1;
+		// a way out just opened (its guard beaten, or a door gone through): look at what lies behind
+		// it; on campaign open land that runs on into unseen regions counts on any day
+		bool lookingBehind = params.breakout >= 4 && leads(hero) && ((!foreignTownTargeted && today < breakoutPauseUntil) || (onCampaign && unseenShare >= 0.1));
 		double waitingAtHome = 0;
 		if(searching || lookingBehind)
 		{
@@ -6548,7 +6557,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 			}
 		}
-		if(params.breakout && leads(hero) && (exploringStalled() || (searching && today >= breakoutPauseUntil)) && !foreignTownTargeted)
+		if(params.breakout && leads(hero) && ((exploringStalled() && !foreignTownTargeted) || (searching && today >= breakoutPauseUntil)))
 		{
 			const double worth = searchWorth;
 			int exits = 0;
@@ -6590,8 +6599,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			if(breakoutLogDay != today)
 			{
 				if(searching)
-					logAi->info("FairAI %s day %d: %s looks for the next town (none among its targets, %.0f%% of the map unseen, %.0f waiting at home): %d way(s) out worth up to %.0f%s",
-						me.toString(), today, hero->getNameTranslated(), 100.0 * unseenShare, waitingAtHome, exits, worth,
+					logAi->info("FairAI %s day %d: %s looks for the next town (%s, %.0f%% of the map unseen, %.0f waiting at home): %d way(s) out worth up to %.0f%s",
+						me.toString(), today, hero->getNameTranslated(), foreignTownTargeted ? "on campaign" : "none among its targets", 100.0 * unseenShare, waitingAtHome, exits, worth,
 						dear > 0 ? boost::str(boost::format(" (%d more would cost too much yet)") % dear) : std::string());
 				else
 					logAi->info("FairAI %s day %d: %s is shut in (next to nothing uncovered lately, no foreign town to go for, %d slack day(s)): %d guard(s) with unseen land behind count as ways out worth up to %.0f%s",
