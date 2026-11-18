@@ -28,6 +28,7 @@
 #pragma once
 
 #include "Params.h"
+#include <array>
 #include "../../../lib/ResourceSet.h"
 
 #include "../../../lib/int3.h"
@@ -154,7 +155,8 @@ public:
 	/// (log only) what we took an enemy hero for before a battle shows it: army and hero factor as estimated
 	std::string describeEstimate(HeroTypeID hero) const;
 	/// a battle against an enemy hero is over: what we know of its army is what the battle left of it
-	void noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos);
+	void noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos,
+		int ownHero = -1, bool weAttack = false, bool siege = false, double ownLostShare = 0, int day = 0);
 	/// (fortress) the strength of an enemy army seen near us lately that outmatches this hero (0: none)
 	double outmatchedBy(const CGHeroInstance * hero) const;
 	int fortressLog = -1;
@@ -366,8 +368,19 @@ private:
 		double ownStrength = 0;    ///< our army in that battle
 		double enemyStrength = 0;  ///< its army in that battle
 		int3 pos = int3(-1, -1, -1); ///< where the battle was fought
+		int ownHero = -1;          ///< (calibration) our hero in it (object id)
+		bool weAttack = false;
+		bool siege = false;        ///< fought at the walls of a town
+		double ownLostShare = 0;
+		int day = 0;
 	};
 	std::vector<BattleOutcome> pendingOutcomes; ///< guarded by intelMutex
+	/// (calibration) What the hero model said about every battle against an enemy hero before it was
+	/// fought, and how it ended - for the test bench (statistics file, key "fights") and the log; never
+	/// used for a decision. One entry: day, we attack, siege, our army, our hero's factor x 100, their
+	/// army, the factor we gave their hero x 100 (-1: never seen before), won, our loss in per cent, theirs.
+	std::vector<std::array<int64_t, 10>> fightNotes;
+	std::map<int, double> ownFactorSeen; ///< (calibration) own hero (object id) -> its commander factor when last looked at
 	std::map<int, int> defeatedDay;             ///< hero type -> day we beat it
 	int decisiveVictoryDay = -1;                ///< the day we beat what was the strongest enemy army we knew of
 	double oppositionHeroes = 0; ///< strongest enemy hero seen in the last three weeks (0: none)

@@ -91,6 +91,9 @@ private:
 	uint64_t battleEnemyStrength = 0;
 	int battleEnemyHero = -1; ///< hero type of the enemy hero in the running battle (-1: none)
 	int3 battleTile = int3(-1, -1, -1); ///< where the running battle is fought
+	int battleOwnHero = -1;  ///< our hero in the running battle (object id, -1: none) - for the calibration record
+	bool battleSiege = false; ///< the running battle is fought at the walls of a town
+	int battleDay = 0;
 
 	void makeTurn();
 	void endTurn();

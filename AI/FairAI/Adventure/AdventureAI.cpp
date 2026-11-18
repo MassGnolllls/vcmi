@@ -673,6 +673,8 @@ void AdventureAI::playTurn()
 		townGainedDay = std::move(now);
 	}
 	restoreNightWatch();
+	for(const auto * hero : perception.ownHeroes())
+		ownFactorSeen[hero->id.getNum()] = commanderFactor(hero);
 	if(params.breakout || statsFile)
 	{
 		// (breakout) how much of the map we have uncovered, day by day
@@ -824,6 +826,8 @@ void AdventureAI::playTurn()
 	heroesLastTurn.clear();
 	for(const auto * hero : perception.ownHeroes())
 		heroesLastTurn.insert(hero->id);
+	for(const auto * hero : perception.ownHeroes())
+		ownFactorSeen[hero->id.getNum()] = commanderFactor(hero); // (calibration) as the enemy will find it tonight
 
 	if(const char * dump = std::getenv("FAI_DUMP_MAP"))
 	{
@@ -971,6 +975,16 @@ void AdventureAI::closeStatsDay()
 		}
 		text += "}";
 	}
+	// (calibration) the battles against enemy heroes as the model saw them
+	text += std::string(firstPhase ? "" : ",") + "\"fights\":[";
+	for(size_t i = 0; i < fightNotes.size(); ++i)
+	{
+		text += i ? ",[" : "[";
+		for(size_t k = 0; k < fightNotes[i].size(); ++k)
+			text += (k ? "," : "") + std::to_string(fightNotes[i][k]);
+		text += "]";
+	}
+	text += "]";
 	text += "}";
 	const std::string path = std::string(statsFile) + "-" + me.toString() + ".json";
 	const std::string tmp = path + ".tmp";
@@ -3116,6 +3130,26 @@ void AdventureAI::updateThreats()
 		for(const auto & outcome : outcomes)
 		{
 			auto seen = enemySightings.find(outcome.hero);
+			if(outcome.ownHero >= 0 && outcome.ownStrength > 0 && outcome.enemyStrength > 0)
+			{
+				// (calibration) the battle as the hero model saw it before it was fought - our hero's
+				// factor as last looked at, theirs as we gave it at the last sighting - and how it ended
+				auto mine = ownFactorSeen.find(outcome.ownHero);
+				const double ownFactor = mine != ownFactorSeen.end() ? mine->second : -1;
+				const double theirFactor = seen != enemySightings.end() && seen->second.factor > 0 ? seen->second.factor : -1;
+				const double theirLost = 1.0 - std::clamp(outcome.remainingShare, 0.0, 1.0);
+				fightNotes.push_back({static_cast<int64_t>(outcome.day), outcome.weAttack ? 1 : 0, outcome.siege ? 1 : 0,
+					static_cast<int64_t>(outcome.ownStrength), static_cast<int64_t>(std::lround(ownFactor * 100)),
+					static_cast<int64_t>(outcome.enemyStrength), static_cast<int64_t>(std::lround(theirFactor * 100)),
+					outcome.gone ? 1 : 0, static_cast<int64_t>(std::lround(outcome.ownLostShare * 100)), static_cast<int64_t>(std::lround(theirLost * 100))});
+				const HeroTypeID type(outcome.hero);
+				logAi->info("FairAI %s day %d: hero battle on day %d (%s%s) against %s: our %.0f x %.2f, their %.0f x %.2f - model ratio %.2f - %s, we lost %.0f %%, they %.0f %%",
+					me.toString(), today, outcome.day, outcome.weAttack ? "we attack" : "we are attacked", outcome.siege ? ", at the walls" : "",
+					type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?"),
+					outcome.ownStrength, ownFactor, outcome.enemyStrength, theirFactor,
+					ownFactor > 0 && theirFactor > 0 ? outcome.ownStrength * ownFactor / (outcome.enemyStrength * theirFactor) : -1.0,
+					outcome.gone ? "won" : "lost", outcome.ownLostShare * 100, theirLost * 100);
+			}
 			if(outcome.gone)
 			{
 				double strongest = 0;
@@ -3576,12 +3610,13 @@ double AdventureAI::magicWorthOf(const HeroIntel & intel, const std::array<doubl
 	return worth;
 }
 
-void AdventureAI::noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos)
+void AdventureAI::noteBattleOutcome(HeroTypeID hero, bool gone, double remainingShare, double ownStrength, double enemyStrength, const int3 & pos,
+	int ownHero, bool weAttack, bool siege, double ownLostShare, int day)
 {
 	if(!hero.hasValue())
 		return;
 	std::unique_lock lock(intelMutex);
-	pendingOutcomes.push_back(BattleOutcome{hero.getNum(), gone, remainingShare, ownStrength, enemyStrength, pos});
+	pendingOutcomes.push_back(BattleOutcome{hero.getNum(), gone, remainingShare, ownStrength, enemyStrength, pos, ownHero, weAttack, siege, ownLostShare, day});
 }
 
 double AdventureAI::outmatchedBy(const CGHeroInstance * hero) const

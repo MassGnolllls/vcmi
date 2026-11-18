@@ -419,6 +419,10 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 		// remembered for the next time we judge a fight against that hero.
 		const CGHeroInstance * enemyHero = side == BattleSide::ATTACKER ? hero2 : hero1;
 		battleEnemyHero = enemyHero ? enemyHero->getHeroTypeID().getNum() : -1;
+		const CGHeroInstance * ownHero = side == BattleSide::ATTACKER ? hero1 : hero2;
+		battleOwnHero = ownHero ? ownHero->id.getNum() : -1;
+		battleSiege = battle->battleGetDefendedTown() != nullptr;
+		battleDay = cb->getDate(Date::DAY);
 		if(enemyHero && adventure)
 		{
 			// What the battle window shows of either hero - primary skills, morale, luck, spell points -
@@ -511,8 +515,10 @@ void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br
 			for(const auto & entry : br->casualties[other])
 				enemyLost += static_cast<uint64_t>(entry.second) * entry.first.toCreature()->getAIValue();
 			const double remaining = battleEnemyStrength > 0 ? 1.0 - std::min(1.0, static_cast<double>(enemyLost) / static_cast<double>(battleEnemyStrength)) : 0.0;
+			const double ownLostShare = battleOwnStrength > 0 ? std::min(1.0, static_cast<double>(lostValue) / static_cast<double>(battleOwnStrength)) : 0.0;
 			adventure->noteBattleOutcome(HeroTypeID(battleEnemyHero), br->winner == battleSide, remaining,
-				static_cast<double>(battleOwnStrength), static_cast<double>(battleEnemyStrength), battleTile);
+				static_cast<double>(battleOwnStrength), static_cast<double>(battleEnemyStrength), battleTile,
+				battleOwnHero, battleSide == BattleSide::ATTACKER, battleSiege, ownLostShare, battleDay);
 		}
 	}
 	CAdventureAI::battleEnd(battleID, br, queryID);
