@@ -1,5 +1,5 @@
 {
- "note": "fresh maps (pool fresh1): 24 medium land maps for two players from four templates - Skirmish M, Balance M, Blockbuster M, Long Run M. Everything so far was developed on twelve Skirmish M maps; the aim is any new random map.",
+ "note": "fresh maps (pool fresh1): 48 medium land maps for two players from four templates - Skirmish M, Balance M, Blockbuster M, Long Run M. Everything so far was developed on twelve Skirmish M maps; the aim is any new random map.",
  "script": "matrix.py",
  "args": [
   "gen",
