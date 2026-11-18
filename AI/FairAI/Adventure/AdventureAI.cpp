@@ -342,6 +342,8 @@ void Params::loadOverrides(int playerIndex)
 	read("surrender", surrender);
 	read("surrenderMinArmy", surrenderMinArmy);
 	read("nightWatch", nightWatch);
+	read("boldBehind", boldBehind);
+	read("boldEdge", boldEdge);
 	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
 	read("regionValue", regionValue);
@@ -439,6 +441,8 @@ void AdventureAI::chooseMainHero()
 	// The army leader keeps its role (and its experience): couriers bring it the troops. Only an army
 	// far bigger than what is left of the leader's takes over (couriers; else at 1.5 times).
 	// - as far as the leader is the more experienced hero: between beginners the bigger army leads.
+	if(current && current->id == veteranMain && today < veteranUntil)
+		return; // (veterans 2) the leader that came back: the troops are on their way to it
 	double takeover = 1.5;
 	if(params.couriers && current)
 		takeover = std::clamp(1.5 + 0.25 * (static_cast<double>(current->level) - static_cast<double>(strongest->level)), 1.5, 3.0);
@@ -902,6 +906,12 @@ void AdventureAI::closeStatsDay()
 	}
 	phase["main." + most] += 1;
 	mainStepsToday.clear();
+	if(nearMissToday == 2)
+		phase["edge10"] += 1;
+	else if(nearMissToday == 1)
+		phase["edge08"] += 1;
+	nearMissToday = 0;
+	phase["townDeficit"] += townDeficit;
 	const CGHeroInstance * main = ownHero(mainHero);
 	if(main && main->getVisitedTown() && main->getVisitedTown()->tempOwner == me)
 		phase["mainEndsInOwnTown"] += 1;
@@ -1593,6 +1603,19 @@ double AdventureAI::guardDanger(const int3 & tile) const
 	return danger;
 }
 
+double AdventureAI::heroEdgeNow() const
+{
+	// (boldBehind) Time works for whoever holds more towns. Level with the enemy or ahead, the main
+	// hero fights an enemy hero only when the battle is as good as won (heroEdge: every logged
+	// battle from 1.3 on was won, at 1.0 it was a coin flip). Behind, waiting loses: in the games we
+	// lost our main army was the bigger one until day 84 and never used it, and the enemy attacked
+	// us with armies no bigger than ours and won nine times out of ten. So for every town the enemy
+	// holds more than we do the edge we ask for drops by a tenth, down to boldEdge.
+	if(!params.boldBehind || townDeficit <= 0)
+		return params.heroEdge;
+	return std::max(params.boldEdge, params.heroEdge - 0.1 * townDeficit);
+}
+
 double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, bool desperate, bool versusHero) const
 {
 	if(danger <= 0)
@@ -1601,7 +1624,7 @@ double AdventureAI::expectedLoss(const CGHeroInstance * hero, double danger, boo
 	// measure that told winner from loser in the logged battles; `danger` is given in the same measure.
 	const bool model = params.heroModel && versusHero;
 	const double strength = model ? fieldStrength(hero) : static_cast<double>(hero->getTotalStrength());
-	double ratio = leads(hero) ? (versusHero ? (model ? params.heroEdge : params.safetyRatioHero) : params.safetyRatio) : params.safetyRatioSecondary;
+	double ratio = leads(hero) ? (versusHero ? (model ? (isMain(hero) ? heroEdgeNow() : params.heroEdge) : params.safetyRatioHero) : params.safetyRatio) : params.safetyRatioSecondary;
 	// a main hero that has been stuck for days accepts riskier fights against guards
 	if(isMain(hero) && !versusHero)
 		ratio = std::max(params.minSafetyRatio, ratio - params.patienceStep * idleDays);
@@ -3167,6 +3190,7 @@ void AdventureAI::updateThreats()
 	// Does an enemy still have towns we have not found? Every enemy in the game has at least one
 	// (or is about to drop out); the thieves' guild ranks the players by their number of towns.
 	huntWanted = false;
+	int deficit = 0;
 	const int myTowns = static_cast<int>(perception.ownTowns().size());
 	auto myPlace = guildTownPlace.find(me);
 	for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
@@ -3185,7 +3209,9 @@ void AdventureAI::updateThreats()
 		}
 		if(townsKnown[color] < expected)
 			huntWanted = true;
+		deficit = std::max(deficit, std::max(townsKnown[color], place != guildTownPlace.end() && myPlace != guildTownPlace.end() && place->second < myPlace->second ? myTowns + 1 : 0) - myTowns);
 	}
+	townDeficit = deficit;
 	// Test hook for the arena (FAI_TEST_PURSUER=<day>): from that day on, whenever a Sanctuary lies
 	// within today's march of the main hero, an army five times its strength stands next to it. Rare
 	// situations cannot be checked by counting wins; this one is staged and read in the log.
@@ -4438,6 +4464,69 @@ bool AdventureAI::leaveGate(const CGTownInstance * town, const int3 & keepFree, 
 	return !town->getVisitingHero();
 }
 
+bool AdventureAI::wouldLead(const CGHeroInstance * candidate) const
+{
+	// clearly the more experienced leader: five levels or more above the hero that leads now, and
+	// worth a tenth more to an army (a hero of level 20 is not replaced by one of level 24: the
+	// walk to hand over the army costs more than the difference brings)
+	const CGHeroInstance * current = ownHero(mainHero);
+	if(!current)
+		return true;
+	if(current == candidate)
+		return false;
+	return candidate->level >= current->level + 5 && commanderFactor(candidate) >= 1.1 * commanderFactor(current);
+}
+
+void AdventureAI::takeCommand(const CGHeroInstance * veteran, const CGTownInstance * town)
+{
+	// (veterans 2) An experienced hero is back - as a rule our own main hero, which fled from a lost
+	// battle and waits in the tavern with its levels, skills, spells and artifacts until the week
+	// ends. Until now nobody hired it: the troops at home went to whoever held most of them, a hero
+	// of level 1 (in one game such a hero lost 173,000 to an army of 222,000 that lost 4,000; its
+	// level 12 predecessor sat in the tavern). The veteran leads again if it is clearly the more
+	// experienced: it takes the troops that stand in this town and those of the hero that led until
+	// now if that one is here, and for a week the lead is its own - whoever holds troops elsewhere
+	// brings them, as heroes do for the main hero.
+	if(!wouldLead(veteran))
+		return;
+	const CGHeroInstance * old = ownHero(mainHero);
+	const ObjectInstanceID id = veteran->id;
+	const ObjectInstanceID oldId = old ? old->id : ObjectInstanceID();
+	const std::string oldName = old ? old->getNameTranslated() + " (level " + std::to_string(old->level) + ")" : std::string("nobody");
+	const double before = static_cast<double>(veteran->getArmyStrength());
+	mainHero = id;
+	veteranMain = id;
+	veteranUntil = today + 7;
+	const CGHeroInstance * guard = town->getGarrisonHero();
+	if(guard && guard != veteran && guard->tempOwner == me && (guard == old || !params.townHeroes))
+	{
+		// (a town's hero keeps the town's troops - townHeroes -, the leader it replaces hands over)
+		pickBestCreatures(veteran, guard);
+		if(const auto * now = ownHero(id))
+			exchangeArtifacts(now, town->getGarrisonHero());
+	}
+	else if(!guard)
+		pickBestCreatures(veteran, town);
+	// the hero that led until now has just stepped out of the gate: it walks back in and hands over
+	old = ownHero(oldId);
+	if(old && !old->isGarrisoned() && old->visitablePos() != town->visitablePos() && old->visitablePos().z == town->visitablePos().z
+		&& old->visitablePos().dist2d(town->visitablePos()) < 2 && old->movementPointsRemaining() > 0)
+	{
+		cb->moveHero(old, old->convertFromVisitablePos(town->visitablePos()), false);
+		gateway.waitTillFree();
+	}
+	const CGHeroInstance * now = ownHero(id);
+	if(!now)
+	{
+		mainHero = oldId;
+		return;
+	}
+	if(statsFile)
+		stats[phaseOf(today)]["veteranBack"] += 1;
+	logAi->info("FairAI %s day %d: %s (level %d) is back and takes command in %s: army %.0f -> %.0f; the lead was with %s", me.toString(), today, now->getNameTranslated(),
+		static_cast<int>(now->level), town->getNameTranslated(), before, static_cast<double>(now->getArmyStrength()), oldName);
+}
+
 double AdventureAI::commanderFactor(const CGHeroInstance * hero) const
 {
 	if(!hero)
@@ -5527,6 +5616,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			}
 			if(loss < 0)
 			{
+				// (statistics) an enemy hero within today's march that the main hero leaves alone
+				// although it is no weaker than ours: how often is there a decisive battle to be had?
+				if(statsFile && isMain(hero) && object.type == Obj::HERO && versusHero && node->turns == 0 && danger > 0)
+				{
+					const double edge = fieldStrength(hero) / danger;
+					nearMissToday = std::max(nearMissToday, edge >= 1.0 ? 2 : (edge >= 0.8 ? 1 : 0));
+				}
 				++rejected["too strong"];
 				continue;
 			}
@@ -8100,7 +8196,14 @@ void AdventureAI::hireHeroes()
 			cb->recruitHero(town, best);
 			gateway.waitTillFree();
 			if(const auto * hired = town->getVisitingHero(); hired && hired->tempOwner == me)
-				manageTownVisit(hired, town);
+			{
+				// (veterans 2) an experienced hero hired for a second army leads the first if it is the better leader
+				const ObjectInstanceID hiredId = hired->id;
+				if(params.veterans >= 2 && hired->level >= 6)
+					takeCommand(hired, town);
+				if(const auto * now = ownHero(hiredId))
+					manageTownVisit(now, town);
+			}
 			break; // one a day
 		}
 	}
@@ -8135,12 +8238,19 @@ void AdventureAI::hireHeroes()
 			gateway.waitTillFree();
 			if(const auto * hired = town->getVisitingHero(); hired && hired->tempOwner == me)
 			{
-				if(hired->canBeMergedWith(*town))
+				// (veterans 2) an experienced hero does not sit in a garrison: it leads
+				const ObjectInstanceID hiredId = hired->id;
+				if(params.veterans >= 2 && hired->level >= 6)
+					takeCommand(hired, town);
+				hired = ownHero(hiredId);
+				if(hired && isMain(hired))
+					break;
+				if(hired && hired->canBeMergedWith(*town))
 				{
 					cb->swapGarrisonHero(town);
 					gateway.waitTillFree();
 				}
-				else
+				else if(hired)
 					pickBestCreatures(hired, town);
 			}
 			break; // one a day
@@ -8173,6 +8283,31 @@ void AdventureAI::hireHeroes()
 			return threatAt(a->visitablePos()) < threatAt(b->visitablePos());
 		});
 	}
+	else if(params.veterans >= 2 && !taverns.empty())
+	{
+		// (veterans 2) an experienced hero on offer is hired where most of our troops at home stand:
+		// it will lead them
+		bool offered = false;
+		for(const auto * candidate : cb->getAvailableHeroes(taverns.front()))
+			offered = offered || (candidate->level >= 6 && wouldLead(candidate));
+		if(offered)
+		{
+			auto force = [this](const CGTownInstance * town)
+			{
+				// (what the hero that leads now carries counts where it stands: the veteran takes it over there)
+				double here = static_cast<double>(town->getUpperArmy()->getArmyStrength());
+				if(const auto * visitor = town->getVisitingHero(); visitor && visitor->tempOwner == me)
+					here += static_cast<double>(visitor->getArmyStrength()) * (isMain(visitor) ? 2.0 : 1.0);
+				if(const auto * guard = town->getGarrisonHero(); guard && isMain(guard))
+					here += static_cast<double>(guard->getArmyStrength());
+				return here;
+			};
+			std::stable_sort(taverns.begin(), taverns.end(), [&force](const CGTownInstance * a, const CGTownInstance * b)
+			{
+				return force(a) > force(b);
+			});
+		}
+	}
 	for(const auto * town : taverns)
 	{
 		int heroes = static_cast<int>(perception.ownHeroes().size());
@@ -8196,7 +8331,7 @@ void AdventureAI::hireHeroes()
 				special = true;
 				break;
 			}
-			if(params.veterans && candidate->level >= 6)
+			if(params.veterans && candidate->level >= 6 && (params.veterans != 2 || wouldLead(candidate)))
 			{
 				if(!special || candidate->level > best->level)
 					best = candidate;
@@ -8235,7 +8370,7 @@ void AdventureAI::hireHeroes()
 					continue; // swap refused
 				parked = true;
 			}
-			else if(params.surrender >= 2 && rehire && best->getHeroTypeID().getNum() == waiting)
+			else if((params.surrender >= 2 && rehire && best->getHeroTypeID().getNum() == waiting) || (params.veterans >= 2 && special && best->level >= 6))
 			{
 				// (surrender 2) Gate and garrison are both taken (a town's hero and a visitor), or their
 				// troops do not fit into one army: the visitor steps out of the gate. The army we paid
@@ -8250,10 +8385,24 @@ void AdventureAI::hireHeroes()
 
 		logAi->info("FairAI %s day %d: hiring %s (level %d) in %s%s", me.toString(), today, best->getNameTranslated(), static_cast<int>(best->level), town->getNameTranslated(),
 			rehire && best->getHeroTypeID().getNum() == waiting ? " (back from its surrender, with its army)" : (special ? " (a veteran)" : ""));
-		if(rehire && best->getHeroTypeID().getNum() == waiting)
+		const bool back = rehire && best->getHeroTypeID().getNum() == waiting;
+		const bool veteran = params.veterans >= 2 && special && !back && best->level >= 6;
+		const HeroTypeID hiredType = best->getHeroTypeID();
+		if(back)
 			rehireHero = -1;
 		cb->recruitHero(town, best);
 		gateway.waitTillFree();
+		if(veteran)
+		{
+			const CGHeroInstance * hired = town->getVisitingHero();
+			if(hired && hired->tempOwner == me && hired->getHeroTypeID() == hiredType)
+				takeCommand(hired, town);
+			if(parked)
+			{
+				// the hero we moved out of the gate stays in the garrison: the gate is the leader's
+				parked = false;
+			}
+		}
 
 		if(parked)
 		{

@@ -8,6 +8,7 @@
  *
  */
 #include "StdInc.h"
+#include <atomic>
 #include "FairAI.h"
 #include "../../lib/gameState/InfoAboutArmy.h"
 #include "../../lib/mapObjects/CGTownInstance.h"
@@ -210,6 +211,22 @@ std::optional<BattleAction> FairAIGateway::makeSurrenderRetreatDecision(const Ba
 	// who can be hired again. Without a town there is nothing to flee to.
 	if(!battleState.canFlee || !battleState.ourHero || cb->getTownsInfo().empty())
 		return std::nullopt;
+	// Test hook for the arena (FAI_TEST_FLEE=<day>): from that day on our most experienced hero flees
+	// from the first battle against an enemy hero in which it may - once. What happens to a main hero
+	// that fled (hired back? leading again?) cannot be counted in wins; it is staged and read in the log.
+	if(const char * test = std::getenv("FAI_TEST_FLEE"))
+	{
+		static std::atomic<bool> fled{false};
+		bool best = battleState.ourHero->level >= 6;
+		for(const auto * hero : cb->getHeroesInfo())
+			best = best && hero->level <= battleState.ourHero->level;
+		if(best && cb->getDate(Date::DAY) >= std::atoi(test) && battleState.enemyHero && !fled.exchange(true))
+		{
+			logAi->info("FairAI %s: %s (level %d) flees from a battle - staged by FAI_TEST_FLEE", playerID.toString(),
+				battleState.ourHero->getNameTranslated(), static_cast<int>(battleState.ourHero->level));
+			return BattleAction::makeRetreat(battleState.ourSide);
+		}
+	}
 	// A battle our simulator sees as lost: buying the army free keeps all of it - if we have the gold
 	// and the army is worth more to us than that gold (and than what it would still kill).
 	const BattleVerdict verdict = battleVerdict(playerID);

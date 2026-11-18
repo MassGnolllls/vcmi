@@ -252,6 +252,9 @@ private:
 	void arrangeTowns();                ///< (nightWatch) end of a turn: in a threatened town with two heroes of ours the better commander goes inside with the best troops of both
 	void restoreNightWatch();           ///< (nightWatch) start of a turn: the troops pooled for the night go back to whom they belong
 	double commanderFactor(const CGHeroInstance * hero) const; ///< what the hero adds to an army it leads (field strength per army value)
+	double heroEdgeNow() const;         ///< (boldBehind) the edge the main hero asks for before it attacks an enemy hero
+	bool wouldLead(const CGHeroInstance * candidate) const; ///< (veterans 2) clearly the more experienced leader than the hero that leads now
+	void takeCommand(const CGHeroInstance * veteran, const CGTownInstance * town); ///< (veterans 2) an experienced hero hired back leads our troops again
 	/// supply runs (parameter supplyRuns): a hero standing in a town brings what has grown there to the main hero
 	struct SupplyRun
 	{
@@ -371,6 +374,10 @@ private:
 	int contactDay = -1;         ///< day we first saw an enemy hero or town (-1: not yet)
 	std::atomic<int> rehireHero{-1}; ///< hero type that surrendered and waits in our tavern with its army
 	std::atomic<int> rehireDay{-100};
+	ObjectInstanceID veteranMain;       ///< (veterans 2) the leader that came back from the tavern ...
+	int veteranUntil = 0;               ///< ... keeps the lead until this day, whatever army the others hold
+	int townDeficit = 0;                ///< towns the enemy holds more than we do (thieves' guild, and what we have seen)
+	int nearMissToday = 0;              ///< (statistics) 2: an enemy hero no weaker than our main hero was in reach today and not attacked; 1: one at 0.8 to 1.0
 	struct NightLoan
 	{
 		ObjectInstanceID inside;
