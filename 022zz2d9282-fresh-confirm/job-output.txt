@@ -1,0 +1,17 @@
+== m-skirmish
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/82c5d85633/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 70 --out /home/alex/fairai/runs/022zz2d9282-fresh-confirm/m-skirmish --variants {"new": {}, "nW": {"magicWorth": 1}, "nWB": {"magicWorth": 1, "boldBehind": 1}, "nWBK": {"magicWorth": 1, "boldBehind": 1, "breakout": 3}, "nWBKG": {"magicWorth": 1, "boldBehind": 1, "breakout": 3, "townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "gather": 2}} --pool fresh1-m-skirmish --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7000
+playing 120 matches (5 variants x 24 on 12 maps) with 9 parallel job(s)
+nWBK: match    1 FairAI as blue of 2: victory winner=blue day=95 score=1.00 [171.9s]
+nWB: match    1 FairAI as blue of 2: victory winner=blue day=101 score=1.00 [216.4s]
+nWBK: match    0 FairAI as red of 2: victory winner=red day=141 score=1.00 [255.8s]
+new: match    1 FairAI as blue of 2: victory winner=blue day=145 score=1.00 [307.8s]
+nW: match    1 FairAI as blue of 2: victory winner=blue day=168 score=1.00 [308.9s]
+nWB: match    0 FairAI as red of 2: victory winner=red day=147 score=1.00 [316.5s]
+nWBKG: match    0 FairAI as red of 2: victory winner=blue day=173 score=0.00 [352.1s]
+new: match    2 FairAI as red of 2: victory winner=blue day=91 score=0.00 [190.9s]
+nW: match    0 FairAI as red of 2: victory winner=red day=206 score=1.00 [454.4s]
+nWBK: match    2 FairAI as red of 2: victory winner=blue day=102 score=0.00 [191.2s]
+nWBKG: match    2 FairAI as red of 2: victory winner=blue day=94 score=0.00 [191.8s]
+new: match    0 FairAI as red of 2: victory winner=blue day=239 score=0.00 [550.2s]
+nWBKG: match    1 FairAI as blue of 2: victory winner=blue day=186 score=1.00 [417.2s]
+nW: match    2 FairAI as red of 2: victory winner=red day=187 score=1.00 [356.7s]
