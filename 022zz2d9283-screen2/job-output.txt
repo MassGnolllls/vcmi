@@ -1,0 +1,16 @@
+== m-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/ca253a07e6/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 61 --out /home/alex/fairai/runs/022zz2d9283-screen2/m-land-2p --variants {"base": {"magicWorth": 1}, "nQSPV": {"magicWorth": 1, "campaignEdge": 2.0, "supplyRuns": 2, "passOwn": 1, "threatRadius": 24}, "nESPM": {"magicWorth": 2, "heroEdge": 1.15, "supplyRuns": 2, "passOwn": 1}, "nEQMV": {"magicWorth": 2, "heroEdge": 1.15, "campaignEdge": 2.0, "threatRadius": 24}, "nBSMV": {"magicWorth": 2, "boldBehind": 1, "supplyRuns": 2, "threatRadius": 24}, "nBQPM": {"magicWorth": 2, "boldBehind": 1, "campaignEdge": 2.0, "passOwn": 1}, "nBEPV": {"magicWorth": 1, "boldBehind": 1, "heroEdge": 1.15, "passOwn": 1, "threatRadius": 24}, "nBEQS": {"magicWorth": 1, "boldBehind": 1, "heroEdge": 1.15, "campaignEdge": 2.0, "supplyRuns": 2}, "nKPMV": {"magicWorth": 2, "breakout": 4, "supplyRuns": 2, "passOwn": 1, "threatRadius": 24}, "nKQSM": {"magicWorth": 2, "breakout": 4, "supplyRuns": 2, "campaignEdge": 2.0}, "nKESV": {"magicWorth": 1, "breakout": 4, "supplyRuns": 2, "heroEdge": 1.15, "threatRadius": 24}, "nKEQP": {"magicWorth": 1, "breakout": 4, "supplyRuns": 2, "heroEdge": 1.15, "campaignEdge": 2.0, "passOwn": 1}, "nKBSP": {"magicWorth": 1, "breakout": 4, "supplyRuns": 2, "boldBehind": 1, "passOwn": 1}, "nKBQV": {"magicWorth": 1, "breakout": 4, "supplyRuns": 2, "boldBehind": 1, "campaignEdge": 2.0, "threatRadius": 24}, "nKBEM": {"magicWorth": 2, "breakout": 4, "supplyRuns": 2, "boldBehind": 1, "heroEdge": 1.15}, "nKBEQSPMV": {"magicWorth": 2, "breakout": 4, "supplyRuns": 2, "boldBehind": 1, "heroEdge": 1.15, "campaignEdge": 2.0, "passOwn": 1, "threatRadius": 24}} --pool long1-m-land-2p --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7000
+playing 384 matches (16 variants x 24 on 12 maps) with 9 parallel job(s)
+nBEQS: match    0 FairAI as red of 2: victory winner=red day=108 score=1.00 [156.9s]
+nBQPM: match    0 FairAI as red of 2: victory winner=red day=109 score=1.00 [197.2s]
+nQSPV: match    0 FairAI as red of 2: victory winner=red day=109 score=1.00 [199.3s]
+nBSMV: match    0 FairAI as red of 2: victory winner=red day=133 score=1.00 [239.4s]
+nESPM: match    0 FairAI as red of 2: victory winner=red day=140 score=1.00 [280.6s]
+nBEPV: match    0 FairAI as red of 2: victory winner=red day=161 score=1.00 [288.7s]
+base: match    0 FairAI as red of 2: victory winner=blue day=163 score=0.00 [312.8s]
+nKEQP: match    0 FairAI as red of 2: victory winner=red day=101 score=1.00 [147.9s]
+nKQSM: match    0 FairAI as red of 2: victory winner=red day=122 score=1.00 [209.7s]
+nKESV: match    0 FairAI as red of 2: victory winner=red day=150 score=1.00 [274.5s]
+nKBEQSPMV: match    0 FairAI as red of 2: victory winner=red day=129 score=1.00 [229.4s]
+nKBQV: match    0 FairAI as red of 2: victory winner=red day=146 score=1.00 [269.6s]
+nKBEM: match    0 FairAI as red of 2: victory winner=red day=151 score=1.00 [308.0s]
