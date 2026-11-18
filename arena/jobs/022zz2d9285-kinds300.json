@@ -1,6 +1,6 @@
 {
  "script": "matrix.py",
- "jobs": 6,
+ "jobs": 9,
  "args": [
   "play",
   "--client",
@@ -17,5 +17,5 @@
   "{\"new\": {}, \"nA\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1}}",
   "--shared-pool"
  ],
- "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. new = the standard (with the veteran's return since 18.11.), nA = with townHeroes + secondArmy + nightWatch. The standard and its switches were tuned on medium land maps for two players only: this shows where it fails elsewhere (boats, several enemies, allies, long ways). Evaluate per category (matrix_summary.md) and with arena/metrics.py."
+ "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. new = the standard (with the veteran's return since 18.11.), nA = with townHeroes + secondArmy + nightWatch. The standard and its switches were tuned on medium land maps for two players only: this shows where it fails elsewhere (boats, several enemies, allies, long ways). Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays."
 }

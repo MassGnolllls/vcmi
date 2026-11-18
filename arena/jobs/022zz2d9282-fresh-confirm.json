@@ -1,5 +1,5 @@
 {
- "note": "On fresh maps, played to day 300: the standard, the standard with townHeroes + secondArmy, and that with the six switches for the main army's time on top (townWorth, breakout, magicWorth, fetchByShare, noChase 1, passage - job d9279 takes them apart on the old maps). 24 maps from four templates, both seats: 48 games per config. Shows whether the standard holds on templates it was never tuned on, and whether the two packages help there too. Evaluate per category (matrix_summary.md) and with arena/metrics.py.",
+ "note": "On fresh maps, played to day 300: the standard, the standard with townHeroes + secondArmy, and that with the six switches for the main army's time on top (townWorth, breakout, magicWorth, fetchByShare, noChase 1, passage - job d9279 takes them apart on the old maps). 24 maps from four templates, both seats: 48 games per config. Shows whether the standard holds on templates it was never tuned on, and whether the two packages help there too. Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays.",
  "script": "matrix.py",
  "args": [
   "play",
@@ -17,5 +17,5 @@
   "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}, \"doc\": {\"townHeroes\": 1, \"secondArmy\": 1, \"townWorth\": 1, \"breakout\": 1, \"magicWorth\": 1, \"fetchByShare\": 1, \"noChase\": 1, \"passage\": 1, \"regionValue\": 8000}}",
   "--shared-pool"
  ],
- "jobs": 6
+ "jobs": 9
 }

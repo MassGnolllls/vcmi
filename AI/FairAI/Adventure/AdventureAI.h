@@ -370,6 +370,7 @@ private:
 	double oppositionHeroes = 0; ///< strongest enemy hero seen in the last three weeks (0: none)
 	double hiddenMain = 0;        ///< strongest of those we cannot see today: it may sit in a town (parameter townAmbush)
 	std::vector<int3> ambushTowns; ///< enemy towns we know of
+	bool ambushCounts = true;     ///< (townAmbush) false while targets are collected for a hero with next to nothing to lose
 	double oppositionGuards = 0; ///< strongest guard we know of on the map
 	int guildDay = -1;           ///< day we last looked into the thieves' guild
 	int contactDay = -1;         ///< day we first saw an enemy hero or town (-1: not yet)

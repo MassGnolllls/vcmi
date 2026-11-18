@@ -3714,7 +3714,7 @@ double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, boo
 	// towns - a hero inside a town does not show on the map. Within a day's march of an enemy town
 	// that army has to be reckoned with. (A main hero went collecting mines beside the enemy's town
 	// with 29k; the enemy's main army came out of the gate.)
-	if(params.townAmbush && hiddenMain > worst)
+	if(params.townAmbush && ambushCounts && hiddenMain > worst)
 	{
 		for(const auto & pos : ambushTowns)
 		{
@@ -5209,6 +5209,16 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, const CPathsInfo & paths, const CPathsInfo & freePaths)
 {
 	std::vector<Target> out;
+	// (townAmbush) An army of weight reckons with the enemy's hidden main army around its towns. A
+	// hero with next to nothing does not: it risks itself (2,500 gold) for a town - the enemy takes
+	// four of ours a game that way, without a battle.
+	struct AmbushScope
+	{
+		bool & flag;
+		bool before;
+		~AmbushScope() { flag = before; }
+	} ambushScope{ambushCounts, ambushCounts};
+	ambushCounts = leads(hero) || static_cast<double>(hero->getArmyStrength()) >= params.heavyPartValue;
 	bool foreignTownTargeted = false; // (breakout) a town not ours is among this hero's targets
 	const auto known = perception.knownObjects();
 	const int3 heroPos = hero->visitablePos();
