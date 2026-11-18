@@ -324,3 +324,29 @@ match    2 FairAI as red of 2: timeout winner= day=151 score=0.26 [266.5s]
 match    0 FairAI as red of 2: timeout winner= day=151 score=0.28 [273.4s]
 match    6 FairAI as red of 2: timeout winner= day=151 score=0.19 [212.4s]
 match    9 FairAI as blue of 2: victory winner=blue day=131 score=1.00 [187.2s]
+match    8 FairAI as red of 2: timeout winner= day=151 score=0.39 [214.5s]
+match   10 FairAI as red of 2: victory winner=blue day=119 score=0.00 [236.0s]
+match    7 FairAI as blue of 2: timeout winner= day=151 score=0.06 [291.3s]
+match   11 FairAI as blue of 2: victory winner=red day=139 score=0.00 [255.0s]
+match   12 FairAI as red of 2: timeout winner= day=151 score=0.32 [270.6s]
+match   13 FairAI as blue of 2: timeout winner= day=151 score=0.32 [237.0s]
+match   14 FairAI as red of 2: timeout winner= day=151 score=0.33 [275.5s]
+match   16 FairAI as red of 2: victory winner=red day=138 score=1.00 [211.8s]
+match   17 FairAI as blue of 2: timeout winner= day=151 score=0.33 [208.3s]
+match   15 FairAI as blue of 2: timeout winner= day=151 score=0.31 [270.2s]
+match   19 FairAI as blue of 2: victory winner=blue day=111 score=1.00 [196.1s]
+match   18 FairAI as red of 2: victory winner=red day=139 score=1.00 [271.2s]
+match   22 FairAI as red of 2: victory winner=blue day=126 score=0.00 [215.6s]
+match   23 FairAI as blue of 2: victory winner=blue day=93 score=1.00 [179.8s]
+match   21 FairAI as blue of 2: timeout winner= day=151 score=0.08 [245.5s]
+match   20 FairAI as red of 2: timeout winner= day=151 score=0.58 [275.9s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 12 -> FairAI won 7, lost 5  (win rate 58%, 95% CI 32%-81%)
+- day limit reached: 12 (material lead for FairAI in 1)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 124 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 57 --out /home/alex/fairai/runs/022zz2d926-idle-means/m-land-2p/nTQB-s57 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"townWorth": 1, "townHeroes": 1, "secondArmy": 1}
