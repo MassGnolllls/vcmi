@@ -267,6 +267,7 @@ private:
 		int startDay = 0;
 		bool returning = false;
 		bool waiting = false; ///< no way to the leader, or the road is not safe: it waits in a town
+		bool loading = false; ///< (supplyRuns 2) called to the town: still on its way to the troops
 	};
 	std::optional<SupplyRun> supply;
 	int supplyLog = -1;
@@ -313,6 +314,7 @@ private:
 	void noteStep(const Target & best);
 	void closeStatsDay();
 	int breakoutLogDay = -1;
+	int lookBehindLogDay = -1;
 	std::set<ObjectInstanceID> fledToday;       ///< heroes that fled from a threat today: they do not turn round for home the same day
 	int mainSlackDays = 0;                   ///< (breakout 3) days in a row on which the main hero found nothing worth its army to do
 	double mainBestValueToday = 0;           ///< (breakout 3) the most valuable target the main hero went for today (ways out not counted)

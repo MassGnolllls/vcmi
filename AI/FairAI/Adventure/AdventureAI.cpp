@@ -517,7 +517,7 @@ bool AdventureAI::exploringStalled() const
 		const double twoWeeks = uncoveredIn(14);
 		stalled = twoWeeks >= 0 && twoWeeks < 0.02 * mapTiles;
 	}
-	if(!stalled && params.breakout >= 3 && today >= 14 && mainSlackDays >= params.breakoutSlackDays)
+	if(!stalled && params.breakout == 3 && today >= 14 && mainSlackDays >= params.breakoutSlackDays)
 	{
 		// (breakout 3) Nothing left to do here: the main hero has spent its last days on things not
 		// worth its army (and, by the rule of level 2 below, the last three days showed next to no
@@ -1432,6 +1432,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			// teleported: both ends of the channel are explored now
 			if(statsFile && best.object.hasValue() && breakoutExits.count(best.object) && !usedTeleporters.count(best.object))
 				stats[phaseOf(today)]["door"] += 1; // (breakout 3) a door taken as the way out
+			if(params.breakout >= 4 && best.object.hasValue() && breakoutExits.count(best.object) && !usedTeleporters.count(best.object))
+				breakoutPauseUntil = today + 3; // (breakout 4) through a door: look at what lies behind it
 			if(best.object.hasValue())
 				usedTeleporters.insert(best.object);
 			for(const auto * obj : cb->getVisitableObjs(hero->visitablePos(), false))
@@ -4446,11 +4448,15 @@ void AdventureAI::planSupplyRun()
 			continue; // the leader itself is here (or a guest): it takes what it needs
 		if(!carrier)
 			carrier = town->getGarrisonHero();
-		if(!carrier || carrier->tempOwner != me || carrier->id == mainHero)
+		if(carrier && (carrier->tempOwner != me || carrier->id == mainHero))
 			continue;
-		supplyPossible = true;
+		// (supplyRuns 2) nobody stands there: a hero of ours is called to the town, or one is hired
+		if(!carrier && params.supplyRuns < 2)
+			continue;
+		if(carrier)
+			supplyPossible = true;
 		const double stock = townTroops(town, leader);
-		if(stock < std::max(1500.0, params.supplyShare * army) || stock <= bestStock)
+		if(stock < std::max(carrier ? 1500.0 : 3000.0, params.supplyShare * army) || stock <= bestStock)
 			continue;
 		bestTown = town;
 		bestCarrier = carrier;
@@ -4458,6 +4464,70 @@ void AdventureAI::planSupplyRun()
 	}
 	if(!bestTown || leader->getVisitedTown() == bestTown)
 		return;
+	if(!bestCarrier)
+	{
+		// (supplyRuns 2) No hero of ours stands in the town. In probe games the troops of a week
+		// waited there - the others were out collecting -, so no run started (three in 45 days) and
+		// the leader walked home itself: nine days out of thirty, and the town it had just taken
+		// fell behind its back. Only when the leader is near enough for a run and not next door (by
+		// its own way to the town; the courier's way is checked when it has loaded).
+		auto leaderPaths = computePaths(leader, false);
+		const CGPathNode * back = leaderPaths->getPathInfo(bestTown->visitablePos());
+		if(!back || !back->reachable() || back->turns < 1 || back->turns > params.supplyDays)
+			return;
+		// A hero of ours that reaches the town today or tomorrow is called there (a light one: not a
+		// leader, not one that holds an army of its own) ...
+		{
+			const CGHeroInstance * runner = nullptr;
+			double runnerCost = 1e9;
+			for(const auto * candidate : perception.ownHeroes())
+			{
+				if(candidate->id == mainHero || leads(candidate) || candidate->isGarrisoned() || candidate->getVisitedTown() == bestTown
+					|| static_cast<double>(candidate->getArmyStrength()) >= params.heavyPartValue)
+					continue;
+				auto way = computePaths(candidate, false);
+				const CGPathNode * node = way->getPathInfo(bestTown->visitablePos());
+				if(!node || !node->reachable() || node->turns > 1 || node->cost >= runnerCost)
+					continue;
+				runner = candidate;
+				runnerCost = node->cost;
+			}
+			if(runner)
+			{
+				supply = SupplyRun{runner->id, bestTown->id, today, false, false, true};
+				supplyPossible = true;
+				if(statsFile)
+					stats[phaseOf(today)]["courierCalled"] += 1;
+				logAi->info("FairAI %s day %d: supply run - %s is called to %s (%.1f days) for the %.0f troops waiting there; the leader is %d day(s) away", me.toString(), today,
+					runner->getNameTranslated(), bestTown->getNameTranslated(), runnerCost, bestStock, static_cast<int>(back->turns));
+				return;
+			}
+		}
+		// ... else a courier is hired in the tavern, for a load worth the 2,500 gold
+		if(bestStock < 5000 || !bestTown->hasBuilt(BuildingID::TAVERN) || static_cast<int>(perception.ownHeroes().size()) >= params.maxHeroes
+			|| spendable()[GameResID::GOLD] < GameConstants::HERO_GOLD_COST + params.heroGoldReserve)
+			return;
+		const CGHeroInstance * best = nullptr;
+		for(const auto * candidate : cb->getAvailableHeroes(bestTown))
+		{
+			if(!best || candidate->getArmyStrength() > best->getArmyStrength())
+				best = candidate;
+		}
+		if(!best)
+			return;
+		logAi->info("FairAI %s day %d: hiring %s (level %d) in %s as courier for the %.0f troops waiting there (the leader is %d day(s) away)", me.toString(), today,
+			best->getNameTranslated(), static_cast<int>(best->level), bestTown->getNameTranslated(), bestStock, static_cast<int>(back->turns));
+		cb->recruitHero(bestTown, best);
+		gateway.waitTillFree();
+		perception.refresh();
+		leader = ownHero(mainHero);
+		bestCarrier = bestTown->getVisitingHero();
+		if(!leader || !bestCarrier || bestCarrier->tempOwner != me || bestCarrier->id == mainHero)
+			return;
+		if(statsFile)
+			stats[phaseOf(today)]["courierHired"] += 1;
+		supplyPossible = true;
+	}
 	const ObjectInstanceID carrierId = bestCarrier->id;
 	if(bestCarrier->isGarrisoned())
 	{
@@ -4496,6 +4566,8 @@ void AdventureAI::planSupplyRun()
 	if(!carrier)
 		return;
 	supply = SupplyRun{carrierId, bestTown->id, today, false};
+	if(statsFile)
+		stats[phaseOf(today)]["supplyRun"] += 1;
 	logAi->info("FairAI %s day %d: supply run - %s takes %llu from %s to %s (army %llu, %.1f days away)", me.toString(), today,
 		carrier->getNameTranslated(), static_cast<unsigned long long>(carrier->getArmyStrength()), bestTown->getNameTranslated(),
 		leader->getNameTranslated(), static_cast<unsigned long long>(leader->getArmyStrength()), node->cost);
@@ -4533,6 +4605,56 @@ std::vector<Target> AdventureAI::supplyTargets(const CGHeroInstance * hero, cons
 			return -1;
 		return path.nodes[path.nodes.size() - 2].turns > 0 ? 0 : 1;
 	};
+	if(supply->loading)
+	{
+		// (supplyRuns 2) called to the town: walk there and load
+		const CGTownInstance * town = nullptr;
+		for(const auto * t : perception.ownTowns())
+			if(t->id == supply->town)
+				town = t;
+		if(!town)
+		{
+			supply.reset(); // the town is lost
+			return targets;
+		}
+		if(hero->getVisitedTown() != town)
+		{
+			const int step = stepToday(town->visitablePos());
+			const CGPathNode * node = paths.getPathInfo(town->visitablePos());
+			if(step < 0 || !node || (town->getVisitingHero() && town->getVisitingHero() != hero))
+			{
+				logAi->debug("FairAI %s day %d: supply run of %s given up (no way to %s, or another hero stands in its gate)", me.toString(), today,
+					hero->getNameTranslated(), town->getNameTranslated());
+				supply.reset();
+				return targets;
+			}
+			if(step == 1)
+			{
+				Target t;
+				t.tile = town->visitablePos();
+				t.object = town->id;
+				t.value = 100000;
+				t.travel = node->cost;
+				t.score = 100000;
+				t.description = "load";
+				targets.push_back(t);
+			}
+			return targets;
+		}
+		const ObjectInstanceID heroId = hero->id;
+		recruitInTown(town, hero, economy.rho > 1.5 ? 0 : 1000);
+		if(const auto * now = ownHero(heroId))
+			pickBestCreatures(now, town);
+		hero = ownHero(heroId);
+		leader = ownHero(mainHero);
+		if(!hero)
+			return targets;
+		if(leader == hero)
+			leader = nullptr;
+		supply->loading = false;
+		logAi->info("FairAI %s day %d: supply run - %s takes %llu from %s to %s", me.toString(), today, hero->getNameTranslated(),
+			static_cast<unsigned long long>(hero->getArmyStrength()), town->getNameTranslated(), leader ? leader->getNameTranslated() : std::string("?"));
+	}
 	if(leader && !supply->returning && leader->getVisitedTown() && leader->getVisitedTown() == hero->getVisitedTown())
 	{
 		// both in the same town, one in the gate and one in the garrison: hand over on the spot
@@ -6080,6 +6202,34 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		const int3 size = cb->getMapSize();
 		Target bestExplore;
 		bestExplore.score = 0;
+		// (breakout 4) The leader's standing task while no foreign town is among its targets: find the
+		// next one. Levels 1 to 3 wait for a standstill - two weeks without new land, or three days
+		// without a target worth the army - and the standstill ends with the first step that shows new
+		// land or the first decent pile: in probe games the hero set out for a way out, turned to a
+		// mine, was "shut in" again three days later. From the third week on the search simply is
+		// on: ways out (guards with unseen land behind, doors) count what a town is worth, by how
+		// much of the map around the land behind them is unseen.
+		const double searchWorth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
+		bool searching = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today >= 14 && unseenShare >= 0.1;
+		double waitingAtHome = 0;
+		if(searching)
+		{
+			// ... but not with the smaller half of our army: when more waits in our towns than the
+			// hero leads, that is fetched first. (The first version of this level went on from way out
+			// to way out with 14,000 for four weeks, across the whole map, while ten times that stood
+			// at home.)
+			for(const auto * town : perception.ownTowns())
+			{
+				double troops = townTroops(town, hero);
+				if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
+					troops = std::max(0.0, troops - left->second);
+				waitingAtHome += troops;
+			}
+			searching = waitingAtHome < static_cast<double>(hero->getArmyStrength());
+		}
+		// a way out just opened (its guard beaten, or a door gone through): look at what lies behind it
+		const bool lookingBehind = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today < breakoutPauseUntil;
+		double bestOpenEnd = 0;
 		std::map<ObjectInstanceID, double> behindGuard;
 		std::map<ObjectInstanceID, double> fogBehind; // most tiles one step behind the guard would reveal
 		std::map<ObjectInstanceID, double> openEnd; // (passage) the land we know behind the guard ends in land we have not seen: how much of the map around there is unseen
@@ -6147,6 +6297,22 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					{
 						if(unsafe(node, ObjectInstanceID()))
 							continue;
+						// (breakout 4) For three days after a way out was opened, the land behind it counts
+						// what the way out counted: open land that runs on into a region we have not seen.
+						// (A hero of 77,000 beat the guard of a gap, turned round and walked home for three
+						// days to fetch troops; the town of that region stood eight tiles beyond the gap.)
+						// Three days, not for good: with this bonus on every day the main hero became a
+						// scout that never came home for its army.
+						if(lookingBehind)
+						{
+							const double part = std::clamp(grid.boxShare(tile, 12) / 0.3, 0.0, 1.0);
+							if(part >= 0.2 && reveal >= 10)
+							{
+								const double open = searchWorth * part * std::clamp(reveal / 40.0, 0.25, 1.0);
+								value += open;
+								bestOpenEnd = std::max(bestOpenEnd, open);
+							}
+						}
 						double score = value / (node->cost + params.travelOffset);
 						if(score > bestExplore.score)
 						{
@@ -6179,6 +6345,12 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		if(bestExplore.score > 0)
 			addTarget(bestExplore.tile, ObjectInstanceID(), bestExplore.value, 0, bestExplore.travel, "explore");
+		if(lookingBehind && bestOpenEnd > 0 && lookBehindLogDay != today)
+		{
+			logAi->info("FairAI %s day %d: %s looks at what lies behind the way out it opened (until day %d): open land towards unseen regions worth up to %.0f",
+				me.toString(), today, hero->getNameTranslated(), breakoutPauseUntil, bestOpenEnd);
+			lookBehindLogDay = today;
+		}
 		for(const auto & [guard, value] : behindGuard)
 		{
 			unlockValue[guard] += value;
@@ -6243,9 +6415,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 			}
 		}
-		if(params.breakout && leads(hero) && exploringStalled() && !foreignTownTargeted)
+		if(params.breakout && leads(hero) && (exploringStalled() || (searching && today >= breakoutPauseUntil)) && !foreignTownTargeted)
 		{
-			const double worth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
+			const double worth = searchWorth;
 			int exits = 0;
 			breakoutExits.clear();
 			int dear = 0;
@@ -6284,8 +6456,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			}
 			if(breakoutLogDay != today)
 			{
-				logAi->info("FairAI %s day %d: %s is shut in (next to nothing uncovered lately, no foreign town to go for, %d slack day(s)): %d guard(s) with unseen land behind count as ways out worth up to %.0f%s",
-					me.toString(), today, hero->getNameTranslated(), mainSlackDays, exits, worth, dear > 0 ? boost::str(boost::format(", %d more would cost too much yet") % dear) : std::string());
+				if(searching)
+					logAi->info("FairAI %s day %d: %s looks for the next town (none among its targets, %.0f%% of the map unseen, %.0f waiting at home): %d way(s) out worth up to %.0f%s",
+						me.toString(), today, hero->getNameTranslated(), 100.0 * unseenShare, waitingAtHome, exits, worth,
+						dear > 0 ? boost::str(boost::format(" (%d more would cost too much yet)") % dear) : std::string());
+				else
+					logAi->info("FairAI %s day %d: %s is shut in (next to nothing uncovered lately, no foreign town to go for, %d slack day(s)): %d guard(s) with unseen land behind count as ways out worth up to %.0f%s",
+						me.toString(), today, hero->getNameTranslated(), mainSlackDays, exits, worth, dear > 0 ? boost::str(boost::format(", %d more would cost too much yet") % dear) : std::string());
 				breakoutLogDay = today;
 			}
 		}
