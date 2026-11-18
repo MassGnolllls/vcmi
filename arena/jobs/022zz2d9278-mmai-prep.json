@@ -1,0 +1,17 @@
+{
+ "note": "Only the preparation for MMAI on this PC (mod archive, ONNX Runtime, MMAI added to the build), then a step that takes seconds: shows whether both downloads work, and which one does not, without waiting for a whole test. d9271 failed with 'HTTP Error 404' without naming the download.",
+ "script": "matrix.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "gen",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long300.json",
+  "--only",
+  "m-land-2p"
+ ],
+ "jobs": 1
+}
