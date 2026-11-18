@@ -1672,7 +1672,63 @@ double AdventureAI::fieldStrength(const CGHeroInstance * hero) const
 	// count as they do for the enemy's hero
 	const double melee = hero->valOfBonuses(Selector::typeSubtype(BonusType::PERCENTAGE_DAMAGE_BOOST, BonusSubtypeID(BonusCustomSubtype::damageTypeMelee))) / 100.0;
 	const double armour = std::clamp(hero->valOfBonuses(BonusType::GENERAL_DAMAGE_REDUCTION) / 100.0, 0.0, 0.7);
-	return static_cast<double>(hero->getArmyStrength()) * hero->getFightingStrength() * std::sqrt((1.0 + std::max(0.0, melee)) / (1.0 - armour));
+	return static_cast<double>(hero->getArmyStrength()) * hero->getFightingStrength() * std::sqrt((1.0 + std::max(0.0, melee)) / (1.0 - armour))
+		* (params.magicWorth >= 2 ? ownMagicWorth(hero) : 1.0);
+}
+
+double AdventureAI::ownMagicWorth(const CGHeroInstance * hero) const
+{
+	// (magicWorth 2) The enemy hero's magic counts in its strength; ours counted for nothing - with
+	// equal armies and equal spells the enemy was "stronger". The same measured values, for the
+	// spells our hero has and the spell points it holds: spells on a whole army 1.05 (Slow, Haste,
+	// Prayer from advanced mastery on), raising the dead 1.15, Blind 1.2, damage by what five rounds
+	// of the best spell take off an army as big as ours (measured: 1.11 at power 5, 1.61 at 12).
+	if(!hero || !hero->hasSpellbook() || hero->mana < 6)
+		return 1.0;
+	double worth = 1.0;
+	double damage = 0;
+	const int power = std::max(1, hero->getPrimSkillLevel(PrimarySkill::SPELL_POWER));
+	for(const SpellID & id : hero->getSpellsInSpellbook())
+	{
+		const CSpell * spell = id.toSpell();
+		if(!spell || !spell->isCombat() || !hero->canCastThisSpell(spell))
+			continue;
+		const int cost = std::max(1, static_cast<int>(hero->getSpellCost(spell)));
+		if(cost > hero->mana)
+			continue;
+		const int mastery = std::clamp(static_cast<int>(hero->getSpellSchoolLevel(spell)), 0, 3);
+		if((id == SpellID::SLOW || id == SpellID::HASTE || id == SpellID::PRAYER) && mastery >= 2)
+			worth = std::max(worth, 1.05);
+		else if(id == SpellID::RESURRECTION || id == SpellID::ANIMATE_DEAD)
+			worth = std::max(worth, 1.15);
+		else if(id == SpellID::BLIND)
+			worth = std::max(worth, 1.2);
+		else if(spell->isDamage())
+		{
+			const auto & info = spell->getLevelInfo(mastery);
+			double perCast = static_cast<double>(spell->calculateRawEffectValue(mastery, power, 1));
+			for(const auto & [name, node] : info.battleEffects.Struct())
+			{
+				if(node["chainLength"].Integer() > 1)
+					perCast *= 1.9;
+			}
+			if(info.range.empty() || info.range.size() > 1)
+				perCast *= 1.5;
+			damage = std::max(damage, perCast * std::min(5.0, std::floor(static_cast<double>(hero->mana) / cost)));
+		}
+	}
+	if(damage > 0)
+	{
+		double health = 0;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(stack && stack->getCreature())
+				health += static_cast<double>(stack->getCount()) * stack->getCreature()->getMaxHealth();
+		}
+		if(health > 0)
+			worth = std::max(worth, 1.0 + 0.7 * std::min(1.0, damage / health));
+	}
+	return worth;
 }
 
 const Combat::HeroSpec * AdventureAI::ownSpells(const CGHeroInstance * hero, Combat::HeroSpec & spec) const
