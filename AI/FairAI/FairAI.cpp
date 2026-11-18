@@ -86,16 +86,20 @@ void FairAIGateway::yourTurn(QueryID queryID)
 {
 	status.addQuery(queryID, "YourTurn");
 	executeActionAsync("yourTurn", [this, queryID]() { answerQuery(queryID, 0); });
+	const bool hadTurn = status.haveTurn();
+	const int serial = ++turnSerial;
 	status.startedTurn();
 	status.turnInterruption.reset();
+	if(hadTurn)
+		logAi->warn("FairAI %s: called to move (call %d) while the turn before still counts as running", playerID.toString(), serial);
 
-	asyncTasks->run([this]()
+	asyncTasks->run([this, serial]()
 	{
 		ScopedThreadName guard("FairAI::makingTurn");
 		try
 		{
 			status.waitTillFree();
-			makeTurn();
+			makeTurn(serial);
 		}
 		catch(const InterruptionRequestedException &)
 		{
@@ -109,22 +113,45 @@ void FairAIGateway::yourTurn(QueryID queryID)
 		{
 			logAi->error("FairAI: turn failed with exception: %s", e.what());
 			// Never leave the game hanging: end the turn even after an internal error.
-			endTurn();
+			endTurn(serial);
 		}
 	});
 }
 
-void FairAIGateway::makeTurn()
+void FairAIGateway::makeTurn(int serial)
 {
 	std::shared_lock gsLock(CGameState::mutex);
 
 	const int day = cb->getDate(Date::DAY);
+	// In about one long game in twenty a day of ours was lost: the server had ended our turn before
+	// this thread came to move (the day had already changed), and the thread then "played" during the
+	// enemy's turn - every order refused - beside the thread of our real turn. Whose turn it is, is
+	// public: when it is not ours (any more), there is nothing to do and nothing to end.
+	if(!cb->isPlayerMakingTurn(playerID))
+	{
+		bool ours = false;
+		{
+			auto unlock = vstd::makeUnlockSharedGuard(CGameState::mutex);
+			for(int i = 0; i < 20 && !ours; ++i)
+			{
+				std::this_thread::sleep_for(std::chrono::milliseconds(10));
+				ours = cb->isPlayerMakingTurn(playerID);
+			}
+		}
+		if(!ours)
+		{
+			logAi->warn("FairAI %s day %d: called to move (call %d), but the turn is not ours (any more) - nothing done", playerID.toString(), day, serial);
+			if(turnSerial.load() == serial)
+				status.madeTurn();
+			return;
+		}
+	}
 	perception->refresh();
 	logAi->info("FairAI %s day %d: %s", playerID.toString(), day, perception->summary());
 
 	adventure->playTurn();
 
-	endTurn();
+	endTurn(serial);
 }
 
 void FairAIGateway::waitTillFree()
@@ -138,17 +165,27 @@ void FairAIGateway::checkInterruption()
 	status.turnInterruption.interruptionPoint();
 }
 
-void FairAIGateway::endTurn()
+void FairAIGateway::endTurn(int serial)
 {
 	if(cb->getPlayerStatus(playerID) != EPlayerStatus::INGAME)
 		return;
 
+	int attempts = 0;
 	do
 	{
+		// a turn that began after the one this thread played is not this thread's to end
+		if(turnSerial.load() != serial)
+		{
+			logAi->warn("FairAI %s: the thread of call %d does not end the turn of call %d (after %d request(s))", playerID.toString(), serial, turnSerial.load(), attempts);
+			return;
+		}
 		cb->endTurn();
+		++attempts;
 		status.turnInterruption.interruptionPoint();
 	}
 	while(status.haveTurn()); // a request may fail: keep asking until the server confirms
+	if(attempts > 1)
+		logAi->debug("FairAI %s: the turn of call %d ended at request %d", playerID.toString(), serial, attempts);
 }
 
 // ------------------------------------------------------------------ queries

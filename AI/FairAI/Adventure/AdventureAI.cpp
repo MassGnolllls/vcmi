@@ -1265,6 +1265,23 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		auto paths = computePaths(hero, false);
 		auto freePaths = computePaths(hero, true);
 		auto targets = supply && supply->courier == heroId ? supplyTargets(hero, *paths) : collectTargets(hero, *paths, *freePaths);
+		// (muster) More waits in the town than the main hero leads: while that town is among its
+		// targets, nothing else is worth more than half a day - a town next door that changed hands
+		// every other day kept a leader of 130,000 from the 380,000 waiting four days away.
+		// Retreat and flight as ever.
+		if(musterUrgent && musterTown.hasValue() && heroId == mainHero)
+		{
+			const bool onTheList = std::any_of(targets.begin(), targets.end(), [this](const Target & t) { return t.object == musterTown; });
+			if(onTheList)
+			{
+				vstd::erase_if(targets, [this](const Target & t)
+				{
+					const std::string & d = t.description;
+					const bool safety = d == "retreat" || d == "flee" || d == "home" || d == "aside" || d == "way out" || d == "fortress" || d == "evacuate" || d == "relocate";
+					return t.object != musterTown && t.travel > 0.5 && !safety;
+				});
+			}
+		}
 		if(supply && supply->courier == heroId && targets.empty())
 			return;
 		{
@@ -3779,47 +3796,78 @@ void AdventureAI::updateThreats()
 		// stood in garrisons from then on, and games were lost with more troops than the enemy had.
 		const ObjectInstanceID musterBefore = musterTown;
 		musterTown = ObjectInstanceID();
+		musterUrgent = false;
 		if(params.muster && leader && today >= 14)
 		{
 			const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
 			const double share = (campaignMode ? 2.0 : 1.0) * params.musterShare;
-			double bestStock = 0;
-			const CGTownInstance * bestTown = nullptr;
-			for(const auto * town : perception.ownTowns())
+			auto stockOf = [&](const CGTownInstance * town)
 			{
-				if(leader->getVisitedTown() == town)
-					continue;
 				double stock = townTroops(town, leader);
 				if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
 					stock = std::max(0.0, stock - left->second);
-				// the town the leader is already marching to stays its goal down to half the bar
-				const double bar = (town->id == musterBefore ? 0.5 : 1.0) * share * army;
-				if(stock >= bar && stock > bestStock)
+				return stock;
+			};
+			// (what a courier is bringing is not fetched; the town the leader stands in needs no march)
+			auto open = [&](const CGTownInstance * town)
+			{
+				return leader->getVisitedTown() != town && !(supply && !supply->returning && !supply->waiting && supply->town == town->id);
+			};
+			const CGTownInstance * chosen = nullptr;
+			double chosenStock = 0;
+			// the town the leader is already marching to stays its goal down to half the bar - whatever
+			// has grown elsewhere meanwhile (two towns whose stocks overtook each other had the leader
+			// turn round every other day)
+			for(const auto * town : perception.ownTowns())
+			{
+				if(town->id != musterBefore || !open(town))
+					continue;
+				const double stock = stockOf(town);
+				if(stock >= 0.5 * share * army)
 				{
-					bestStock = stock;
-					bestTown = town;
+					chosen = town;
+					chosenStock = stock;
 				}
 			}
-			// what a courier is bringing is not fetched
-			if(bestTown && supply && !supply->returning && !supply->waiting && supply->town == bestTown->id)
-				bestTown = nullptr;
-			// a town within the days the leader looks ahead anyway is judged as ever: the long view is
-			// for the town beyond them (and stays on that town until the leader has been there)
-			if(bestTown && bestTown->id != musterBefore)
+			if(!chosen)
 			{
-				auto way = computePaths(leader, false, 30);
-				const CGPathNode * node = way->getPathInfo(bestTown->visitablePos());
-				if(node && node->reachable() && node->turns <= std::max(params.maxTravelTurns, params.mainHorizon))
-					bestTown = nullptr;
+				// else the largest stock that lies beyond the days the leader looks ahead anyway (a town
+				// within them is judged as ever) and that it has a way to
+				std::vector<std::pair<double, const CGTownInstance *>> candidates;
+				for(const auto * town : perception.ownTowns())
+				{
+					if(!open(town))
+						continue;
+					const double stock = stockOf(town);
+					if(stock >= share * army)
+						candidates.emplace_back(stock, town);
+				}
+				if(!candidates.empty())
+				{
+					std::sort(candidates.begin(), candidates.end(), [](const auto & a, const auto & b) { return a.first > b.first; });
+					auto way = computePaths(leader, false, 30);
+					for(const auto & [stock, town] : candidates)
+					{
+						const CGPathNode * node = way->getPathInfo(town->visitablePos());
+						if(!node || !node->reachable() || node->turns <= std::max(params.maxTravelTurns, params.mainHorizon))
+							continue;
+						chosen = town;
+						chosenStock = stock;
+						break;
+					}
+				}
 			}
-			if(bestTown)
-				musterTown = bestTown->id;
+			if(chosen)
+			{
+				musterTown = chosen->id;
+				musterUrgent = chosenStock >= 2.0 * share * army;
+			}
 			if(musterTown != musterBefore)
 			{
-				if(bestTown && musterTown.hasValue())
+				if(chosen)
 				{
-					logAi->info("FairAI %s day %d: muster - %.0f wait in %s, the main hero leads %.0f: it goes there for them", me.toString(), today, bestStock,
-						bestTown->getNameTranslated(), army);
+					logAi->info("FairAI %s day %d: muster - %.0f wait in %s, the main hero leads %.0f: it goes there for them%s", me.toString(), today, chosenStock,
+						chosen->getNameTranslated(), army, musterUrgent ? " and leaves everything else" : "");
 					if(statsFile)
 						stats[phaseOf(today)]["fetchFar"] += 1;
 				}

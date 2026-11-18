@@ -15,6 +15,7 @@
  */
 #pragma once
 
+#include <atomic>
 #include "../../lib/callback/CAdventureAI.h"
 #include "Status.h"
 #include "../../lib/battle/BattleSide.h"
@@ -95,8 +96,10 @@ private:
 	bool battleSiege = false; ///< the running battle is fought at the walls of a town
 	int battleDay = 0;
 
-	void makeTurn();
-	void endTurn();
+	void makeTurn(int serial);
+	void endTurn(int serial);
+	/// counts the calls to move: a turn thread that is late must not end a turn that began after its own
+	std::atomic<int> turnSerial{0};
 	void answerQuery(QueryID queryID, int selection);
 	/// Runs on a worker thread with a shared gamestate lock. Needed because requests
 	/// may not be sent from the thread that delivers game events.

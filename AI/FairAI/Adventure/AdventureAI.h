@@ -423,6 +423,7 @@ private:
 	bool campaignMode = false;   ///< the main hero is clearly the strongest force we know of (updateThreats; parameter leaderFocus)
 	bool refillMode = false; ///< campaign interrupted: the main hero fetches the troops that wait in our towns
 	ObjectInstanceID musterTown; ///< (muster) the town of ours whose troops the main hero is to fetch, however far it is
+	bool musterUrgent = false;   ///< (muster) more waits there than the main hero leads: nothing else is worth days now
 	int musterLog = -1;
 	/// this hero is the main hero on campaign: long marches, the enemy's towns first, no errands
 	bool campaign(const CGHeroInstance * hero) const;
