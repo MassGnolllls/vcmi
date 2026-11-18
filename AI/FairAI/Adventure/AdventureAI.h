@@ -593,6 +593,8 @@ private:
 	double transferGain(const CArmedInstance * destination, const CArmedInstance * source) const;
 	/// > 1 when troops waiting for the main hero are big compared with its army (parameter couriers)
 	double reinforcementBoost(double troops) const;
+	/// (gather) what troops count for when they close the gap between the main hero and the edge it asks for against the strongest enemy hero seen lately: 1 to 3, or 0 when that is not the question
+	double decisiveBoost(double troops) const;
 };
 
 }

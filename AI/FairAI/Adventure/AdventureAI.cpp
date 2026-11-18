@@ -347,6 +347,7 @@ void Params::loadOverrides(int playerIndex)
 	read("nightWatch", nightWatch);
 	read("boldBehind", boldBehind);
 	read("gather", gather);
+	read("gatherDays", gatherDays);
 	read("primaryByArmy", primaryByArmy);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
@@ -4940,6 +4941,20 @@ double AdventureAI::transferGain(const CArmedInstance * destination, const CArme
 	return gained;
 }
 
+double AdventureAI::decisiveBoost(double troops) const
+{
+	const CGHeroInstance * leader = ownHero(mainHero);
+	if(!params.gather || !leader || oppositionHeroes <= 0 || troops <= 0)
+		return 0;
+	const double own = fieldStrength(leader);
+	const double now = own / oppositionHeroes;
+	const double then = (own + troops * commanderFactor(leader)) / oppositionHeroes;
+	const double edge = heroEdgeNow();
+	if(now >= 0.5 && now < edge)
+		return 1.0 + 2.0 * std::clamp((then - now) / (edge - now), 0.0, 1.0);
+	return 0;
+}
+
 double AdventureAI::reinforcementBoost(double troops) const
 {
 	// Troops in a garrison win nothing. For the main hero a reinforcement that is big compared with
@@ -4953,16 +4968,7 @@ double AdventureAI::reinforcementBoost(double troops) const
 	// decisive battle waits for. Counted while our leader is within reach of the edge it asks for
 	// (from half the enemy's strength on): three times their value when they carry it over the edge,
 	// in between by the share of the gap they close.
-	double decisive = 0;
-	if(params.gather && oppositionHeroes > 0 && troops > 0)
-	{
-		const double own = fieldStrength(leader);
-		const double now = own / oppositionHeroes;
-		const double then = (own + troops * commanderFactor(leader)) / oppositionHeroes;
-		const double edge = heroEdgeNow();
-		if(now >= 0.5 && now < edge)
-			decisive = 1.0 + 2.0 * std::clamp((then - now) / (edge - now), 0.0, 1.0);
-	}
+	const double decisive = decisiveBoost(troops);
 	if(params.fetchByShare)
 	{
 		// Troops waiting in a town do not run away: fetching them only brings their use forward. A
@@ -5271,7 +5277,8 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 				if(other->id == mainHero)
 				{
 					gain = transferGain(other, hero);
-					if(gain < 0.5 * static_cast<double>(other->getArmyStrength()))
+					// (gather 2) ... or when its troops are what the decisive battle waits for
+					if(gain < 0.5 * static_cast<double>(other->getArmyStrength()) && !(params.gather >= 2 && decisiveBoost(gain) >= 2.0))
 						gain = 0;
 				}
 				else if(!leads(other))
@@ -5571,12 +5578,34 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			}
 		}
 	}
+	// (gather 2) The muster. A town's hero brings its troops to the main hero, up to gatherDays away,
+	// when they are what the decisive battle waits for (they close half the gap to the edge or more),
+	// or when its town cannot hold and there is no town to go to: troops that wait there are beaten
+	// one town after the other by the one army that is stronger than each of them and weaker than
+	// all of them. (Logged: on day 84 we had 527,000 against 207,000, the main hero 207,000 of them;
+	// the enemy's main hero took two towns with 63,000 and 41,000 in them within three days while
+	// ours stood a day's march away, short of the edge by the troops that fell there.)
+	bool muster = false;
+	if(params.gather >= 2 && heavyPart && !leads(hero))
+	{
+		const CGHeroInstance * leader = ownHero(mainHero);
+		if(leader && leader != hero)
+		{
+			const double gain = transferGain(leader, hero);
+			const bool lastResort = params.townHeroes && roundTripBudget >= 0 && !refuge && threatAt(heroPos) > params.evacuateRatio * defenceAt(hero, heroPos);
+			muster = gain > 0 && (decisiveBoost(gain) >= 2.0 || lastResort);
+			if(muster && heavyPartLog.insert(today * 1000 + heroNum % 1000 + 700000000).second)
+				logAi->info("FairAI %s day %d: %s musters - its army (%llu, %.0f of it for %s) %s", me.toString(), today, hero->getNameTranslated(),
+					static_cast<unsigned long long>(hero->getArmyStrength()), gain, leader->getNameTranslated(),
+					lastResort ? "cannot hold its town and has no town to go to" : "is what the decisive battle waits for");
+		}
+	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
 	{
 		if(evacuating && description != "evacuate")
 			return;
 		// (safeParts) the main hero within today's march: delivering the troops is arriving
-		const bool delivery = (heavyPart && object.hasValue() && object == mainHero && travel < 1.0) || description == "evacuate" || description == "relocate";
+		const bool delivery = (heavyPart && object.hasValue() && object == mainHero && (travel < 1.0 || (muster && travel <= params.gatherDays))) || description == "evacuate" || description == "relocate";
 		if(fortressOutside && description != "fortress" && description != "retreat" && description != "flee" && travel > 0.25 && !delivery)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
