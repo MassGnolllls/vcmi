@@ -14,8 +14,8 @@
   "--seeds",
   "90",
   "--configs",
-  "{\"new\": {}, \"nAKW\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 2}}",
+  "{\"new\": {}, \"nW\": {\"magicWorth\": 1}}",
   "--shared-pool"
  ],
- "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. new = the standard (with the veteran's return since 18.11.), nAKW = the pack the doctrine test (d9280) carries so far: townHeroes + secondArmy + nightWatch, breakout 2, magicWorth 1 (to be replaced by what the fresh-map test d9282 confirms before this job starts). The standard and its switches were tuned on medium land maps for two players only: this shows where it fails elsewhere (boats, several enemies, allies, long ways). Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays."
+ "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. new = the standard (with the veteran's return since 18.11.), nW = with magicWorth 1, the one switch the doctrine test d9280 carries clearly (to be replaced by what the fresh-map test d9282 and the screening d9283 confirm before this job starts). The standard and its switches were tuned on medium land maps for two players only: this shows where it fails elsewhere (boats, several enemies, allies, long ways). Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays."
 }

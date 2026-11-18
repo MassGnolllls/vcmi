@@ -1,5 +1,5 @@
 {
- "note": "On fresh maps, played to day 300 (48 maps from four templates, both seats: 96 games per config). new = the standard. nAKW = the pack the doctrine test (d9280) carries so far: townHeroes + secondArmy + nightWatch, breakout 2, magicWorth 1. Around it a 2 x 2: breakout 3 instead of 2 (K3: out of the corner after three slack days, doors, gaps - commit d3659de) and boldBehind (B: the main hero takes the battle at a smaller edge when behind in towns; +0.17 +- 0.16 in 24 local pairs). Shows what the standard and the pack are worth on templates they were never tuned on, and the two main effects from 384 games. Evaluate per category (matrix_summary.md), with arena/effects.py --factors '{\"K3\":{\"breakout\":3},\"B\":{\"boldBehind\":1}}' --within '{\"townHeroes\":1}' and arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays.",
+ "note": "On fresh maps, played to day 300 (48 maps from four templates, both seats: 96 games per config) - a ladder. new = the standard. nW = with magicWorth 1 (an enemy hero's magic from measurement): the one switch the doctrine test d9280 carries clearly (+0.13 +- 0.10 after 257 of 384 games; townHeroes + secondArmy + nightWatch 0.00, breakout 2 +0.08, passage -0.10, noChase 1 -0.08). nWB = that with boldBehind (the main hero takes the battle at a smaller edge when behind in towns; +0.17 +- 0.16 on the standard and +0.17 on a pack in 24 local pairs each). nWBK = that with breakout 3 (out of the corner after three slack days, doors, gaps; commit d3659de). nWBKG = that with the armies doctrine and the muster (townHeroes + secondArmy + nightWatch + gather 2; commit f3a8b24). Each rung against the one below it, paired by game. Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays.",
  "script": "matrix.py",
  "args": [
   "play",
@@ -14,7 +14,7 @@
   "--seeds",
   "70",
   "--configs",
-  "{\"new\": {}, \"nAKW\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 2}, \"nAK3W\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 3}, \"nAKWB\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 2, \"boldBehind\": 1}, \"nAK3WB\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"magicWorth\": 1, \"breakout\": 3, \"boldBehind\": 1}}",
+  "{\"new\": {}, \"nW\": {\"magicWorth\": 1}, \"nWB\": {\"magicWorth\": 1, \"boldBehind\": 1}, \"nWBK\": {\"magicWorth\": 1, \"boldBehind\": 1, \"breakout\": 3}, \"nWBKG\": {\"magicWorth\": 1, \"boldBehind\": 1, \"breakout\": 3, \"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1, \"gather\": 2}}",
   "--shared-pool"
  ],
  "jobs": 9
