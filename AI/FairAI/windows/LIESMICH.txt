@@ -1,0 +1,35 @@
+﻿FairAI für VCMI 1.7.5 (Windows, 64 Bit)
+=======================================
+
+Was ist das?
+  FairAI ist die nicht schummelnde Computergegner-KI für Heroes of Might and Magic III in VCMI,
+  an der Claude für dich arbeitet. Sie steckt in einem eigenen VCMI 1.7.5, das neben deiner
+  bisherigen Installation liegt. Deine bisherige Installation wird nicht verändert.
+
+Installieren und aktualisieren
+  "FairAI installieren oder aktualisieren.bat" doppelklicken. Das ist alles.
+  Die Datei lädt das aktuelle Paket aus dem Fork github.com/MassGnolllls/vcmi (Veröffentlichung
+  "fairai-latest"), prüft seine Prüfsumme und entpackt es hierher. Ein späterer Doppelklick holt
+  die neueste Version; ist sie schon installiert, wird nichts geladen.
+
+Starten
+  Verknüpfung "VCMI mit FairAI" auf dem Desktop oder "VCMI mit FairAI starten" in diesem Ordner.
+
+Wo stellt man die KI ein?
+  Im Launcher unter Einstellungen > KI. In jeder der fünf Listen steht zusätzlich
+  "FairAI (experimental, plays without cheats)".
+  - Um gegen FairAI zu spielen, genügt "Gegner auf der Abenteuerkarte" = FairAI (ist voreingestellt).
+    Ihre Kämpfe führt sie dann mit ihrem eigenen Kampfteil.
+  - Die Kampf-Listen sind Zusatz (eigener Autokampf, neutrale Monster). Für neutrale Monster ist
+    FairAI noch nicht getestet - dort besser BattleAI lassen.
+
+Was liegt wo?
+  VCMI-FairAI\      das Programm (wird bei jedem Update ersetzt)
+  Einstellungen\    die Einstellungen dieses VCMI (beim ersten Mal eine Kopie deiner bisherigen;
+                    bleiben bei Updates erhalten)
+  Gemeinsam mit deiner bisherigen Installation genutzt werden die Spieldaten, Karten, Mods und
+  Spielstände in Dokumente\My Games\vcmi.
+  Hinweis: Ein Spielstand aus einer Partie gegen FairAI lässt sich nur mit diesem VCMI laden.
+
+Entfernen
+  Diesen Ordner und die Verknüpfung auf dem Desktop löschen. Sonst wurde nichts verändert.
