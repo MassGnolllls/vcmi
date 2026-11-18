@@ -851,6 +851,8 @@ void onBattleResult(CClient & client, const BattleResult & result)
 			add(attackerHero ? attackerHero->level : 0);
 			add(defenderHero ? defenderHero->level : 0);
 			add(result.result == EBattleResult::NORMAL ? 0 : (result.result == EBattleResult::ESCAPE ? 1 : 2));
+			// the defender stood in the gate of a town whose garrison held another hero: fought outside the walls, alone
+			add(defenderHero && defenderHero->getVisitedTown() && !battle->getDefendedTown() ? 1 : 0);
 			playerBattles.push_back(fight);
 		}
 		for(BattleSide side : {BattleSide::ATTACKER, BattleSide::DEFENDER})

@@ -23,6 +23,9 @@ Figures (ours unless marked "enemy"):
   free                    towns the enemy gained without a battle (its gains minus its won battles at our towns)
   gdef                    army lost in towns defended by the garrison alone (thousands)
   caught                  army lost by heroes attacked in the open (thousands)
+  gate                    of that: lost in the gate of a town of ours whose garrison held another hero - the
+                          game lets the attacker meet the hero in the gate outside the walls (thousands;
+                          results written by clients built after 18.11.2026 11:00)
   gkill                   army value of map guards destroyed (thousands)
   days                    length of the game
 """
@@ -37,7 +40,7 @@ from pathlib import Path
 
 COLORS = ["red", "blue", "tan", "green", "orange", "purple", "teal", "pink"]
 COLUMNS = ["army", "towns", "heroes", "income", "mines", "explored", "level", "gold", "dwellings", "guardFights", "guardLosses", "mainArmy", "garrisons"]
-FIGURES = ["score", "won", "lost", "t42", "t84", "et84", "main84", "garr84", "gold84", "heroes84", "expl42", "gain", "loss", "free", "gdef", "caught", "gkill", "days"]
+FIGURES = ["score", "won", "lost", "t42", "t84", "et84", "main84", "garr84", "gold84", "heroes84", "expl42", "gain", "loss", "free", "gdef", "caught", "gate", "gkill", "days"]
 THOUSANDS = {"main84", "garr84", "gold84"}
 # What FairAI's main hero spent its days on (results written by clients built after 18.11.2026 08:55 carry
 # these statistics, by four-week phase): share of the days 29 to 84 by the kind most of its steps went to -
@@ -105,6 +108,7 @@ def figures(record):
     enemy_won_at_towns = 0
     garrison_lost = 0
     caught = 0
+    gate = 0
     for b in result.get("playerBattles", []):
         day, att, dfn, a0, d0, alost, dlost, winner, town, dhero = b[:10]
         if COLORS[dfn] == me:
@@ -114,6 +118,7 @@ def figures(record):
                     garrison_lost += dlost
             else:
                 caught += dlost
+                gate += dlost if len(b) > 13 and b[13] else 0
     battles = (result.get("battles") or {}).get(me) or {}
     behaviour = {}
     own = (record.get("fairai") or {}).get(me)
@@ -144,7 +149,7 @@ def figures(record):
         "main84": at(result, me, 84, "mainArmy"), "garr84": at(result, me, 84, "garrisons"), "gold84": at(result, me, 84, "gold"),
         "heroes84": at(result, me, 84, "heroes"), "expl42": at(result, me, 42, "explored"),
         "gain": gain, "loss": loss, "free": max(0, enemy_gain - enemy_won_at_towns),
-        "gdef": garrison_lost / 1000.0, "caught": caught / 1000.0, "gkill": battles.get("guardKills", 0) / 1000.0,
+        "gdef": garrison_lost / 1000.0, "caught": caught / 1000.0, "gate": gate / 1000.0, "gkill": battles.get("guardKills", 0) / 1000.0,
         "days": result.get("day", 0),
     }
 
@@ -178,7 +183,7 @@ def fmt(name, value):
         return f"{value / 1000:.0f}k"
     if name in ("score", "won", "lost"):
         return f"{value:.3f}" if name == "score" else f"{value:.2f}"
-    if name in ("gdef", "caught", "gkill"):
+    if name in ("gdef", "caught", "gate", "gkill"):
         return f"{value:.0f}k"
     if name in ("days", "expl42"):
         return f"{value:.0f}"
@@ -295,7 +300,7 @@ def main() -> int:
                 effect = statistics.mean(a) - statistics.mean(b)
                 half = 1.96 * math.sqrt(statistics.pvariance(a) / len(a) + statistics.pvariance(b) / len(b))
             scale = 1000.0 if f in THOUSANDS else 1.0
-            unit = "k" if f in THOUSANDS or f in ("gdef", "caught", "gkill") else ""
+            unit = "k" if f in THOUSANDS or f in ("gdef", "caught", "gate", "gkill") else ""
             digits = 3 if f == "score" else (2 if f in ("won", "lost", "t42", "t84", "et84", "heroes84", "gain", "loss", "free") else 0)
             mark = "**" if abs(effect) > half and half > 0 else ""
             cells.append(f"{mark}{effect / scale:+.{digits}f}{unit} ±{half / scale:.{digits}f}{mark}")
