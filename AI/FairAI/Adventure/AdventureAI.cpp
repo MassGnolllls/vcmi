@@ -1382,6 +1382,8 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		if(sent && hero->visitablePos().dist2d(posBefore) > 2.5)
 		{
 			// teleported: both ends of the channel are explored now
+			if(statsFile && best.object.hasValue() && breakoutExits.count(best.object) && !usedTeleporters.count(best.object))
+				stats[phaseOf(today)]["door"] += 1; // (breakout 3) a door taken as the way out
 			if(best.object.hasValue())
 				usedTeleporters.insert(best.object);
 			for(const auto * obj : cb->getVisitableObjs(hero->visitablePos(), false))
@@ -5630,9 +5632,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const bool lastResort = params.townHeroes && roundTripBudget >= 0 && !refuge && threatAt(heroPos) > params.evacuateRatio * defenceAt(hero, heroPos);
 			muster = gain > 0 && (decisiveBoost(gain) >= 2.0 || lastResort);
 			if(muster && heavyPartLog.insert(today * 1000 + heroNum % 1000 + 700000000).second)
+			{
+				if(statsFile)
+					stats[phaseOf(today)]["muster"] += 1;
 				logAi->info("FairAI %s day %d: %s musters - its army (%llu, %.0f of it for %s) %s", me.toString(), today, hero->getNameTranslated(),
 					static_cast<unsigned long long>(hero->getArmyStrength()), gain, leader->getNameTranslated(),
 					lastResort ? "cannot hold its town and has no town to go to" : "is what the decisive battle waits for");
+			}
 		}
 	}
 	auto addTarget = [&](const int3 & tile, ObjectInstanceID object, double value, double loss, double travel, const std::string & description)
@@ -6167,6 +6173,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				{
 					breakoutPauseUntil = today + 3;
 					logAi->info("FairAI %s day %d: a way out is open - no further ways out are forced before day %d", me.toString(), today, breakoutPauseUntil);
+					if(statsFile)
+						stats[phaseOf(today)]["wayOut"] += 1;
 					breakoutExits.clear();
 					break;
 				}
