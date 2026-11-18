@@ -14,8 +14,8 @@
   "--seeds",
   "90",
   "--configs",
-  "{\"new\": {}, \"nW\": {\"magicWorth\": 1}}",
+  "{\"new\": {}, \"nW\": {\"magicWorth\": 1}, \"nWK\": {\"magicWorth\": 1, \"breakout\": 4, \"supplyRuns\": 2}}",
   "--shared-pool"
  ],
- "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. new = the standard (with the veteran's return since 18.11.), nW = with magicWorth 1, the one switch the doctrine test d9280 carries clearly (to be replaced by what the fresh-map test d9282 and the screening d9283 confirm before this job starts). The standard and its switches were tuned on medium land maps for two players only: this shows where it fails elsewhere (boats, several enemies, allies, long ways). Evaluate per category (matrix_summary.md) and with arena/metrics.py. Nine games at a time instead of six (twelve logical processors): the games per hour of this job against the six-slot jobs before it show whether that pays."
+ "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. new = the standard; nW = with magicWorth 1 (+0.07 +- 0.10 in d9280, the base of the screenings); nWK = that with the expedition (breakout 4 + supplyRuns 2: the leader looks for the next town from the third week on and its troops are brought to it - in probe games on medium land maps 3.0 towns on day 45 against 2.5). The standard and its switches were tuned on medium land maps for two players only: this shows where they fail elsewhere (boats, several enemies, allies, long ways) - and whether the expedition, built on medium land maps today, does harm on islands or with several enemies. Evaluate per kind of map: arena/metrics.py and the summary of each category."
 }
