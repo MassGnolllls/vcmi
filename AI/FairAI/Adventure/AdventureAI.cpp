@@ -7759,7 +7759,9 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 		// the army's size is what the spells work on: little early, a lot once the army is big
 		const double army = leader ? static_cast<double>(leader->getArmyStrength()) : 0.0;
 		const double scale = std::clamp(army / 40000.0, 0.4, 3.0);
-		value += worth[std::clamp(level, 1, 5) - 1] * share * (others > 0 ? 0.5 : 1.0) * scale;
+		// (magicFocus 2) situational: a guild level is worth a little - too little to be built before
+		// dwellings, enough to be built from gold that lies idle (idleBuild)
+		value += worth[std::clamp(level, 1, 5) - 1] * share * (others > 0 ? 0.5 : 1.0) * scale * (params.magicFocus >= 2 ? 0.15 : 1.0);
 	}
 	else if(id == BuildingID::MAGES_GUILD_1)
 		value += params.mageGuildValue;
