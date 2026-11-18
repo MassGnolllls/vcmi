@@ -324,6 +324,7 @@ void Params::loadOverrides(int playerIndex)
 	read("breakoutSlack", breakoutSlack);
 	read("breakoutSlackDays", breakoutSlackDays);
 	read("breakoutReady", breakoutReady);
+	read("worstCaseRatio", worstCaseRatio);
 	read("breakoutLoss", breakoutLoss);
 	read("idleBuild", idleBuild);
 	read("idleGold", idleGold);
@@ -1935,11 +1936,18 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 	return result;
 }
 
-double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster) const
+double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster, bool simulate) const
 {
 	if(!monster.army)
 		return 0;
-	if(!params.fightForecast || monster.army->units.size() != 1 || !monster.army->units.front().creature.hasValue())
+	// Never against a stack that may be as strong as we are. The map shows a range ("20 to 49"), the
+	// rules below judge by its middle - and the top of the range is what may stand there (in 5,204
+	// logged fights a tenth of the stacks were a third stronger than assumed, the strongest 1.8
+	// times). With an army worth less than 1.1 times the largest stack the range allows we lost 8 of
+	// 367 fights outright and a quarter of the army on average; above that, 2 of 4,837.
+	if(params.worstCaseRatio > 0 && static_cast<double>(hero->getArmyStrength()) < params.worstCaseRatio * static_cast<double>(monster.army->maxStrength()))
+		return -1;
+	if((!params.fightForecast && !simulate) || monster.army->units.size() != 1 || !monster.army->units.front().creature.hasValue())
 		return expectedLoss(hero, observedDanger(monster));
 
 	// the map shows a range ("a pack": 10-19): judge the likely size, and survive the largest
@@ -6573,7 +6581,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					// (breakout 3) not at any price: a way out that would cost more than a fifth of the
 					// army waits until the army has grown (the worth of a town would pay for half of it)
 					auto it = known.find(guard);
-					const double cost = it != known.end() ? monsterLoss(hero, it->second) : -1;
+					// (breakout 4) the guards of a way out are the strong ones, and the square law is no
+					// judge of a close fight: 30 ogres and 15 ogre magi cost 48 % of an army of 35,000
+					// where it said 5 % - the simulated battle said 58 to 70 %. Level 4 asks the simulator.
+					const double cost = it != known.end() ? monsterLoss(hero, it->second, params.breakout >= 4) : -1;
 					if(cost < 0 || cost > params.breakoutLoss * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue)
 					{
 						++dear;
@@ -6643,7 +6654,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		if(!node)
 			continue;
 		double danger = observedDanger(object);
-		double loss = monsterLoss(hero, object);
+		// (breakout 4) a guard that counts as a way out is fought on the simulator's word (see there)
+		double loss = monsterLoss(hero, object, params.breakout >= 4 && breakoutExits.count(id) > 0);
 		if(params.fightForecast && isMain(hero) && forecastLogDay != today * 100 + heroNum % 100 && logAi->isDebugEnabled() && object.army->units.size() == 1)
 		{
 			// once a day: how the main hero judges every guard in reach (diagnostics)

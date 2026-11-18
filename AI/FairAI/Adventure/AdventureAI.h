@@ -479,7 +479,7 @@ private:
 	uint64_t fightSignature(const CGHeroInstance * hero) const;
 	FightForecast forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const;
 	/// expected loss (gold) of attacking this stack of wandering monsters; -1: leave it alone
-	double monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster) const;
+	double monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster, bool simulate = false) const;
 	/// same for whatever guards a tile
 	double guardLoss(const CGHeroInstance * hero, const int3 & tile) const;
 	mutable std::map<std::tuple<int, uint64_t, int, int>, FightForecast> forecastCache;

@@ -24,6 +24,7 @@ struct Params
 	double safetyRatio = 1.3;          ///< minimum own strength / enemy strength to start a fight (main hero)
 	double resourceNeedFactor = 3.0;   ///< resource piles we need for a blocked building are worth up to 1 + this
 	double patienceStep = 0.03;        ///< safety ratio reduction per idle day of the main hero
+	double worstCaseRatio = 1.1;       ///< no fight against wandering monsters with an army worth less than this times the largest stack the range shown on the map allows (0: off - the rule until 18.11.2026, which lost 8 of 367 such fights outright; always on since: a fight that may be lost outright is not a risk worth a mine)
 	double minSafetyRatio = 1.15;
 	double safetyRatioHero = 1.05;     ///< same against enemy heroes and towns (exact armies, our combat AI is better)
 	double safetyRatioSecondary = 2.5; ///< same for scouts and collectors
