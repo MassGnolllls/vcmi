@@ -1,0 +1,59 @@
+{
+ "pool": "fresh1",
+ "mods": "",
+ "note": "fresh maps to confirm what was developed on pool long1: medium land maps for two players from four templates (long1 holds only Skirmish M), day limit 300 - every game is decided",
+ "categories": [
+  {
+   "name": "m-skirmish",
+   "template": "Skirmish M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 44000,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  },
+  {
+   "name": "m-balance",
+   "template": "Balance M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 44100,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  },
+  {
+   "name": "m-blockbuster",
+   "template": "Blockbuster M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 44200,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  },
+  {
+   "name": "m-longrun",
+   "template": "Long Run M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 6,
+   "seed": 44300,
+   "days": 300,
+   "timeout": 4200,
+   "stall": 300
+  }
+ ]
+}

@@ -1,0 +1,20 @@
+{
+ "note": "On fresh maps, played to day 300: the standard and the standard with townHeroes + secondArmy (0.61 against 0.48 in d926; d928 tests the pair on the old maps). 24 maps from four templates, both seats: 48 games per config. Shows whether the standard holds on templates it was never tuned on, and whether the pair helps there too. Evaluate per category (matrix_summary.md) and together (arena/effects.py with --factors '{\"A\": {\"townHeroes\": 1, \"secondArmy\": 1}}').",
+ "script": "matrix.py",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_fresh300.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "70",
+  "--configs",
+  "{\"new\": {}, \"nQB\": {\"townHeroes\": 1, \"secondArmy\": 1}}"
+ ],
+ "jobs": 6
+}
