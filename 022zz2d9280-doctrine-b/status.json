@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d9280-doctrine-b",
+ "state": "running",
+ "commit": "69897ce97073da54840860e92ee1cf0d302d8dae",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-18T10:55:36",
+ "note": "The main army's time, played to the end (day limit 300): eight switches on medium land maps, 24 games per config, 2^(8-4) resolution IV (generators F = T.K.W, H = A.K.W, P = A.T.K, C = A.T.W) - job d9279 again, restarted after two of sixteen configurations: (1) all configurations now share one pool of games (played one after the other, a third of the machine's time went into waiting for each configuration's last long game; and the games are dealt out map by map, so the test can be read while it runs); (2) three switches in the form the probe games of this morning call for - none of them was part of the two configurations already played (new, nWFHC): A = townHeroes + secondArmy + nightWatch (a hero in the gate of a town whose garrison holds another hero fights outside the walls: 157,000 and 134,000 lost that way in two probe games); T = townWorth + townAmbush (townWorth alone sent three main armies of 35,000-47,000 one after the other across the map into a town next to enemy heroes of 65,000-118,000; the same switch cost 0.09 in d925); K = breakout 2 (version 1 beat eight guards on the way out in sixteen days before walking through one gap). W = magicWorth, F = fetchByShare, H = noChase 1, P = passage + regionValue 8000, C = guardKillValue 0.08 + expValueMain 1.0 as before. Evaluate with arena/effects.py and arena/metrics.py: --factors '{\"A\": {\"townHeroes\": 1, \"secondArmy\": 1, \"nightWatch\": 1}, \"T\": {\"townWorth\": 1, \"townAmbush\": 1}, \"K\": {\"breakout\": 2}, \"W\": {\"magicWorth\": 1}, \"F\": {\"fetchByShare\": 1}, \"H\": {\"noChase\": 1}, \"P\": {\"passage\": 1, \"regionValue\": 8000}, \"C\": {\"guardKillValue\": 0.08, \"expValueMain\": 1.0}}'"
+}
