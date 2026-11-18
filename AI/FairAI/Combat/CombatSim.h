@@ -207,7 +207,9 @@ enum class Stance : uint8_t
 {
 	CHARGE, ///< melee units advance towards the enemy
 	HOLD,   ///< melee units only attack what is already in reach, otherwise stay
-	STALK   ///< like VCMI's BattleAI: with nothing in reach wait for the others to move, then close in on the most rewarding target
+	STALK,  ///< like VCMI's BattleAI: with nothing in reach wait for the others to move, then close in on the most rewarding target
+	AMBUSH, ///< let them come: with nothing worth hitting in reach wait; after waiting hit what has come into reach, otherwise stay. Faster units strike an enemy that closed in at the end of the round - and again before it at the start of the next
+	GUARD   ///< close ranks: like AMBUSH, but a unit that does not stand next to our most valuable shooter first walks there - the enemy meets our troops together, and the shooter cannot be reached
 };
 
 /// Engine-evaluated result of one attack (including special abilities and retaliation)
@@ -235,6 +237,17 @@ struct SimAction
 	SimActionType type = SimActionType::DEFEND;
 	int target = -1;   ///< unit index for ATTACK / SHOOT
 	BattleHex hex;     ///< destination for MOVE, attack position for ATTACK
+};
+
+class SimState;
+
+/// Something that knows what an enemy unit will really do (FairBattleAI: VCMI's BattleAI run on a
+/// mirror of the state). Slow and exact, where the default policy is fast and a guess.
+class EnemyOracle
+{
+public:
+	virtual ~EnemyOracle() = default;
+	virtual bool choose(const SimState & state, int unit, SimAction & out) const = 0;
 };
 
 class SimState
@@ -278,10 +291,23 @@ public:
 
 	// --- actions
 	void apply(int unit, const SimAction & action);
+	SimAction lastAction;  ///< the action applied last (what the default policy chose, for the policy check)
+	/// Play-outs: the units of oracleSide are played by the oracle up to round oracleLastRound
+	const EnemyOracle * oracle = nullptr;
+	BattleSide oracleSide = BattleSide::NONE;
+	int oracleLastRound = -1;
+	int oracleCalls = 0;
 	/// apply an attack whose result was computed by the engine-based evaluator
 	void applyOutcome(int unit, const AttackOutcome & outcome);
 	/// let the default (greedy) policy act for this unit
 	void playDefault(int unit);
+	/// Can the unit shoot, or reach an enemy for a melee attack, in this turn?
+	bool hasAttack(int unit) const;
+	/// The unit our side closes ranks around: its most valuable stack that can shoot (-1: none)
+	int anchorOf(BattleSide side) const;
+	/// Where \p unit would stand to close ranks: the hex next to the anchor it reaches in this turn,
+	/// on the side the enemy comes from (invalid: none, or it stands there already)
+	BattleHex rallyHex(int unit) const;
 	/// play with the default policy until the end of round `lastRound` or the end of the battle
 	void playout(int lastRound);
 	/// The hero of `side` casts if it may this round and a spell of its harms the enemy more than its own

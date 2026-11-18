@@ -16,6 +16,8 @@
 // components of VCMI's BattleAI (compiled into FairAI, see CMakeLists.txt)
 #include "../../BattleAI/BattleAI.h"
 #include "../../BattleAI/BattleEvaluator.h"
+#include "../../BattleAI/BattleExchangeVariant.h"
+#include "../../../lib/battle/BattleUnitTurnReason.h"
 #include "../../BattleAI/PotentialTargets.h"
 #include "../../BattleAI/StackWithBonuses.h"
 #include "../../BattleAI/SpellTargetsEvaluator.h"
@@ -63,6 +65,10 @@ struct SearchSettings
 	double exposureWeight = envInt("FAI_EXPOSURE_PCT", 0) / 100.0; ///< weight of the next-round potential
 	int planRounds = envInt("FAI_PLAN_ROUNDS", 8);          ///< battle plan: rounds played ahead when comparing "hold" and "advance"
 	int enemyModel = envInt("FAI_ENEMY_MODEL", 0);          ///< play-outs: 0 the enemy advances at once, 1 it waits and stalks like VCMI's BattleAI, 2 the worse of both for us
+	int oracleRounds = envInt("FAI_ORACLE_ROUNDS", 0);      ///< against guards: this many rounds (the current one counts) the enemy is played by the oracle - BattleAI itself on a mirror of the state; 0 = the player's parameter guardOracle decides
+	int oracleUntilRound = envInt("FAI_ORACLE_UNTIL", 3);   ///< ... in the first rounds of a battle only (the opening decides who gets hit first)
+	int ambush = envInt("FAI_AMBUSH", 0);                  ///< battle plan: a third plan for our side besides holding and advancing - lying in wait (Stance::AMBUSH)
+	int corner = envInt("FAI_CORNER", 0);                  ///< move candidate: into the nearer corner of our side
 	int spellRounds = envInt("FAI_SPELL_ROUNDS", 2);        ///< spell search: rounds after the current one
 	int manaPricePermille = envInt("FAI_MANA_PRICE", 4);   ///< spell search: price of a scarce spell point, per mille of our army
 };
@@ -116,6 +122,12 @@ struct FairBattleAI::SimCheck
 
 namespace
 {
+bool policyCheckEnabled()
+{
+	static const bool enabled = std::getenv("FAI_POLICYCHECK") != nullptr;
+	return enabled;
+}
+
 bool simCheckEnabled()
 {
 	static const bool enabled = std::getenv("FAI_SIMCHECK") != nullptr;
@@ -151,9 +163,276 @@ void FairBattleAI::battleStacksAttacked(const BattleID & battleID, const std::ve
 		quietDecisions = 0;
 }
 
+bool FairBattleAI::oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out)
+{
+	const auto & actor = sim.units[unit];
+	using Clock = std::chrono::steady_clock;
+	auto lap = [last = Clock::now()](double & into) mutable
+	{
+		const auto now = Clock::now();
+		into += std::chrono::duration<double, std::milli>(now - last).count();
+		last = now;
+	};
+	++oracleProfile[0];
+	auto hb = std::make_shared<HypotheticBattle>(env.get(), real);
+	// the unit whose turn it is (this resets what the engine resets when a unit gets its turn;
+	// the simulator's own flags are written over it below)
+	hb->nextTurn(actor.id, BattleUnitTurnReason::TURN_QUEUE);
+	for(const auto & u : sim.units)
+	{
+		auto state = hb->getForUpdate(u.id);
+		if(!state)
+			return false;
+		if(u.pos.isValid() && state->getPosition() != u.pos)
+			state->setPosition(u.pos);
+		const int64_t health = state->getAvailableHealth();
+		if(health > u.totalHP())
+		{
+			int64_t lost = health - u.totalHP();
+			state->damage(lost);
+		}
+		else if(health < u.totalHP())
+		{
+			int64_t gained = u.totalHP() - health;
+			state->heal(gained, EHealLevel::OVERHEAL, EHealPower::PERMANENT);
+		}
+		state->waiting = u.waited && !u.acted;
+		state->waitedThisTurn = u.waited;
+		state->movedThisRound = u.acted;
+		if(sim.round != baseRound || !u.acted)
+			state->defending = false;
+		state->counterAttacks.reset();
+		const int have = state->counterAttacks.available();
+		if(have > u.retaliationsLeft && u.retaliationsLeft >= 0)
+			state->counterAttacks.use(have - u.retaliationsLeft);
+	}
+	const battle::Unit * active = hb->battleGetUnitByID(actor.id);
+	if(!active || !active->alive())
+		return false;
+	const BattleSide own = actor.side;
+	lap(oracleProfile[1]);
+
+	DamageCache damageCache;
+	damageCache.buildDamageCache(hb, own);
+	lap(oracleProfile[2]);
+	PotentialTargets targets(active, damageCache, hb);
+	lap(oracleProfile[3]);
+	const int turns = env->game()->getStartInfo()->difficulty < 4 ? 2 : 10; // as BattleAI sets itself up
+	BattleExchangeEvaluator scoreEvaluator(hb, env, strengthRatio(hb, own), turns);
+
+	auto answer = [&](SimActionType type, int target = -1, BattleHex hex = BattleHex())
+	{
+		out = SimAction{type, target, hex};
+		return true;
+	};
+
+	auto moveTarget = scoreEvaluator.findMoveTowardsUnreachable(active, targets, damageCache, hb);
+	lap(oracleProfile[4]);
+	float score = EvaluationResult::INEFFECTIVE_SCORE;
+	if(!targets.possibleAttacks.empty())
+	{
+		auto result = scoreEvaluator.findBestTarget(active, targets, damageCache, hb, false);
+		lap(oracleProfile[5]);
+		const auto & bestAttack = result.bestAttack;
+		if(result.score > score)
+		{
+			score = result.score;
+			if(moveTarget.score <= score)
+			{
+				if(result.wait)
+					return answer(SimActionType::WAIT);
+				const int target = sim.indexOf(bestAttack.attack.defender->unitId());
+				if(target < 0)
+					return false;
+				if(bestAttack.attack.shooting)
+					return answer(SimActionType::SHOOT, target);
+				if(bestAttack.collateralDamageReduce && bestAttack.collateralDamageReduce >= bestAttack.defenderDamageReduce / 2 && score < 0)
+					return answer(SimActionType::DEFEND);
+				return answer(SimActionType::ATTACK, target, bestAttack.from);
+			}
+		}
+	}
+	if(moveTarget.score > score)
+	{
+		if(!active->waited())
+			return answer(SimActionType::WAIT);
+		// BattleEvaluator::goTowardsNearest, on the hypothetical state
+		auto reachability = hb->getReachability(active);
+		auto available = hb->battleGetAvailableHexes(reachability, active, false);
+		if(available.empty() || moveTarget.positions.empty())
+			return answer(SimActionType::DEFEND);
+		BattleHexArray wanted = moveTarget.positions;
+		wanted.sort([&reachability](const BattleHex & a, const BattleHex & b) { return reachability.distances[a.toInt()] < reachability.distances[b.toInt()]; });
+		const BattleHex nearest = wanted.front();
+		if(reachability.distances[nearest.toInt()] > GameConstants::BFIELD_SIZE)
+			return answer(SimActionType::DEFEND);
+		auto moveOrAttack = [&](const BattleHex & hex)
+		{
+			// an attack from that very hex is taken on the way
+			float best = 0;
+			const AttackPossibility * onTheWay = nullptr;
+			for(const auto & ap : targets.possibleAttacks)
+			{
+				if(!ap.attack.shooting && ap.from == hex && ap.attackValue() > best)
+				{
+					best = ap.attackValue();
+					onTheWay = &ap;
+				}
+			}
+			if(onTheWay)
+			{
+				const int target = sim.indexOf(onTheWay->attack.defender->unitId());
+				if(target >= 0)
+					return answer(SimActionType::ATTACK, target, hex);
+			}
+			return hex == active->getPosition() ? answer(SimActionType::DEFEND) : answer(SimActionType::MOVE, -1, hex);
+		};
+		for(const auto & hex : wanted)
+		{
+			if(available.contains(hex))
+				return moveOrAttack(hex);
+			if(active->coversPos(hex))
+				return answer(SimActionType::DEFEND);
+		}
+		scoreEvaluator.updateReachabilityMap(hb);
+		if(active->hasBonusOfType(BonusType::FLYING))
+		{
+			BattleHex bestHex;
+			int bestDistance = std::numeric_limits<int>::max();
+			for(const auto & hex : available)
+			{
+				int distance = BattleHex::getDistance(nearest, hex);
+				if(scoreEvaluator.checkPositionBlocksOurStacks(*hb, active, hex))
+					distance += 100;
+				if(distance < bestDistance)
+				{
+					bestDistance = distance;
+					bestHex = hex;
+				}
+			}
+			return bestHex.isValid() ? moveOrAttack(bestHex) : answer(SimActionType::DEFEND);
+		}
+		BattleHex step = nearest;
+		for(int guard = 0; guard < GameConstants::BFIELD_SIZE; ++guard)
+		{
+			if(!step.isValid())
+				return answer(SimActionType::DEFEND);
+			if(available.contains(step) && !scoreEvaluator.checkPositionBlocksOurStacks(*hb, active, step))
+				return moveOrAttack(step);
+			step = reachability.predecessors[step.toInt()];
+		}
+		return answer(SimActionType::DEFEND);
+	}
+	return answer(active->waited() ? SimActionType::DEFEND : SimActionType::WAIT);
+}
+
+void FairBattleAI::policyCheck(const BattleID & battleID, const BattleAction & action)
+{
+	try
+	{
+		auto battle = cb->getBattle(battleID);
+		if(!battle || battle->battleGetDefendedTown())
+			return;
+		const CStack * actor = battle->battleGetStackByID(action.stackNumber, true);
+		if(!actor || actor->unitSide() == side)
+			return;
+		const auto targets = action.getTarget(battle.get());
+		const battle::Unit * target = nullptr;
+		BattleHex hex;
+		const char * kind = nullptr;
+		switch(action.actionType)
+		{
+		case EActionType::WALK:
+			if(targets.empty())
+				return;
+			hex = targets[0].hexValue;
+			kind = "move";
+			break;
+		case EActionType::WALK_AND_ATTACK:
+			if(targets.size() < 2)
+				return;
+			target = battle->battleGetUnitByPos(targets[1].hexValue, true);
+			hex = targets[0].hexValue;
+			kind = "attack";
+			break;
+		case EActionType::SHOOT:
+			if(targets.empty())
+				return;
+			target = targets[0].unitValue ? targets[0].unitValue : battle->battleGetUnitByPos(targets[0].hexValue, true);
+			kind = "shoot";
+			break;
+		case EActionType::WAIT:
+			kind = "wait";
+			break;
+		case EActionType::DEFEND:
+			kind = "defend";
+			break;
+		default:
+			return;
+		}
+
+		std::vector<const battle::Unit *> units;
+		for(const auto * u : battle->battleGetUnitsIf([](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid(); }))
+			units.push_back(u);
+		DamageTable table;
+		table.build(*battle, units, simAbilities);
+		SimState state;
+		state.init(*battle, units, table, simAbilities);
+		const int me = state.indexOf(actor->unitId());
+		if(me < 0)
+			return;
+		const int targetIndex = target ? state.indexOf(target->unitId()) : -1;
+		const int enemySide = side == BattleSide::ATTACKER ? 1 : 0;
+
+		auto name = [](SimActionType type)
+		{
+			switch(type)
+			{
+			case SimActionType::MOVE: return "move";
+			case SimActionType::ATTACK: return "attack";
+			case SimActionType::SHOOT: return "shoot";
+			case SimActionType::WAIT: return "wait";
+			default: return "defend";
+			}
+		};
+		std::string line = boost::str(boost::format("FairAI policycheck|%s|%d|%d|%d|%s|%s|%d") % creatureKey(actor) % actor->getCount() % state.round
+			% (actor->waited() ? 1 : 0) % kind % (target ? creatureKey(dynamic_cast<const CStack *>(target)) : std::string("-")) % (hex.isValid() ? hex.toInt() : -1));
+		auto add = [&](const SimAction & chosen)
+		{
+			const bool sameTarget = (chosen.type == SimActionType::ATTACK || chosen.type == SimActionType::SHOOT) && chosen.target == targetIndex && targetIndex >= 0;
+			const int apart = chosen.hex.isValid() && hex.isValid() ? static_cast<int>(BattleHex::getDistance(chosen.hex, hex)) : -1;
+			line += boost::str(boost::format("|%s|%d|%d") % name(chosen.type) % (sameTarget ? 1 : 0) % apart);
+		};
+		for(Stance stance : {Stance::CHARGE, Stance::STALK})
+		{
+			SimState sim = state;
+			sim.stance[enemySide] = stance;
+			sim.playDefault(me);
+			add(sim.lastAction);
+		}
+		// ... and the oracle: BattleAI's own evaluation on a mirror of this state
+		SimAction told;
+		const auto started = std::chrono::steady_clock::now();
+		if(oracleAction(battle, state, me, state.round, told))
+			add(told);
+		else
+			line += "|none|0|-1";
+		line += boost::str(boost::format("|%.2f") % std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
+		// the shortcut of the play-outs: a unit with nothing to attack that has not waited yet waits
+		line += !actor->waited() && state.units[me].active && !state.hasAttack(me) ? "|1" : "|0";
+		logAi->info(line);
+	}
+	catch(const std::exception & e)
+	{
+		logAi->debug("FairAI policycheck: failed (%s)", e.what());
+	}
+}
+
 void FairBattleAI::actionStarted(const BattleID & battleID, const BattleAction & action)
 {
 	pendingCheck.reset();
+	if(policyCheckEnabled())
+		policyCheck(battleID, action);
 	if(!simCheckEnabled() || side != BattleSide::ATTACKER)
 		return;
 	try
@@ -357,6 +636,11 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	setMultiHex(params.simMultiHex != 0);
 	setAfterHit(params.simAfterHit != 0);
 	battlePlan = params.battlePlan != 0;
+	guardOracle = params.guardOracle;
+	ambushPlan = params.battlePlan >= 2;
+	guardPlan = params.battlePlan >= 3;
+	cornerMove = params.battlePlan >= 4;
+	guardOracleUntil = params.guardOracleUntil;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -1054,7 +1338,35 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		};
 
 		addMove(pick([&](const BattleHex & h) { return closestEnemyDistance(h, false, false); }), "advance");
-		addMove(pick([&](const BattleHex & h) { return closestEnemyDistance(h, true, false); }), "advance to shooters");
+		// (only when the enemy has shooters: without any, every hex scored the same and the unit was sent
+		// to the first hex of the field - royal griffins flew into the top corner)
+		bool enemyShoots = false;
+		for(const auto & e : base.units)
+			enemyShoots = enemyShoots || (e.alive() && e.side != base.units[me].side && e.shooter);
+		if(enemyShoots)
+			addMove(pick([&](const BattleHex & h) { return closestEnemyDistance(h, true, false); }), "advance to shooters");
+		if(searchSettings().ambush >= 2 || guardPlan)
+			addMove(base.rallyHex(me), "close ranks");
+		if(searchSettings().corner || cornerMove)
+		{
+			// Into the corner of our side of the field that lies nearer to our troops: there an enemy
+			// reaches us from fewer hexes, and our troops stand together. (Found by accident: a bug sent
+			// units to the first hex of the field, and the battle plan lost less with it than without.)
+			double rows = 0;
+			int own = 0;
+			for(const auto & u : base.units)
+			{
+				if(u.alive() && u.side == base.units[me].side)
+				{
+					rows += u.pos.getY();
+					++own;
+				}
+			}
+			const int cornerY = own && rows / own > (GameConstants::BFIELD_HEIGHT - 1) / 2.0 ? GameConstants::BFIELD_HEIGHT - 1 : 0;
+			const int cornerX = base.units[me].side == BattleSide::ATTACKER ? 1 : GameConstants::BFIELD_WIDTH - 2;
+			const BattleHex corner(cornerX, cornerY);
+			addMove(pick([&](const BattleHex & h) { return static_cast<int>(BattleHex::getDistance(h, corner)); }), "to the corner");
+		}
 		if(base.units[me].shooter)
 			addMove(pick([&](const BattleHex & h) { return -closestEnemyDistance(h, false, true); }), "keep distance");
 	}
@@ -1079,6 +1391,74 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 	if(config.robustStances)
 		enemyStances.push_back(Stance::HOLD);
 	Candidate * best = nullptr;
+	const BattleSide otherSide = side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER;
+	std::vector<Stance> ownPlans = {Stance::HOLD, Stance::CHARGE};
+	if(config.ambush || ambushPlan)
+		ownPlans.push_back(Stance::AMBUSH);
+	if(config.ambush >= 2 || guardPlan)
+		ownPlans.push_back(Stance::GUARD);
+	// (the environment variables of the test bench win over the player's parameters)
+	const int oracleRounds = config.oracleRounds > 0 ? config.oracleRounds : guardOracle;
+	const int oracleUntil = config.oracleRounds > 0 ? config.oracleUntilRound : guardOracleUntil;
+	if(oracleRounds > 0 && roundsAhead < 0 && !battle->battleGetFightingHero(otherSide) && battle->battleGetRound() <= oracleUntil)
+	{
+		// Against guards we know the enemy's mind: VCMI's BattleAI plays them, and the oracle runs that
+		// very code on a mirror of each state. Every candidate is played on with our troops once
+		// holding and once advancing - the plan is ours to choose - and the enemy answering as it
+		// really would for oracleRounds rounds; after that the default policies finish the battle.
+		// What counts is what we have left at the end.
+		struct Adapter : EnemyOracle
+		{
+			FairBattleAI * ai;
+			std::shared_ptr<CBattleInfoCallback> real;
+			int baseRound;
+			bool choose(const SimState & state, int unit, SimAction & out) const override
+			{
+				try
+				{
+					return ai->oracleAction(real, state, unit, baseRound, out);
+				}
+				catch(const std::exception &)
+				{
+					return false;
+				}
+			}
+		} adapter;
+		adapter.ai = this;
+		adapter.real = battle;
+		adapter.baseRound = base.round;
+		const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
+		const int planEnd = base.round + std::max(1, config.planRounds);
+		int calls = 0;
+		for(auto & c : candidates)
+		{
+			double bestPlan = -std::numeric_limits<double>::max();
+			for(Stance ownStance : ownPlans)
+			{
+				SimState sim = base;
+				sim.stance[ownSide] = ownStance;
+				sim.stance[enemySide] = Stance::STALK;
+				sim.oracle = &adapter;
+				sim.oracleSide = otherSide;
+				sim.oracleLastRound = base.round + oracleRounds - 1;
+				if(c.outcome && config.engineOutcome)
+					sim.applyOutcome(me, *c.outcome);
+				else
+					sim.apply(me, c.sim);
+				sim.playout(planEnd);
+				calls += sim.oracleCalls;
+				bestPlan = std::max(bestPlan, sim.evaluate(side));
+			}
+			c.score = bestPlan;
+			if(!best || c.score > best->score + 1e-6)
+				best = &c;
+		}
+		oracleCallsMade += calls;
+		if(logAi->isDebugEnabled())
+			logAi->debug("FairAI oracleprofile|%d candidates|%d calls|mirror %.1f|damage %.1f|targets %.1f|move %.1f|best %.1f ms (sums of this battle AI)", static_cast<int>(candidates.size()),
+				static_cast<int>(oracleProfile[0]), oracleProfile[1], oracleProfile[2], oracleProfile[3], oracleProfile[4], oracleProfile[5]);
+		return {best->real, best->score, best->description + " [oracle]"};
+	}
 	if(battlePlan && roundsAhead < 0)
 	{
 		// Battle plan: every candidate is played on for several rounds, once with our troops advancing
@@ -1090,7 +1470,7 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		for(auto & c : candidates)
 		{
 			double bestPlan = -std::numeric_limits<double>::max();
-			for(Stance ownStance : {Stance::HOLD, Stance::CHARGE})
+			for(Stance ownStance : ownPlans)
 			{
 				double worst = std::numeric_limits<double>::max();
 				for(Stance enemyStance : enemyStances)

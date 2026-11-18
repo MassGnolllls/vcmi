@@ -24,6 +24,7 @@
 
 VCMI_LIB_NAMESPACE_BEGIN
 class CBattleCallback;
+class CBattleInfoCallback;
 class CStack;
 class BattleAction;
 class Environment;
@@ -38,6 +39,9 @@ class HypotheticBattle;
 
 namespace FAI::Combat
 {
+
+class SimState;
+struct SimAction;
 
 class FairBattleAI : public CBattleGameInterface
 {
@@ -61,6 +65,17 @@ public:
 private:
 	struct SimCheck;
 	std::unique_ptr<SimCheck> pendingCheck;
+	/// Policy check (FAI_POLICYCHECK=1): before every action of an enemy unit, what would the
+	/// simulator's default policy have done in its place? One log line per action; arena/policy_check.py
+	/// counts how often the simulator's enemy does what the real one does.
+	void policyCheck(const BattleID & battleID, const BattleAction & action);
+	/// The enemy's oracle: what VCMI's BattleAI - the combat AI of the map's guards - does with unit
+	/// \p unit in the simulator's state \p sim. The state is mirrored into a hypothetical battle of
+	/// the engine and BattleAI's own evaluation is run on it. Slow (about a millisecond), exact.
+	/// \p baseRound: the simulator's round in which the real battle stands. False: no answer.
+	long oracleCallsMade = 0; ///< oracle calls of this battle AI (statistics)
+	std::array<double, 6> oracleProfile{}; ///< calls, and milliseconds spent on: the mirror, the damage cache, the targets, the move target, the best target
+	bool oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out);
 	std::map<uint32_t, int64_t> lastHealth; ///< unit -> health after the previous action (changes in between: regeneration, poison...)
 	bool lastActionWasSpell = false;
 	int quietDecisions = 0; ///< our decisions since anybody was hurt (the attacker must not let a battle stand still)
@@ -81,6 +96,11 @@ private:
 	bool spellForecast = false; ///< the forecast logged at the start of a battle plays our hero's damage spells (as the adventure AI's does)
 	bool simAbilities = true; ///< from the player's FairAI parameters: the look-ahead knows special abilities
 	bool battlePlan = false;  ///< from the player's FairAI parameters: candidates are judged by playing several rounds ahead, holding or advancing
+	int guardOracle = 0;      ///< from the player's FairAI parameters: rounds the guards are played by the oracle (0 = off)
+	bool ambushPlan = false;  ///< battlePlan 2: lying in wait is a third plan besides holding and advancing
+	bool guardPlan = false;   ///< battlePlan 3: closing ranks around our shooter is a fourth
+	bool cornerMove = false;  ///< battlePlan 4: a move into the nearer corner of our side is among the candidates
+	int guardOracleUntil = 3; ///< ... in the first rounds of a battle only
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);

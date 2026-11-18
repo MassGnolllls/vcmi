@@ -83,6 +83,15 @@ def cmd_gen(args) -> int:
                         army = battle_scenarios.scale_army(army, real_ratio / ratio)
                         army_value = battle_scenarios.army_value(army, value_of)
                     hero = rng.choice([h for h in might if h["faction"] == faction] or might)["id"]
+                    # --baits N: single creatures split off the cheapest stack into free slots, as a player
+                    # does before a fight (they take retaliations and stand in the way); the army's value stays
+                    for _ in range(args.baits):
+                        donors = [entry for entry in army if entry[1] >= 4]
+                        if len(army) >= 7 or not donors:
+                            break
+                        donor = min(donors, key=lambda entry: value_of[entry[0]])
+                        donor[1] -= 1
+                        army.append([donor[0], 1])
                     name = f"{safe(guard['id'])}__r{int(ratio * 100):03d}__{copy}{args.tag}"
                     # --spells: the hero carries a spell book with these spells (and --primary: its skills),
                     # to see what the hero's magic does to a guard fight and how well that is forecast
@@ -314,6 +323,7 @@ def main() -> int:
     g.add_argument("--spells", default="", help="spells in the hero's book, e.g. core:magicArrow,core:lightningBolt (default: no book)")
     g.add_argument("--primary", default="", help="the hero's attack,defence,power,knowledge, or by stage: early=1,1,3,2;mid=3,3,6,5;late=6,6,10,8 (default: the stage's might hero)")
     g.add_argument("--tag", default="", help="suffix of the map names, to keep several sets side by side (play --filter)")
+    g.add_argument("--baits", type=int, default=0, help="single creatures split off the cheapest stack into free slots of the hero's army")
     g.add_argument("--force", action="store_true")
     p = sub.add_parser("play")
     p.add_argument("--client", required=True)

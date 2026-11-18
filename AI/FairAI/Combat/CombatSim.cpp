@@ -1180,6 +1180,7 @@ void SimState::finishTurn(int unit, bool waited)
 
 void SimState::apply(int unit, const SimAction & action)
 {
+	lastAction = action;
 	auto & u = units[unit];
 	switch(action.type)
 	{
@@ -1355,6 +1356,110 @@ double SimState::shotValue(int attacker, int target) const
 	return value;
 }
 
+bool SimState::hasAttack(int unit) const
+{
+	const auto & u = units[unit];
+	if(canShoot(unit))
+		return true;
+	if(!u.canMove && !u.alive())
+		return false;
+	std::array<int8_t, FIELD_SIZE> dist;
+	reachable(unit, dist);
+	for(int i = 0; i < static_cast<int>(units.size()); ++i)
+	{
+		const auto & e = units[i];
+		if(!e.alive() || e.side == u.side)
+			continue;
+		for(const auto & around : battle::Unit::getSurroundingHexes(e.pos, e.doubleWide, e.side))
+		{
+			std::array<BattleHex, 3> heads = {around, BattleHex(), BattleHex()};
+			if(u.doubleWide)
+			{
+				if(around.getX() > 0)
+					heads[1] = BattleHex(around.getX() - 1, around.getY());
+				if(around.getX() < GameConstants::BFIELD_WIDTH - 1)
+					heads[2] = BattleHex(around.getX() + 1, around.getY());
+			}
+			for(const auto & head : heads)
+			{
+				if(head.isValid() && dist[head.toInt()] >= 0 && adjacent(unit, head, i))
+					return true;
+			}
+		}
+	}
+	return false;
+}
+
+int SimState::anchorOf(BattleSide side) const
+{
+	int best = -1;
+	double bestValue = 0;
+	for(int i = 0; i < static_cast<int>(units.size()); ++i)
+	{
+		const auto & u = units[i];
+		if(!u.alive() || u.side != side || !u.shooter || u.shots <= 0)
+			continue;
+		const double value = u.remainingValue();
+		if(value > bestValue)
+		{
+			bestValue = value;
+			best = i;
+		}
+	}
+	return best;
+}
+
+BattleHex SimState::rallyHex(int unit) const
+{
+	const auto & u = units[unit];
+	const int anchor = anchorOf(u.side);
+	if(anchor < 0 || anchor == unit || !u.canMove)
+		return BattleHex();
+	const BattleHex centre = units[anchor].pos;
+	if(BattleHex::getDistance(u.pos, centre) <= 1)
+		return BattleHex(); // stands there already
+	// where the enemy comes from: the middle of its troops
+	double ex = 0;
+	double ey = 0;
+	int enemies = 0;
+	for(const auto & e : units)
+	{
+		if(e.alive() && e.side != u.side)
+		{
+			ex += e.pos.getX();
+			ey += e.pos.getY();
+			++enemies;
+		}
+	}
+	if(!enemies)
+		return BattleHex();
+	ex /= enemies;
+	ey /= enemies;
+	std::array<int8_t, FIELD_SIZE> dist;
+	reachable(unit, dist);
+	BattleHex best;
+	double bestScore = 1e18;
+	for(int h = 0; h < FIELD_SIZE; ++h)
+	{
+		if(dist[h] < 0)
+			continue;
+		const BattleHex hex(h);
+		const int toAnchor = BattleHex::getDistance(hex, centre);
+		if(toAnchor < 1)
+			continue;
+		// next to the anchor first; among those hexes the one nearest to the enemy
+		const double score = 100.0 * toAnchor + std::abs(hex.getX() - ex) + 0.5 * std::abs(hex.getY() - ey);
+		if(score < bestScore)
+		{
+			bestScore = score;
+			best = hex;
+		}
+	}
+	if(best.isValid() && BattleHex::getDistance(best, centre) >= BattleHex::getDistance(u.pos, centre))
+		return BattleHex(); // no closer than where it stands
+	return best;
+}
+
 void SimState::playDefault(int unit)
 {
 	const auto & u = units[unit];
@@ -1441,9 +1546,19 @@ void SimState::playDefault(int unit)
 	}
 
 	const Stance own = stance[static_cast<int>(u.side)];
-	if(bestTarget >= 0 && (own != Stance::HOLD || bestValue > 0))
+	if(bestTarget >= 0 && ((own != Stance::HOLD && own != Stance::AMBUSH && own != Stance::GUARD) || bestValue > 0))
 	{
 		apply(unit, {SimActionType::ATTACK, bestTarget, bestHex});
+		return;
+	}
+	if(own == Stance::GUARD)
+	{
+		// close ranks around the shooter; once there, lie in wait
+		const BattleHex rally = rallyHex(unit);
+		if(rally.isValid())
+			apply(unit, {SimActionType::MOVE, -1, rally});
+		else
+			apply(unit, {u.waited ? SimActionType::DEFEND : SimActionType::WAIT, -1, BattleHex()});
 		return;
 	}
 
@@ -1451,6 +1566,12 @@ void SimState::playDefault(int unit)
 	if(own == Stance::HOLD)
 	{
 		apply(unit, {SimActionType::DEFEND, -1, BattleHex()});
+		return;
+	}
+	if(own == Stance::AMBUSH)
+	{
+		// ... or lies in wait: its turn comes again when the others have moved
+		apply(unit, {u.waited ? SimActionType::DEFEND : SimActionType::WAIT, -1, BattleHex()});
 		return;
 	}
 	if(own == Stance::STALK && !u.waited)
@@ -1517,6 +1638,23 @@ void SimState::playout(int lastRound)
 		// or kill the very unit whose turn it is (a chain, a blast on its own side)
 		if(heroCast(units[unit].side) && (battleOver() || !units[unit].alive()))
 			continue;
+		if(oracle && units[unit].side == oracleSide && round <= oracleLastRound)
+		{
+			// BattleAI with nothing to attack in this turn waits - always, so nobody needs to be asked
+			// (BattleEvaluator::selectStackAction: no possible attack and not waited yet)
+			if(!units[unit].waited && units[unit].active && !hasAttack(unit))
+			{
+				apply(unit, {SimActionType::WAIT, -1, BattleHex()});
+				continue;
+			}
+			SimAction told;
+			++oracleCalls;
+			if(oracle->choose(*this, unit, told))
+			{
+				apply(unit, told);
+				continue;
+			}
+		}
 		playDefault(unit);
 	}
 }
