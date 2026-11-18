@@ -245,3 +245,29 @@ nWBK: match   21 FairAI as blue of 2: victory winner=blue day=112 score=1.00 [17
 nWB: match   21 FairAI as blue of 2: victory winner=red day=203 score=0.00 [322.0s]
 nW: match   21 FairAI as blue of 2: victory winner=red day=191 score=0.00 [345.7s]
 nWBKG: match   21 FairAI as blue of 2: victory winner=blue day=87 score=1.00 [154.0s]
+new: match   22 FairAI as red of 2: victory winner=red day=97 score=1.00 [149.9s]
+nW: match   22 FairAI as red of 2: victory winner=red day=125 score=1.00 [228.7s]
+nWB: match   22 FairAI as red of 2: victory winner=red day=101 score=1.00 [184.5s]
+nWBKG: match   22 FairAI as red of 2: victory winner=red day=86 score=1.00 [172.0s]
+new: match   23 FairAI as blue of 2: victory winner=red day=94 score=0.00 [177.5s]
+nWBK: match   22 FairAI as red of 2: victory winner=red day=115 score=1.00 [211.8s]
+nWB: match   23 FairAI as blue of 2: victory winner=red day=106 score=0.00 [168.6s]
+nW: match   23 FairAI as blue of 2: victory winner=red day=123 score=0.00 [232.2s]
+nWBKG: match   20 FairAI as red of 2: victory winner=red day=281 score=1.00 [654.7s]
+nWBKG: match   23 FairAI as blue of 2: victory winner=red day=142 score=0.00 [299.8s]
+nWBK: match   23 FairAI as blue of 2: victory winner=blue day=217 score=1.00 [417.7s]
+# A/B test (5 configs, seeds 70)
+
+Paired against `new`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| new | `{}` | 24 | 11 | 12 | 0.497 ± 0.203 | - | 0.494 ± 0.202 | - | 24 |
+| nW | `{"magicWorth": 1}` | 24 | 8 | 14 | 0.414 ± 0.200 | -0.083 ± 0.232 | 0.404 ± 0.196 | -0.090 ± 0.225 | 24 |
+| nWB | `{"magicWorth": 1, "boldBehind": 1}` | 22 | 4 | 15 | 0.256 ± 0.173 | -0.242 ± 0.188 | 0.214 ± 0.167 | -0.279 ± 0.185 | 22 |
+| nWBK | `{"magicWorth": 1, "boldBehind": 1, "breakout": 3}` | 24 | 10 | 12 | 0.450 ± 0.195 | -0.047 ± 0.305 | 0.440 ± 0.196 | -0.054 ± 0.304 | 24 |
+| nWBKG | `{"magicWorth": 1, "boldBehind": 1, "breakout": 3, "townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "gather": 2}` | 24 | 11 | 12 | 0.480 ± 0.200 | -0.017 ± 0.239 | 0.470 ± 0.200 | -0.024 ± 0.243 | 24 |
+
+== m-blockbuster
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/82c5d85633/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 70 --out /home/alex/fairai/runs/022zz2d9282-fresh-confirm/m-blockbuster --variants {"new": {}, "nW": {"magicWorth": 1}, "nWB": {"magicWorth": 1, "boldBehind": 1}, "nWBK": {"magicWorth": 1, "boldBehind": 1, "breakout": 3}, "nWBKG": {"magicWorth": 1, "boldBehind": 1, "breakout": 3, "townHeroes": 1, "secondArmy": 1, "nightWatch": 1, "gather": 2}} --pool fresh1-m-blockbuster --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7200
+playing 120 matches (5 variants x 24 on 12 maps) with 9 parallel job(s)
