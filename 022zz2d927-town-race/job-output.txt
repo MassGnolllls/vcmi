@@ -514,3 +514,24 @@ match   20 FairAI as red of 2: victory winner=red day=94 score=1.00 [128.9s]
 match   19 FairAI as blue of 2: victory winner=blue day=134 score=1.00 [252.2s]
 match   21 FairAI as blue of 2: victory winner=blue day=109 score=1.00 [198.1s]
 match   22 FairAI as red of 2: victory winner=blue day=99 score=0.00 [206.5s]
+match   23 FairAI as blue of 2: victory winner=blue day=121 score=1.00 [252.2s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 20 -> FairAI won 15, lost 5  (win rate 75%, 95% CI 53%-89%)
+- day limit reached: 4 (material lead for FairAI in 2)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 121 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 58 --out /home/alex/fairai/runs/022zz2d927-town-race/m-land-2p/nPUFZMHS-s58 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"passage": 1, "regionValue": 8000, "unlockDirect": 1, "fetchByShare": 1, "mainHorizon": 12, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "heroLossPause": 0, "scouts": 3, "collectorsRoam": 3}
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    1 FairAI as blue of 2: victory winner=blue day=130 score=1.00 [263.6s]
+match    4 FairAI as red of 2: victory winner=red day=132 score=1.00 [285.8s]
+match    3 FairAI as blue of 2: victory winner=blue day=116 score=1.00 [285.9s]
+match    0 FairAI as red of 2: victory winner=red day=145 score=1.00 [311.5s]
+match    2 FairAI as red of 2: timeout winner= day=151 score=0.09 [325.3s]
+match    5 FairAI as blue of 2: timeout winner= day=151 score=0.53 [348.0s]
+match   11 FairAI as blue of 2: victory winner=blue day=89 score=1.00 [131.9s]
+match   10 FairAI as red of 2: victory winner=red day=118 score=1.00 [202.9s]
+match    9 FairAI as blue of 2: timeout winner= day=151 score=0.92 [256.9s]
