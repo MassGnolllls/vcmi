@@ -127,7 +127,7 @@ def map_seat_groups(map_name: str):
 
 def game_score(record: dict):
     """Score of the AI under test in one game: 1 = won, 0 = lost, otherwise its army share at the day
-    limit, per seat (so 0.5 means parity however many seats each AI holds). None if the game failed."""
+    limit (heroes and garrisons), per seat (so 0.5 means parity however many seats each AI holds). None if the game failed."""
     result = record.get("result") or {}
     players = result.get("players") or {}
     if not players or result.get("outcome") == "stalled":
@@ -137,8 +137,18 @@ def game_score(record: dict):
     winner = result.get("winner") or ""
     if result.get("outcome") == "victory" and winner:
         return 1.0 if winner in mine else 0.0
-    my = sum(players[c].get("armyStrength", 0) for c in mine if c in players) / max(1, len(mine))
-    their = sum(players[c].get("armyStrength", 0) for c in others) / max(1, len(others))
+    # The game's own figure counts the armies of heroes only. What stands in towns without a hero is
+    # army as well (day by day in the timeline, column 13): FairAI keeps a third to a half of its
+    # troops there, Nullkiller2 next to nothing - until 18.11.2026 an undecided game was scored
+    # without them, which flattered every switch that moves troops from garrisons to heroes.
+    last = ((result.get("timeline") or [{}])[-1].get("players")) or {}
+
+    def army(colour):
+        row = last.get(colour) or []
+        return players[colour].get("armyStrength", 0) + (row[12] if len(row) > 12 else 0)
+
+    my = sum(army(c) for c in mine if c in players) / max(1, len(mine))
+    their = sum(army(c) for c in others) / max(1, len(others))
     return my / (my + their) if my + their > 0 else 0.5
 
 
