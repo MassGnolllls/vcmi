@@ -311,6 +311,8 @@ private:
 	void noteStep(const Target & best);
 	void closeStatsDay();
 	int breakoutLogDay = -1;
+	int mainSlackDays = 0;                   ///< (breakout 3) days in a row on which the main hero found nothing worth its army to do
+	double mainBestValueToday = 0;           ///< (breakout 3) the most valuable target the main hero went for today (ways out not counted)
 	int breakoutPauseUntil = 0;              ///< (breakout 2) no ways out are forced before this day: one has just been opened
 	std::set<ObjectInstanceID> breakoutExits; ///< (breakout 2) the guards counted as ways out at the last look
 	std::map<int, int> seenTilesOn; ///< (breakout) tiles of the map uncovered at the start of each of our days

@@ -320,6 +320,9 @@ void Params::loadOverrides(int playerIndex)
 	read("fastKeeper", fastKeeper);
 	read("passage", passage);
 	read("breakout", breakout);
+	read("breakoutSlack", breakoutSlack);
+	read("breakoutSlackDays", breakoutSlackDays);
+	read("breakoutLoss", breakoutLoss);
 	read("idleBuild", idleBuild);
 	read("idleGold", idleGold);
 	read("idleRho", idleRho);
@@ -492,14 +495,35 @@ bool AdventureAI::exploringStalled() const
 {
 	// (breakout) Two weeks that uncovered less than a fiftieth of the map, with a tenth of it or more
 	// still unseen: whatever there is left to explore without a fight is not worth the way.
-	if(today < 21 || mapTiles <= 0)
+	if(mapTiles <= 0)
 		return false;
 	auto now = seenTilesOn.find(today);
-	auto before = seenTilesOn.upper_bound(today - 14);
-	if(now == seenTilesOn.end() || before == seenTilesOn.begin())
+	if(now == seenTilesOn.end() || now->second >= 0.9 * mapTiles)
 		return false;
-	--before; // the last count from two weeks ago or earlier
-	if(now->second >= 0.9 * mapTiles || now->second - before->second >= 0.02 * mapTiles)
+	// tiles uncovered since the last count taken so many days ago or earlier (-1: no such count)
+	auto uncoveredIn = [&](int days) -> double
+	{
+		auto before = seenTilesOn.upper_bound(today - days);
+		if(before == seenTilesOn.begin())
+			return -1;
+		--before;
+		return now->second - before->second;
+	};
+	bool stalled = false;
+	if(today >= 21)
+	{
+		const double twoWeeks = uncoveredIn(14);
+		stalled = twoWeeks >= 0 && twoWeeks < 0.02 * mapTiles;
+	}
+	if(!stalled && params.breakout >= 3 && today >= 14 && mainSlackDays >= params.breakoutSlackDays)
+	{
+		// (breakout 3) Nothing left to do here: the main hero has spent its last days on things not
+		// worth its army (and, by the rule of level 2 below, the last three days showed next to no
+		// new land). Waiting for two full weeks of standstill is waiting while the enemy takes the
+		// towns between us.
+		stalled = true;
+	}
+	if(!stalled)
 		return false;
 	if(params.breakout >= 2)
 	{
@@ -510,13 +534,9 @@ bool AdventureAI::exploringStalled() const
 		// hero walked through any of the gaps.
 		if(today < breakoutPauseUntil)
 			return false;
-		auto lately = seenTilesOn.upper_bound(today - 3);
-		if(lately != seenTilesOn.begin())
-		{
-			--lately;
-			if(now->second - lately->second >= 0.005 * mapTiles)
-				return false;
-		}
+		const double lately = uncoveredIn(3);
+		if(lately >= 0.005 * mapTiles)
+			return false;
 	}
 	return true;
 }
@@ -695,8 +715,15 @@ void AdventureAI::playTurn()
 		const int3 start = main->visitablePos();
 		const ObjectInstanceID id = mainHero;
 		mainProductive = false;
+		mainBestValueToday = 0;
+		const double armyGold = static_cast<double>(main->getArmyStrength()) * params.goldPerArmyValue;
 		playHero(mainHero);
 		const auto * after = ownHero(id);
+		// (breakout 3) a slack day: nothing the hero went for was worth a tenth of its army
+		if(mainBestValueToday < std::clamp(params.breakoutSlack * armyGold, 3000.0, 8000.0))
+			++mainSlackDays;
+		else
+			mainSlackDays = 0;
 		// walking about without visiting, fighting or exploring is idle too (patience lowers the safety ratio)
 		if(after && (params.concentrate ? !mainProductive : after->visitablePos().dist2d(start) < 3))
 			++idleDays;
@@ -919,6 +946,8 @@ void AdventureAI::closeStatsDay()
 		phase["mainEndsInOwnTown"] += 1;
 	if(exploringStalled())
 		phase["stalled"] += 1;
+	if(mainSlackDays > 0)
+		phase["slack"] += 1;
 	int heavyHeroes = 0;
 	for(const auto * hero : perception.ownHeroes())
 		heavyHeroes += heavy(hero) ? 1 : 0;
@@ -1233,6 +1262,24 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			best.description, best.tile.toString(), best.value, best.loss, best.travel, best.score);
 		if(statsFile && isMain(hero))
 			noteStep(best);
+		// (breakout 3) what the main hero found worth doing today; a way out it is forcing does not
+		// count - or the day it sets out for one would end the standstill that sent it
+		if(isMain(hero) && !(best.object.hasValue() && breakoutExits.count(best.object)))
+		{
+			// ... and neither does fetching troops from our own towns and heroes: an army that only
+			// grows is not being used (a main hero went from 64,000 to 300,000 in four weeks of
+			// walking between its town and the troops brought after it, next to the weakly guarded
+			// monolith that was the way out)
+			bool fetching = false;
+			if(best.object.hasValue())
+			{
+				const auto & all = perception.knownObjects();
+				auto it = all.find(best.object);
+				fetching = it != all.end() && it->second.owner == me && (it->second.type == Obj::TOWN || it->second.type == Obj::HERO);
+			}
+			if(!fetching)
+				mainBestValueToday = std::max(mainBestValueToday, best.value);
+		}
 
 		const bool safetyMove = best.description == "retreat" || best.description == "flee" || best.description == "home" || best.description == "aside" || best.description == "way out"
 			|| best.description == "fortress";
@@ -5612,6 +5659,17 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	std::string tableLines;
 	tableDebug = bankLog ? &tableLines : nullptr;
 
+	// (breakout 3) Doors: two-way monoliths and subterranean gates we have never gone through. On
+	// generated maps some regions are joined by such a pair instead of a pass - the way out of our
+	// corner is then a door, guarded or not, and "land behind a guard" finds nothing. (A main hero
+	// of 385,000 stood for thirty days before twenty to forty-nine beholders that watched a
+	// monolith: they "opened" 179 gold, and no way out was known with two thirds of the map unseen.)
+	std::map<ObjectInstanceID, double> doorBehind;               // guard -> a door behind it
+	std::vector<std::pair<ObjectInstanceID, double>> openDoors;  // doors the hero can walk to: id, days
+	double unseenShare = 0;
+	if(auto seen = seenTilesOn.find(today); seen != seenTilesOn.end() && mapTiles > 0)
+		unseenShare = 1.0 - static_cast<double>(seen->second) / mapTiles;
+
 	// ---- objects other than monsters
 	for(const auto & [id, object] : known)
 	{
@@ -5638,6 +5696,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		if(value <= 0 || reservedByOther(id))
 			continue;
+		const bool door = params.breakout >= 3 && leads(hero) && !usedTeleporters.count(id)
+			&& (object.type == Obj::MONOLITH_TWO_WAY || object.type == Obj::SUBTERRANEAN_GATE);
 
 		if(const CGPathNode * node = reachable(paths, object.visitablePos))
 		{
@@ -5813,6 +5873,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			// (heroes: whose - walking up to our own hero hands over troops, an enemy's is a hunt)
 			if(object.type == Obj::TOWN && object.owner != me && !isAlly(object.owner))
 				foreignTownTargeted = true;
+			if(door)
+				openDoors.emplace_back(id, travel);
 			addTarget(object.visitablePos, id, value, loss, travel, (bank ? "bank " : "object ") + std::to_string(object.type.getNum())
 				+ (object.type == Obj::HERO ? (object.owner == me ? " own" : " enemy") : ""));
 		}
@@ -5831,6 +5893,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				unlockValue[g.guard] += value * unlockShare(g, free);
 				if(object.type == Obj::TOWN && object.owner != me)
 					strategicUnlock[g.guard] += value * unlockShare(g, free);
+				if(door)
+					doorBehind[g.guard] = unseenShare;
 			}
 		}
 		else if(params.seekTowns && object.type == Obj::TOWN && object.owner != me && !isAlly(object.owner)
@@ -5906,7 +5970,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					// the view often ends right behind it: no open tile lies beyond, so the guard
 					// "opened" nothing. (A main hero of 13,000 left 35 troglodytes of 3,000 standing
 					// from day 10 to day 28 - they were the only way out of its corner of the map.)
-					bool watched = params.passage && free && free->action == EPathNodeAction::BATTLE;
+					// (breakout 3) Without passage such a tile counts for one thing only: the guard is a way out.
+					bool watched = (params.passage || (params.breakout >= 3 && leads(hero))) && free && free->action == EPathNodeAction::BATTLE;
 					if(watched)
 					{
 						// the far side: no tile we can simply walk to within two steps
@@ -5963,9 +6028,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 						const GuardOnPath g = firstGuard(free);
 						if(g.guard.hasValue())
 						{
-							behindGuard[g.guard] = std::max(behindGuard[g.guard], value * unlockShare(g, free));
 							if(params.breakout)
 								wayOut[g.guard] = std::max(wayOut[g.guard], grid.boxShare(tile, 12));
+							if(watched && !params.passage)
+								continue; // (breakout 3) a way out, nothing else
+							behindGuard[g.guard] = std::max(behindGuard[g.guard], value * unlockShare(g, free));
 							if(g.count == 1)
 							{
 								fogBehind[g.guard] = std::max(fogBehind[g.guard], reveal);
@@ -6013,6 +6080,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		// 200,000 to 700,000 stayed in its corner for a hundred days: 20 to 49 pit lords "opened"
 		// 358 gold and would have cost 1,700 of the army, so they were "not worth it", and so was
 		// every other way out.)
+		for(const auto & [guard, share] : doorBehind)
+			wayOut[guard] = std::max(wayOut[guard], share);
 		if(params.breakout && leads(hero) && breakoutDebugDay != today && logAi->isDebugEnabled())
 		{
 			std::string ways;
@@ -6021,8 +6090,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				auto it = known.find(guard);
 				ways += boost::str(boost::format(" [%s: %.2f, fog behind %.0f]") % (it != known.end() ? it->second.visitablePos.toString() : std::string("?")) % share % fogBehind[guard]);
 			}
-			logAi->debug("FairAI %s day %d: breakout check for %s: exploring stalled %s, a foreign town among the targets %s, ways out:%s", me.toString(), today,
-				hero->getNameTranslated(), exploringStalled() ? "yes" : "no", foreignTownTargeted ? "yes" : "no", ways.empty() ? " none" : ways);
+			logAi->debug("FairAI %s day %d: breakout check for %s: exploring stalled %s, slack days %d, a foreign town among the targets %s, ways out:%s", me.toString(), today,
+				hero->getNameTranslated(), exploringStalled() ? "yes" : "no", mainSlackDays, foreignTownTargeted ? "yes" : "no", ways.empty() ? " none" : ways);
 			breakoutDebugDay = today;
 		}
 		if(params.breakout >= 2)
@@ -6044,20 +6113,44 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const double worth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
 			int exits = 0;
 			breakoutExits.clear();
+			int dear = 0;
 			for(const auto & [guard, share] : wayOut)
 			{
 				const double part = std::clamp(share / 0.3, 0.0, 1.0);
 				if(part < 0.2)
 					continue;
+				if(params.breakout >= 3)
+				{
+					// (breakout 3) not at any price: a way out that would cost more than a fifth of the
+					// army waits until the army has grown (the worth of a town would pay for half of it)
+					auto it = known.find(guard);
+					const double cost = it != known.end() ? monsterLoss(hero, it->second) : -1;
+					if(cost < 0 || cost > params.breakoutLoss * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue)
+					{
+						++dear;
+						continue;
+					}
+				}
 				unlockValue[guard] += worth * part;
 				strategicUnlock[guard] += worth * part;
 				breakoutExits.insert(guard);
 				++exits;
 			}
+			// (breakout 3) a door we can simply walk through is a way out as well
+			const double doorPart = std::clamp(unseenShare / 0.3, 0.0, 1.0);
+			for(const auto & [door, days] : openDoors)
+			{
+				auto it = known.find(door);
+				if(it == known.end() || doorPart < 0.2)
+					continue;
+				addTarget(it->second.visitablePos, door, worth * doorPart, 0, days, "door");
+				breakoutExits.insert(door);
+				++exits;
+			}
 			if(breakoutLogDay != today)
 			{
-				logAi->info("FairAI %s day %d: %s is shut in (next to nothing uncovered in two weeks, no foreign town to go for): %d guard(s) with unseen land behind count as ways out worth up to %.0f",
-					me.toString(), today, hero->getNameTranslated(), exits, worth);
+				logAi->info("FairAI %s day %d: %s is shut in (next to nothing uncovered lately, no foreign town to go for, %d slack day(s)): %d guard(s) with unseen land behind count as ways out worth up to %.0f%s",
+					me.toString(), today, hero->getNameTranslated(), mainSlackDays, exits, worth, dear > 0 ? boost::str(boost::format(", %d more would cost too much yet") % dear) : std::string());
 				breakoutLogDay = today;
 			}
 		}
