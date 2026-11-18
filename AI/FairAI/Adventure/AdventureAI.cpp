@@ -323,6 +323,7 @@ void Params::loadOverrides(int playerIndex)
 	read("breakout", breakout);
 	read("breakoutSlack", breakoutSlack);
 	read("breakoutSlackDays", breakoutSlackDays);
+	read("breakoutReady", breakoutReady);
 	read("breakoutLoss", breakoutLoss);
 	read("idleBuild", idleBuild);
 	read("idleGold", idleGold);
@@ -6326,13 +6327,17 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		// much of the map around the land behind them is unseen.
 		const double searchWorth = params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
 		bool searching = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today >= 14 && unseenShare >= 0.1;
+		// a way out just opened (its guard beaten, or a door gone through): look at what lies behind it
+		bool lookingBehind = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today < breakoutPauseUntil;
 		double waitingAtHome = 0;
-		if(searching)
+		if(searching || lookingBehind)
 		{
-			// ... but not with the smaller half of our army: when more waits in our towns than the
-			// hero leads, that is fetched first. (The first version of this level went on from way out
-			// to way out with 14,000 for four weeks, across the whole map, while ten times that stood
-			// at home.)
+			// ... but not with a part of our army: what waits in our towns and what a courier is
+			// bringing must be less than breakoutReady of what the hero leads - else that comes first
+			// (fetched, or the courier met). The first version of this level went on from way out to
+			// way out with 14,000 for four weeks, across the whole map, while ten times that stood at
+			// home; the second walked on into unseen land with 38,000 and met the enemy's main hero
+			// with 93,000, its courier two days behind with 46,000.
 			for(const auto * town : perception.ownTowns())
 			{
 				double troops = townTroops(town, hero);
@@ -6340,10 +6345,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					troops = std::max(0.0, troops - left->second);
 				waitingAtHome += troops;
 			}
-			searching = waitingAtHome < static_cast<double>(hero->getArmyStrength());
+			if(supply && !supply->returning && supply->courier != hero->id)
+			{
+				if(const auto * courier = ownHero(supply->courier))
+					waitingAtHome += transferGain(hero, courier);
+			}
+			if(waitingAtHome >= params.breakoutReady * static_cast<double>(hero->getArmyStrength()))
+			{
+				if(breakoutLogDay != today)
+				{
+					logAi->info("FairAI %s day %d: %s does not go on looking for the next town - %.0f wait at home or are on their way, it leads %llu", me.toString(), today,
+						hero->getNameTranslated(), waitingAtHome, static_cast<unsigned long long>(hero->getArmyStrength()));
+					breakoutLogDay = today;
+				}
+				searching = false;
+				lookingBehind = false;
+			}
 		}
-		// a way out just opened (its guard beaten, or a door gone through): look at what lies behind it
-		const bool lookingBehind = params.breakout >= 4 && leads(hero) && !foreignTownTargeted && today < breakoutPauseUntil;
 		double bestOpenEnd = 0;
 		std::map<ObjectInstanceID, double> behindGuard;
 		std::map<ObjectInstanceID, double> fogBehind; // most tiles one step behind the guard would reveal
