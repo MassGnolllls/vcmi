@@ -358,3 +358,30 @@ match    4 FairAI as red of 2: timeout winner= day=151 score=0.84 [235.9s]
 match    1 FairAI as blue of 2: timeout winner= day=151 score=0.35 [249.2s]
 match    2 FairAI as red of 2: timeout winner= day=151 score=0.49 [268.1s]
 match   11 FairAI as blue of 2: victory winner=blue day=98 score=1.00 [105.8s]
+match    6 FairAI as red of 2: victory winner=red day=149 score=1.00 [253.8s]
+match    7 FairAI as blue of 2: timeout winner= day=151 score=0.45 [227.7s]
+match    9 FairAI as blue of 2: victory winner=blue day=136 score=1.00 [187.2s]
+match   10 FairAI as red of 2: timeout winner= day=151 score=0.57 [229.0s]
+match    8 FairAI as red of 2: timeout winner= day=151 score=0.33 [242.6s]
+match   12 FairAI as red of 2: victory winner=blue day=127 score=0.00 [204.4s]
+match   15 FairAI as blue of 2: victory winner=blue day=108 score=1.00 [165.4s]
+match   13 FairAI as blue of 2: victory winner=blue day=147 score=1.00 [222.0s]
+match   14 FairAI as red of 2: timeout winner= day=151 score=0.43 [250.6s]
+match   16 FairAI as red of 2: timeout winner= day=151 score=0.79 [219.3s]
+match   17 FairAI as blue of 2: victory winner=blue day=136 score=1.00 [228.0s]
+match   22 FairAI as red of 2: victory winner=blue day=55 score=0.00 [79.5s]
+match   20 FairAI as red of 2: victory winner=red day=109 score=1.00 [165.8s]
+match   19 FairAI as blue of 2: victory winner=blue day=128 score=1.00 [233.2s]
+match   18 FairAI as red of 2: timeout winner= day=151 score=0.64 [249.6s]
+match   21 FairAI as blue of 2: timeout winner= day=151 score=0.48 [237.9s]
+match   23 FairAI as blue of 2: timeout winner= day=151 score=0.80 [297.5s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 24 (runner errors: 0)
+- decided: 12 -> FairAI won 10, lost 2  (win rate 83%, 95% CI 55%-95%)
+- day limit reached: 12 (material lead for FairAI in 6)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 121 days
+- cheat flags raised: 0
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/870bc27ee3/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 6 --seed 58 --out /home/alex/fairai/runs/022zz2d927-town-race/m-land-2p/nPFZS-s58 --pool long1-m-land-2p --max-days 150 --timeout 1500 --stall-seconds 300 --base-port 7000 --ai-params {"passage": 1, "regionValue": 8000, "fetchByShare": 1, "mainHorizon": 12, "scouts": 3}

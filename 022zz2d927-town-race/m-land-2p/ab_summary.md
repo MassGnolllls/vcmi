@@ -14,7 +14,7 @@ Paired against `new`: mean difference over the games both played (95% CI). score
 | nUFZH | `{"unlockDirect": 1, "fetchByShare": 1, "mainHorizon": 12, "heroLossPause": 0}` | 24 | 12 | 4 | 0.686 ± 0.160 | -0.100 ± 0.180 | 0.679 ± 0.161 | -0.107 ± 0.179 | 24 |
 | nPMS | `{"passage": 1, "regionValue": 8000, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "scouts": 3, "collectorsRoam": 3}` | 24 | 13 | 1 | 0.707 ± 0.142 | -0.080 ± 0.146 | 0.696 ± 0.154 | -0.089 ± 0.161 | 24 |
 | nPZMH | `{"passage": 1, "regionValue": 8000, "mainHorizon": 12, "heroesWeek1": 3, "heroesWeek3": 5, "heroesLater": 6, "heroLossPause": 0, "collectorsRoam": 3}` | 24 | 11 | 5 | 0.592 ± 0.173 | -0.195 ± 0.177 | 0.583 ± 0.175 | -0.202 ± 0.197 | 24 |
-| nPFH | `{"passage": 1, "regionValue": 8000, "fetchByShare": 1, "heroLossPause": 0}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
+| nPFH | `{"passage": 1, "regionValue": 8000, "fetchByShare": 1, "heroLossPause": 0}` | 24 | 10 | 2 | 0.705 ± 0.130 | -0.081 ± 0.137 | 0.702 ± 0.151 | -0.083 ± 0.159 | 24 |
 | nPFZS | `{"passage": 1, "regionValue": 8000, "fetchByShare": 1, "mainHorizon": 12, "scouts": 3}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nPUHS | `{"passage": 1, "regionValue": 8000, "unlockDirect": 1, "heroLossPause": 0, "scouts": 3}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
 | nPUZ | `{"passage": 1, "regionValue": 8000, "unlockDirect": 1, "mainHorizon": 12}` | 0 | 0 | 0 | nan ± nan | - | nan ± nan | - | 0 |
