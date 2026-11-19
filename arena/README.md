@@ -60,6 +60,31 @@ MMAI braucht seine Mod im VCMI-Datenordner; für VCMI 1.7.x die Version aus dem 
 
 Ergebnis: `results.jsonl` (eine Zeile pro Partie) und `summary.md` mit Siegquote und 95-%-Konfidenzintervall.
 
+## Wachen-Prüfstand und Kämpfe aus echten Partien
+
+```bash
+# Wachen-Prüfstand: ein Held mit plausibler Armee gegen Wachen jeder Kreatur (30, 50, 80 % der eigenen Stärke)
+python3 arena/guard_bench.py gen  --client build/bin/vcmiclient
+python3 arena/guard_bench.py play --client build/bin/vcmiclient --ai FairAI --filter __0. --out guard-a \
+    --ai-params '{"battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1}'
+
+# Kämpfe aus mitgeschriebenen Partien nachstellen (Armee, wie sie stand; Wachen nach Art und Zahl):
+# die Sätze liegen im Fork und werden einmal zu Karten gemacht
+python3 arena/game_fights.py gen --set arena/gamefights/sample300.json --client build/bin/vcmiclient
+python3 arena/game_fights.py gen --set arena/gamefights/dearest69.json --client build/bin/vcmiclient
+python3 arena/guard_bench.py play --client build/bin/vcmiclient --ai FairAI --filter __s0 --out games-a --ai-params '{...}'
+
+# neue Sätze aus eigenen Logs (Partien mit ARENA_AI_LOG=debug)
+python3 arena/game_fights.py collect --logs 'probes/*/VCMI_Client_log.txt' --out arena/gamefights/neu.json \
+    --sample 300 --suffix __s1 --client build/bin/vcmiclient
+```
+
+- `sample300` (Endung `__s0`): 300 zufällige von 2.685 Wachenkämpfen aus 91 Partien – so sehen die Kämpfe einer Partie aus
+  (die Hälfte kostet nichts; Wachen, die schießen, sind ein Viertel der Kämpfe und fast die Hälfte der Verluste).
+- `dearest69` (Endung `__g0`): die 69 teuersten (ab 20 % Verlust oder 10 Punkte über der Prognose der Kampf-KI).
+- Stand 19.11.2026 auf `sample300`: ohne Kampf-Paket 7,1 % der Armee verloren, mit 4,5 % (160 statt 75 Kämpfe ohne Verlust).
+- Die Endung eines Satzes darf in keinem anderen Kartennamen vorkommen (`--filter` sucht im Namen; `__r0` träfe auch `__r030__0`).
+
 ## Auswertung ganzer Partien
 
 ```bash

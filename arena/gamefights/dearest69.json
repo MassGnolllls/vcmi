@@ -1,0 +1,3566 @@
+[
+ {
+  "name": "game-DG2-41211-blue-d13-00__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      30
+     ],
+     [
+      "core:airElemental",
+      5
+     ],
+     [
+      "core:pixie",
+      9
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:griffin",
+      2
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     85
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41211-blue-d13-01__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      31
+     ],
+     [
+      "core:airElemental",
+      5
+     ],
+     [
+      "core:pixie",
+      11
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:griffin",
+      2
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     85
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41203-blue-d23-02__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      37
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      16
+     ],
+     [
+      "core:orcChieftain",
+      8
+     ],
+     [
+      "core:thunderbird",
+      2
+     ],
+     [
+      "core:thunderbird",
+      4
+     ],
+     [
+      "core:skeleton",
+      24
+     ],
+     [
+      "core:orcChieftain",
+      14
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:goldGolem",
+     18
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41205-blue-d28-03__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:battleDwarf",
+      19
+     ],
+     [
+      "core:centaurCaptain",
+      12
+     ],
+     [
+      "core:woodElf",
+      16
+     ],
+     [
+      "core:dendroidSoldier",
+      1
+     ],
+     [
+      "core:dendroidSoldier",
+      8
+     ],
+     [
+      "core:centaurCaptain",
+      23
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     18
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41201-red-d13-04__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:halon",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:gremlin",
+      84
+     ],
+     [
+      "core:stoneGargoyle",
+      7
+     ],
+     [
+      "core:centaur",
+      6
+     ],
+     [
+      "core:dwarf",
+      4
+     ],
+     [
+      "core:ironGolem",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     99
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41205-blue-d25-05__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:battleDwarf",
+      25
+     ],
+     [
+      "core:battleDwarf",
+      1
+     ],
+     [
+      "core:centaurCaptain",
+      8
+     ],
+     [
+      "core:woodElf",
+      11
+     ],
+     [
+      "core:dendroidSoldier",
+      1
+     ],
+     [
+      "core:dendroidSoldier",
+      10
+     ],
+     [
+      "core:centaurCaptain",
+      5
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     17
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41208-red-d20-06__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      36
+     ],
+     [
+      "core:goblin",
+      32
+     ],
+     [
+      "core:dendroidSoldier",
+      10
+     ],
+     [
+      "core:woodElf",
+      8
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:dwarf",
+      8
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     14
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41204-red-d35-07__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:jenova",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      41
+     ],
+     [
+      "core:battleDwarf",
+      35
+     ],
+     [
+      "core:grandElf",
+      21
+     ],
+     [
+      "core:greenDragon",
+      1
+     ],
+     [
+      "core:pegasus",
+      24
+     ],
+     [
+      "core:dendroidSoldier",
+      16
+     ],
+     [
+      "core:warUnicorn",
+      5
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:cyclop",
+     50
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA3-41204-red-d15-08__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:jenova",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      77
+     ],
+     [
+      "core:dwarf",
+      6
+     ],
+     [
+      "core:woodElf",
+      12
+     ],
+     [
+      "core:dendroidGuard",
+      2
+     ],
+     [
+      "core:walkingDead",
+      8
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     19
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41200-red-d10-09__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:malcom",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      35
+     ],
+     [
+      "core:pikeman",
+      15
+     ],
+     [
+      "core:griffin",
+      3
+     ],
+     [
+      "core:archer",
+      2
+     ],
+     [
+      "core:walkingDead",
+      4
+     ],
+     [
+      "core:skeleton",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     91
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA3-41211-blue-d12-10__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      30
+     ],
+     [
+      "core:airElemental",
+      5
+     ],
+     [
+      "core:pixie",
+      11
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:griffin",
+      2
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     85
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41203-blue-d22-11__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      38
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      18
+     ],
+     [
+      "core:orcChieftain",
+      6
+     ],
+     [
+      "core:thunderbird",
+      1
+     ],
+     [
+      "core:skeleton",
+      21
+     ],
+     [
+      "core:thunderbird",
+      5
+     ],
+     [
+      "core:orcChieftain",
+      21
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     47
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41211-blue-d13-12__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      31
+     ],
+     [
+      "core:airElemental",
+      5
+     ],
+     [
+      "core:pixie",
+      10
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:griffin",
+      2
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     85
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41210-blue-d09-13__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:malcom",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      53
+     ],
+     [
+      "core:dwarf",
+      5
+     ],
+     [
+      "core:pikeman",
+      15
+     ],
+     [
+      "core:griffin",
+      3
+     ],
+     [
+      "core:archer",
+      5
+     ],
+     [
+      "core:woodElf",
+      6
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     97
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41205-blue-d22-14__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:dwarf",
+      16
+     ],
+     [
+      "core:dwarf",
+      3
+     ],
+     [
+      "core:centaur",
+      7
+     ],
+     [
+      "core:woodElf",
+      21
+     ],
+     [
+      "core:dendroidGuard",
+      2
+     ],
+     [
+      "core:dendroidSoldier",
+      9
+     ],
+     [
+      "core:battleDwarf",
+      16
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusa",
+     40
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41205-blue-d25-15__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:dwarf",
+      2
+     ],
+     [
+      "core:dwarf",
+      2
+     ],
+     [
+      "core:woodElf",
+      9
+     ],
+     [
+      "core:dendroidSoldier",
+      9
+     ],
+     [
+      "core:battleDwarf",
+      13
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusaQueen",
+     17
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41210-blue-d10-16__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:malcom",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      48
+     ],
+     [
+      "core:dwarf",
+      5
+     ],
+     [
+      "core:archer",
+      5
+     ],
+     [
+      "core:woodElf",
+      3
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:zombieLord",
+     27
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41203-blue-d22-17__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      54
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      18
+     ],
+     [
+      "core:orcChieftain",
+      6
+     ],
+     [
+      "core:thunderbird",
+      1
+     ],
+     [
+      "core:skeleton",
+      21
+     ],
+     [
+      "core:thunderbird",
+      5
+     ],
+     [
+      "core:orcChieftain",
+      21
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     47
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41206-blue-d12-18__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:fafner",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:gremlin",
+      72
+     ],
+     [
+      "core:stoneGargoyle",
+      6
+     ],
+     [
+      "core:skeleton",
+      61
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:evilEye",
+     16
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41208-red-d19-19__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      55
+     ],
+     [
+      "core:goblin",
+      35
+     ],
+     [
+      "core:dendroidSoldier",
+      11
+     ],
+     [
+      "core:woodElf",
+      8
+     ],
+     [
+      "core:pegasus",
+      5
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:dwarf",
+      8
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:harpy",
+     96
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA3-41206-red-d16-20__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      72
+     ],
+     [
+      "core:woodElf",
+      5
+     ],
+     [
+      "core:dwarf",
+      8
+     ],
+     [
+      "core:goblinWolfRider",
+      4
+     ],
+     [
+      "core:walkingDead",
+      8
+     ],
+     [
+      "core:gremlin",
+      33
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:harpyHag",
+     41
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41203-blue-d23-21__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      1
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      13
+     ],
+     [
+      "core:orcChieftain",
+      6
+     ],
+     [
+      "core:thunderbird",
+      1
+     ],
+     [
+      "core:skeleton",
+      9
+     ],
+     [
+      "core:thunderbird",
+      3
+     ],
+     [
+      "core:orcChieftain",
+      21
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:goldGolem",
+     18
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41204-red-d14-22__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:jenova",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      75
+     ],
+     [
+      "core:dwarf",
+      10
+     ],
+     [
+      "core:woodElf",
+      13
+     ],
+     [
+      "core:dendroidGuard",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     17
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41211-blue-d19-23__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      84
+     ],
+     [
+      "core:airElemental",
+      3
+     ],
+     [
+      "core:swordsman",
+      11
+     ],
+     [
+      "core:cavalier",
+      2
+     ],
+     [
+      "core:griffin",
+      2
+     ],
+     [
+      "core:archer",
+      12
+     ],
+     [
+      "core:royalGriffin",
+      24
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     44
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41203-blue-d22-24__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      77
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      12
+     ],
+     [
+      "core:orcChieftain",
+      11
+     ],
+     [
+      "core:thunderbird",
+      2
+     ],
+     [
+      "core:thunderbird",
+      5
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      18
+     ],
+     [
+      "core:orcChieftain",
+      14
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     47
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41211-blue-d18-25__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      96
+     ],
+     [
+      "core:airElemental",
+      4
+     ],
+     [
+      "core:royalGriffin",
+      24
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:swordsman",
+      12
+     ],
+     [
+      "core:cavalier",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     44
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41206-red-d20-26__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      47
+     ],
+     [
+      "core:woodElf",
+      6
+     ],
+     [
+      "core:dwarf",
+      7
+     ],
+     [
+      "core:goblinWolfRider",
+      12
+     ],
+     [
+      "core:walkingDead",
+      12
+     ],
+     [
+      "core:battleDwarf",
+      14
+     ],
+     [
+      "core:gremlin",
+      27
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:harpyHag",
+     41
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41203-blue-d15-27__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:goblin",
+      75
+     ],
+     [
+      "core:goblinWolfRider",
+      14
+     ],
+     [
+      "core:orc",
+      5
+     ],
+     [
+      "core:roc",
+      1
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     19
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41206-red-d12-28__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      65
+     ],
+     [
+      "core:woodElf",
+      5
+     ],
+     [
+      "core:dwarf",
+      7
+     ],
+     [
+      "core:goblinWolfRider",
+      12
+     ],
+     [
+      "core:walkingDead",
+      8
+     ],
+     [
+      "core:skeleton",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusa",
+     18
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41203-blue-d18-29__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      80
+     ],
+     [
+      "core:goblinWolfRider",
+      19
+     ],
+     [
+      "core:roc",
+      6
+     ],
+     [
+      "core:orc",
+      10
+     ],
+     [
+      "core:troglodyte",
+      71
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     43
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41203-blue-d22-30__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      70
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      6
+     ],
+     [
+      "core:orcChieftain",
+      6
+     ],
+     [
+      "core:skeleton",
+      2
+     ],
+     [
+      "core:thunderbird",
+      5
+     ],
+     [
+      "core:orcChieftain",
+      21
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      12
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     47
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41211-blue-d18-31__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      66
+     ],
+     [
+      "core:swordsman",
+      12
+     ],
+     [
+      "core:cavalier",
+      2
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:royalGriffin",
+      23
+     ],
+     [
+      "core:archer",
+      11
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     44
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41203-blue-d15-32__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:goblin",
+      45
+     ],
+     [
+      "core:goblinWolfRider",
+      19
+     ],
+     [
+      "core:orc",
+      5
+     ],
+     [
+      "core:roc",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     19
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41208-blue-d16-33__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gerwulf",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:gnoll",
+      47
+     ],
+     [
+      "core:serpentFly",
+      10
+     ],
+     [
+      "core:lizardman",
+      14
+     ],
+     [
+      "core:gremlin",
+      32
+     ],
+     [
+      "core:airElemental",
+      5
+     ],
+     [
+      "core:pixie",
+      22
+     ],
+     [
+      "core:wyvern",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusa",
+     19
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41205-blue-d27-34__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:dwarf",
+      2
+     ],
+     [
+      "core:pegasus",
+      7
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:centaur",
+      20
+     ],
+     [
+      "core:woodElf",
+      6
+     ],
+     [
+      "core:dendroidSoldier",
+      8
+     ],
+     [
+      "core:battleDwarf",
+      8
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     17
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41205-blue-d19-35__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaurCaptain",
+      28
+     ],
+     [
+      "core:pegasus",
+      10
+     ],
+     [
+      "core:centaur",
+      45
+     ],
+     [
+      "core:imp",
+      43
+     ],
+     [
+      "core:battleDwarf",
+      24
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:dendroidSoldier",
+      6
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusa",
+     50
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41203-red-d09-36__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:orrin",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      20
+     ],
+     [
+      "core:archer",
+      4
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:pixie",
+     40
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41206-blue-d28-37__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:fafner",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:giant",
+      1
+     ],
+     [
+      "core:obsidianGargoyle",
+      15
+     ],
+     [
+      "core:genie",
+      8
+     ],
+     [
+      "core:nagaQueen",
+      6
+     ],
+     [
+      "core:naga",
+      2
+     ],
+     [
+      "core:mage",
+      19
+     ],
+     [
+      "core:stoneGolem",
+      15
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:naga",
+     20
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41201-red-d35-38__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "late",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:halon",
+    "primary": [
+     8,
+     7,
+     5,
+     5
+    ],
+    "army": [
+     [
+      "core:stoneGolem",
+      9
+     ],
+     [
+      "core:gog",
+      40
+     ],
+     [
+      "core:nagaQueen",
+      4
+     ],
+     [
+      "core:obsidianGargoyle",
+      38
+     ],
+     [
+      "core:masterGremlin",
+      99
+     ],
+     [
+      "core:naga",
+      10
+     ],
+     [
+      "core:mage",
+      16
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:naga",
+     20
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41211-blue-d19-39__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      92
+     ],
+     [
+      "core:royalGriffin",
+      23
+     ],
+     [
+      "core:waterElemental",
+      2
+     ],
+     [
+      "core:royalGriffin",
+      1
+     ],
+     [
+      "core:swordsman",
+      12
+     ],
+     [
+      "core:cavalier",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     44
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41205-blue-d22-40__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:battleDwarf",
+      27
+     ],
+     [
+      "core:battleDwarf",
+      3
+     ],
+     [
+      "core:centaurCaptain",
+      38
+     ],
+     [
+      "core:woodElf",
+      12
+     ],
+     [
+      "core:dendroidSoldier",
+      1
+     ],
+     [
+      "core:dendroidSoldier",
+      10
+     ],
+     [
+      "core:centaurCaptain",
+      20
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:evilEye",
+     38
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41206-red-d32-41__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaurCaptain",
+      40
+     ],
+     [
+      "core:woodElf",
+      16
+     ],
+     [
+      "core:battleDwarf",
+      21
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:battleDwarf",
+      16
+     ],
+     [
+      "core:dendroidSoldier",
+      9
+     ],
+     [
+      "core:centaurCaptain",
+      26
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:thunderbird",
+     14
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41208-red-d22-42__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      42
+     ],
+     [
+      "core:goblin",
+      20
+     ],
+     [
+      "core:woodElf",
+      15
+     ],
+     [
+      "core:dendroidSoldier",
+      11
+     ],
+     [
+      "core:pegasus",
+      5
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:battleDwarf",
+      7
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     15
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41205-blue-d05-43__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:dwarf",
+      8
+     ],
+     [
+      "core:dwarf",
+      3
+     ],
+     [
+      "core:centaur",
+      23
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:pixie",
+     42
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41205-blue-d23-44__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:battleDwarf",
+      28
+     ],
+     [
+      "core:battleDwarf",
+      3
+     ],
+     [
+      "core:centaurCaptain",
+      32
+     ],
+     [
+      "core:woodElf",
+      16
+     ],
+     [
+      "core:dendroidSoldier",
+      1
+     ],
+     [
+      "core:dendroidSoldier",
+      10
+     ],
+     [
+      "core:centaurCaptain",
+      24
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     17
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41205-blue-d20-45__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:dwarf",
+      16
+     ],
+     [
+      "core:dwarf",
+      3
+     ],
+     [
+      "core:centaur",
+      43
+     ],
+     [
+      "core:woodElf",
+      21
+     ],
+     [
+      "core:dendroidGuard",
+      2
+     ],
+     [
+      "core:dendroidSoldier",
+      8
+     ],
+     [
+      "core:battleDwarf",
+      4
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     15
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41207-red-d37-46__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:terek",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:ogre",
+      4
+     ],
+     [
+      "core:goblinWolfRider",
+      19
+     ],
+     [
+      "core:hobgoblin",
+      59
+     ],
+     [
+      "core:skeleton",
+      55
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:harpy",
+     43
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41208-red-d17-47__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      58
+     ],
+     [
+      "core:goblin",
+      35
+     ],
+     [
+      "core:dendroidSoldier",
+      9
+     ],
+     [
+      "core:woodElf",
+      7
+     ],
+     [
+      "core:pegasus",
+      8
+     ],
+     [
+      "core:dwarf",
+      9
+     ],
+     [
+      "core:unicorn",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusa",
+     40
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41211-blue-d10-48__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:pikeman",
+      42
+     ],
+     [
+      "core:airElemental",
+      5
+     ],
+     [
+      "core:pixie",
+      44
+     ],
+     [
+      "core:waterElemental",
+      7
+     ],
+     [
+      "core:skeleton",
+      6
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     85
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41208-red-d20-49__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      55
+     ],
+     [
+      "core:dendroidSoldier",
+      8
+     ],
+     [
+      "core:woodElf",
+      8
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:dwarf",
+      3
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:minotaur",
+     14
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41203-blue-d22-50__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:hobgoblin",
+      48
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      14
+     ],
+     [
+      "core:orcChieftain",
+      8
+     ],
+     [
+      "core:thunderbird",
+      2
+     ],
+     [
+      "core:thunderbird",
+      5
+     ],
+     [
+      "core:hobgoblinWolfRider",
+      18
+     ],
+     [
+      "core:orcChieftain",
+      14
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     47
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41206-blue-d17-51__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:fafner",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:gremlin",
+      70
+     ],
+     [
+      "core:stoneGargoyle",
+      3
+     ],
+     [
+      "core:skeleton",
+      56
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     82
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG2-41203-blue-d15-52__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:shiva",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:goblin",
+      65
+     ],
+     [
+      "core:goblinWolfRider",
+      15
+     ],
+     [
+      "core:orc",
+      5
+     ],
+     [
+      "core:roc",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     19
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41211-blue-d38-53__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "late",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:sylvia",
+    "primary": [
+     8,
+     7,
+     5,
+     5
+    ],
+    "army": [
+     [
+      "core:crusader",
+      2
+     ],
+     [
+      "core:swordsman",
+      18
+     ],
+     [
+      "core:halberdier",
+      92
+     ],
+     [
+      "core:vampire",
+      9
+     ],
+     [
+      "core:royalGriffin",
+      45
+     ],
+     [
+      "core:cavalier",
+      7
+     ],
+     [
+      "core:champion",
+      4
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:pitFiend",
+     33
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41206-red-d15-54__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      43
+     ],
+     [
+      "core:woodElf",
+      3
+     ],
+     [
+      "core:dwarf",
+      10
+     ],
+     [
+      "core:goblinWolfRider",
+      8
+     ],
+     [
+      "core:walkingDead",
+      7
+     ],
+     [
+      "core:gremlin",
+      33
+     ],
+     [
+      "core:stoneGargoyle",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:infernalTroglodyte",
+     71
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41206-blue-d13-55__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:fafner",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:gremlin",
+      51
+     ],
+     [
+      "core:skeleton",
+      62
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:troglodyte",
+     78
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41201-red-d07-56__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:halon",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:gremlin",
+      66
+     ],
+     [
+      "core:stoneGargoyle",
+      5
+     ],
+     [
+      "core:centaur",
+      15
+     ],
+     [
+      "core:dwarf",
+      4
+     ],
+     [
+      "core:ironGolem",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:sprite",
+     40
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG1-41208-red-d19-57__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:centaur",
+      54
+     ],
+     [
+      "core:goblin",
+      36
+     ],
+     [
+      "core:dendroidSoldier",
+      11
+     ],
+     [
+      "core:woodElf",
+      8
+     ],
+     [
+      "core:pegasus",
+      5
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:dwarf",
+      8
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:harpy",
+     96
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA2-41205-blue-d24-58__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:ufretin",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:dwarf",
+      15
+     ],
+     [
+      "core:dwarf",
+      3
+     ],
+     [
+      "core:centaur",
+      30
+     ],
+     [
+      "core:woodElf",
+      20
+     ],
+     [
+      "core:dendroidGuard",
+      2
+     ],
+     [
+      "core:dendroidSoldier",
+      5
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusaQueen",
+     17
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41206-red-d26-59__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:brissa",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:wraith",
+      1
+     ],
+     [
+      "core:walkingDead",
+      26
+     ],
+     [
+      "core:skeleton",
+      36
+     ],
+     [
+      "core:vampire",
+      12
+     ],
+     [
+      "core:wight",
+      7
+     ],
+     [
+      "core:lich",
+      3
+     ],
+     [
+      "core:powerLich",
+      6
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:harpy",
+     87
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41200-red-d30-60__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:adelaide",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:pegasus",
+      15
+     ],
+     [
+      "core:vampire",
+      10
+     ],
+     [
+      "core:battleDwarf",
+      22
+     ],
+     [
+      "core:dendroidSoldier",
+      9
+     ],
+     [
+      "core:woodElf",
+      21
+     ],
+     [
+      "core:wight",
+      17
+     ],
+     [
+      "core:centaur",
+      67
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:pitLord",
+     19
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41206-red-d39-61__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "late",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     8,
+     7,
+     5,
+     5
+    ],
+    "army": [
+     [
+      "core:centaurCaptain",
+      55
+     ],
+     [
+      "core:grandElf",
+      18
+     ],
+     [
+      "core:battleDwarf",
+      53
+     ],
+     [
+      "core:greenDragon",
+      3
+     ],
+     [
+      "core:dendroidSoldier",
+      17
+     ],
+     [
+      "core:warUnicorn",
+      3
+     ],
+     [
+      "core:pegasus",
+      24
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:naga",
+     20
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DG0-41206-blue-d21-62__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:fafner",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:gremlin",
+      24
+     ],
+     [
+      "core:obsidianGargoyle",
+      13
+     ],
+     [
+      "core:skeleton",
+      24
+     ],
+     [
+      "core:naga",
+      6
+     ],
+     [
+      "core:mage",
+      12
+     ],
+     [
+      "core:ironGolem",
+      18
+     ],
+     [
+      "core:masterGremlin",
+      13
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:beholder",
+     49
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA3-41200-red-d21-63__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:adelaide",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:pegasus",
+      7
+     ],
+     [
+      "core:gog",
+      7
+     ],
+     [
+      "core:battleDwarf",
+      24
+     ],
+     [
+      "core:dendroidSoldier",
+      8
+     ],
+     [
+      "core:woodElf",
+      19
+     ],
+     [
+      "core:unicorn",
+      2
+     ],
+     [
+      "core:centaur",
+      95
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:medusaQueen",
+     25
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA3-41208-blue-d28-64__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gerwulf",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:fireDragonFly",
+      27
+     ],
+     [
+      "core:gnollMarauder",
+      52
+     ],
+     [
+      "core:lizardWarrior",
+      34
+     ],
+     [
+      "core:wyvern",
+      10
+     ],
+     [
+      "core:mightyGorgon",
+      5
+     ],
+     [
+      "core:gorgon",
+      9
+     ],
+     [
+      "core:greaterBasilisk",
+      16
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:cyclop",
+     40
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41201-red-d21-65__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:halon",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:stoneGargoyle",
+      16
+     ],
+     [
+      "core:genie",
+      1
+     ],
+     [
+      "core:nagaQueen",
+      1
+     ],
+     [
+      "core:naga",
+      10
+     ],
+     [
+      "core:mage",
+      2
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:hydra",
+     3
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41204-red-d07-66__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:jenova",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      28
+     ],
+     [
+      "core:dwarf",
+      5
+     ],
+     [
+      "core:woodElf",
+      7
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:pixie",
+     47
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-DGA-41203-red-d30-67__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "mid",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:tazar",
+    "primary": [
+     4,
+     3,
+     2,
+     2
+    ],
+    "army": [
+     [
+      "core:lizardWarrior",
+      27
+     ],
+     [
+      "core:lizardman",
+      45
+     ],
+     [
+      "core:greaterBasilisk",
+      10
+     ],
+     [
+      "core:hydra",
+      3
+     ],
+     [
+      "core:fireDragonFly",
+      14
+     ],
+     [
+      "core:wyvern",
+      7
+     ],
+     [
+      "core:serpentFly",
+      18
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:ogre",
+     45
+    ]
+   }
+  ]
+ },
+ {
+  "name": "game-FA4-41206-red-d10-68__g0",
+  "terrain": "grass",
+  "kind": "guard",
+  "stage": "early",
+  "magic": false,
+  "sides": [
+   {
+    "hero": "core:gem",
+    "primary": [
+     1,
+     1,
+     1,
+     1
+    ],
+    "army": [
+     [
+      "core:centaur",
+      39
+     ],
+     [
+      "core:woodElf",
+      5
+     ],
+     [
+      "core:dwarf",
+      2
+     ],
+     [
+      "core:goblinWolfRider",
+      13
+     ]
+    ],
+    "spellBook": false,
+    "spells": []
+   },
+   {
+    "guard": [
+     "core:infernalTroglodyte",
+     60
+    ]
+   }
+  ]
+ }
+]
