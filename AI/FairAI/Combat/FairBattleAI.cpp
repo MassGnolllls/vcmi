@@ -819,7 +819,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	planVsPlayers = params.planVsPlayers != 0;
 	modelSearch = params.modelSearch != 0;
 	kitePlan = params.kitePlan;
-	latePlan = params.latePlan != 0;
+	latePlan = params.latePlan;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -1709,8 +1709,16 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		ownPlans.push_back(Stance::AMBUSH);
 	if(config.ambush >= 2 || guardPlan)
 		ownPlans.push_back(Stance::GUARD);
-	// (latePlan) "wait, then advance": nothing in reach - wait, and walk when the others have moved
-	if(latePlan)
+	// (latePlan) "wait, then advance": nothing in reach - wait, and walk when the others have moved.
+	// Level 1: only while the enemy has troops that shoot - there walking at once takes our walkers
+	// into the range where a shot counts in full (the plan gained there and nowhere else)
+	bool lateNow = latePlan >= 2;
+	if(latePlan == 1)
+	{
+		for(const auto & u : base.units)
+			lateNow = lateNow || (u.alive() && u.side != base.units[me].side && u.shooter && u.shots > 0);
+	}
+	if(lateNow)
 		ownPlans.push_back(Stance::STALK);
 	// (the environment variables of the test bench win over the player's parameters)
 	const int oracleRounds = config.oracleRounds > 0 ? config.oracleRounds : guardOracle;
@@ -2014,14 +2022,14 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 					{
 						if(showCandidates)
 							logAi->info("FairAI candidates for %s (plans hold, advance%s%s%s; guards by model):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "",
-								ownPlans.size() > 3 ? ", close ranks" : "", latePlan ? ", wait then advance" : "", shown);
+								ownPlans.size() > 3 ? ", close ranks" : "", lateNow ? ", wait then advance" : "", shown);
 						return {*real, kiteValue, what + " [out of reach]"};
 					}
 				}
 			}
 		}
 		if(showCandidates)
-			logAi->info("FairAI candidates for %s (plans hold, advance%s%s%s; guards by %s):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "", ownPlans.size() > 3 ? ", close ranks" : "", latePlan ? ", wait then advance" : "",
+			logAi->info("FairAI candidates for %s (plans hold, advance%s%s%s; guards by %s):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "", ownPlans.size() > 3 ? ", close ranks" : "", lateNow ? ", wait then advance" : "",
 				modelGuards ? "model" : "stance", shown);
 		return {best->real, best->score, best->description};
 	}
