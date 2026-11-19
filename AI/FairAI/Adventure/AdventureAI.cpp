@@ -320,6 +320,8 @@ void Params::loadOverrides(int playerIndex)
 	read("forecastCalib", forecastCalib);
 	read("forecastCalibWeight", forecastCalibWeight);
 	read("forecastCalibMemory", forecastCalibMemory);
+	read("shooterDwellings", shooterDwellings);
+	read("shooterDwellingDays", shooterDwellingDays);
 	read("forecastSafeShare", forecastSafeShare);
 	read("guardKillValue", guardKillValue);
 	read("couriers", couriers);
@@ -9115,7 +9117,11 @@ double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) co
 				const CCreature * base = creatureAt(level, upgrade - 1);
 				perUnit = base ? perUnit - base->getAIValue() : perUnit;
 			}
-			value += creature->getGrowth() * fortBonus * perUnit * params.goldPerArmyValue * params.dwellingHorizonWeeks * armyWeight;
+			double dwelling = creature->getGrowth() * fortBonus * perUnit * params.goldPerArmyValue * params.dwellingHorizonWeeks * armyWeight;
+			// (shooterDwellings, a trial) shooters first: they are what makes fights against guards cheap
+			if(params.shooterDwellings > 0 && today <= params.shooterDwellingDays && creature->hasBonusOfType(BonusType::SHOOTER))
+				dwelling *= params.shooterDwellings;
+			value += dwelling;
 		}
 	}
 	else if(id == BuildingID::FORT || id == BuildingID::CITADEL || id == BuildingID::CASTLE)
