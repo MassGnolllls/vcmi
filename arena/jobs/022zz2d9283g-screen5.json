@@ -1,0 +1,25 @@
+{
+ "script": "matrix.py",
+ "jobs": 9,
+ "note": "Fifth screening, whole games to their end (day limit 300) against Nullkiller2 - for the first time on fresh maps: six maps each of the templates Blockbuster M and Long Run M of pool fresh1, both seats, 24 games per configuration, 384 in all. On these two templates the standard of 18.11. won 6 and 8 of 24 games (16 of 24 on Skirmish M, the template of the twelve maps every screening so far was played on). Base: the defaults of 20.11. (measured worth of magic, combat package against guards, saving for the capitol, tower guard, own heroes give way, the last town is not left). What is asked: F - does judging guard fights by the simulated battle, level 2 (calibrated on the fights of the game, over the range of the guards' number), keep what level 1 showed in screening 4 (+0.07 +- 0.08, 29 instead of 42 games lost) without its fewer fights? R - the second army a third time (+0.03 +- 0.07, +0.02 +- 0.07). S - threatSpend 2, spending for a threatened town only where it can decide something (level 1 cost games: -0.10 +- 0.07). D - tour, a way judged with its next stop (probe games: more guard fights and mines by day 21). K - the two further battle plans against guards, shoot and stay out of reach and wait then advance, in whole games. B - breakout 3 once more (+0.08 +- 0.11 on the ladder of fresh maps). N - the rule of the last town OFF (lastStand 0): what the default of 20.11. brings or costs. H - fetching troops by share with the way home counted twice. Design: eight switches or groups of switches on the base {}, 2^(8-4) resolution IV, shared pool; F = fightForecast 2 + forecastPlans 1; R = secondArmy 1 + secondArmyEdge 0.6; S = threatSpend 2; D = tour 1; K = kitePlan 1 + latePlan 1; B = breakout 3; N = lastStand 0; H = fetchByShare 1 + fetchRoundTrip 1. Evaluate with arena/dev_effects.py (and arena/effects.py for the army share at the day limit): --factors '{\"F\": {\"fightForecast\": 2, \"forecastPlans\": 1}, \"R\": {\"secondArmy\": 1, \"secondArmyEdge\": 0.6}, \"S\": {\"threatSpend\": 2}, \"D\": {\"tour\": 1}, \"K\": {\"kitePlan\": 1, \"latePlan\": 1}, \"B\": {\"breakout\": 3}, \"N\": {\"lastStand\": 0}, \"H\": {\"fetchByShare\": 1, \"fetchRoundTrip\": 1}}' (configurations named by the letters that are on; 'base' = the base alone).",
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_fresh300.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "66",
+  "--only",
+  "m-blockbuster,m-longrun",
+  "--configs",
+  "{\"base\": {}, \"nDKBH\": {\"tour\": 1, \"kitePlan\": 1, \"latePlan\": 1, \"breakout\": 3, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nSKBN\": {\"threatSpend\": 2, \"kitePlan\": 1, \"latePlan\": 1, \"breakout\": 3, \"lastStand\": 0}, \"nSDNH\": {\"threatSpend\": 2, \"tour\": 1, \"lastStand\": 0, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nRKNH\": {\"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"kitePlan\": 1, \"latePlan\": 1, \"lastStand\": 0, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nRDBN\": {\"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"tour\": 1, \"breakout\": 3, \"lastStand\": 0}, \"nRSBH\": {\"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"threatSpend\": 2, \"breakout\": 3, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nRSDK\": {\"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"threatSpend\": 2, \"tour\": 1, \"kitePlan\": 1, \"latePlan\": 1}, \"nFBNH\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"breakout\": 3, \"lastStand\": 0, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nFDKN\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"tour\": 1, \"kitePlan\": 1, \"latePlan\": 1, \"lastStand\": 0}, \"nFSKH\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"threatSpend\": 2, \"kitePlan\": 1, \"latePlan\": 1, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nFSDB\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"threatSpend\": 2, \"tour\": 1, \"breakout\": 3}, \"nFRKB\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"kitePlan\": 1, \"latePlan\": 1, \"breakout\": 3}, \"nFRDH\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"tour\": 1, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}, \"nFRSN\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"threatSpend\": 2, \"lastStand\": 0}, \"nFRSDKBNH\": {\"fightForecast\": 2, \"forecastPlans\": 1, \"secondArmy\": 1, \"secondArmyEdge\": 0.6, \"threatSpend\": 2, \"tour\": 1, \"kitePlan\": 1, \"latePlan\": 1, \"breakout\": 3, \"lastStand\": 0, \"fetchByShare\": 1, \"fetchRoundTrip\": 1}}",
+  "--shared-pool",
+  "--max-maps",
+  "6"
+ ]
+}
