@@ -1,0 +1,20 @@
+== m-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/29e37b0b87/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 62 --out /home/alex/fairai/runs/022zz2d9283c-screen3/m-land-2p --variants {"base": {"magicWorth": 2}, "nWURP": {"magicWorth": 2, "fightForecast": 1, "muster": 1, "supplyDays": 8, "secondArmy": 1, "secondArmyEdge": 0.6, "passOwn": 1}, "nLURI": {"magicWorth": 2, "battlePlan": 3, "muster": 1, "supplyDays": 8, "secondArmy": 1, "secondArmyEdge": 0.6, "idleBuild": 1, "spareStock": 1, "magicFocus": 2}, "nLWIP": {"magicWorth": 2, "battlePlan": 3, "fightForecast": 1, "idleBuild": 1, "spareStock": 1, "magicFocus": 2, "passOwn": 1}, "nDUIP": {"magicWorth": 2, "towerGuard": 1, "threatSpend": 1, "muster": 1, "supplyDays": 8, "idleBuild": 1, "spareStock": 1, "magicFocus": 2, "passOwn": 1}, "nDWRI": {"magicWorth": 2, "towerGuard": 1, "threatSpend": 1, "fightForecast": 1, "secondArmy": 1, "secondArmyEdge": 0.6, "idleBuild": 1, "spareStock": 1, "magicFocus": 2}, "nDLRP": {"magicWorth": 2, "towerGuard": 1, "threatSpend": 1, "battlePlan": 3, "secondArmy": 1, "secondArmyEdge": 0.6, "passOwn": 1}, "nDLWU": {"magicWorth": 2, "towerGuard": 1, "threatSpend": 1, "battlePlan": 3, "fightForecast": 1, "muster": 1, "supplyDays": 8}, "nCRIP": {"magicWorth": 2, "saveFor": 1, "secondArmy": 1, "secondArmyEdge": 0.6, "idleBuild": 1, "spareStock": 1, "magicFocus": 2, "passOwn": 1}, "nCWUI": {"magicWorth": 2, "saveFor": 1, "fightForecast": 1, "muster": 1, "supplyDays": 8, "idleBuild": 1, "spareStock": 1, "magicFocus": 2}, "nCLUP": {"magicWorth": 2, "saveFor": 1, "battlePlan": 3, "muster": 1, "supplyDays": 8, "passOwn": 1}, "nCLWR": {"magicWorth": 2, "saveFor": 1, "battlePlan": 3, "fightForecast": 1, "secondArmy": 1, "secondArmyEdge": 0.6}, "nCDUR": {"magicWorth": 2, "saveFor": 1, "towerGuard": 1, "threatSpend": 1, "muster": 1, "supplyDays": 8, "secondArmy": 1, "secondArmyEdge": 0.6}, "nCDWP": {"magicWorth": 2, "saveFor": 1, "towerGuard": 1, "threatSpend": 1, "fightForecast": 1, "passOwn": 1}, "nCDLI": {"magicWorth": 2, "saveFor": 1, "towerGuard": 1, "threatSpend": 1, "battlePlan": 3, "idleBuild": 1, "spareStock": 1, "magicFocus": 2}, "nCDLWURIP": {"magicWorth": 2, "saveFor": 1, "towerGuard": 1, "threatSpend": 1, "battlePlan": 3, "fightForecast": 1, "muster": 1, "supplyDays": 8, "secondArmy": 1, "secondArmyEdge": 0.6, "idleBuild": 1, "spareStock": 1, "magicFocus": 2, "passOwn": 1}} --pool long1-m-land-2p --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7000
+playing 384 matches (16 variants x 24 on 12 maps) with 9 parallel job(s)
+nCRIP: match    0 FairAI as red of 2: victory winner=red day=77 score=1.00 [142.8s]
+nWURP: match    0 FairAI as red of 2: victory winner=red day=99 score=1.00 [171.6s]
+nDUIP: match    0 FairAI as red of 2: victory winner=red day=108 score=1.00 [178.2s]
+nDLRP: match    0 FairAI as red of 2: victory winner=red day=93 score=1.00 [183.5s]
+nLURI: match    0 FairAI as red of 2: victory winner=red day=115 score=1.00 [213.9s]
+base: match    0 FairAI as red of 2: victory winner=red day=125 score=1.00 [231.3s]
+nDLWU: match    0 FairAI as red of 2: victory winner=red day=133 score=1.00 [232.4s]
+nDWRI: match    0 FairAI as red of 2: victory winner=red day=124 score=1.00 [256.3s]
+nCLUP: match    0 FairAI as red of 2: victory winner=red day=110 score=1.00 [203.8s]
+nCLWR: match    0 FairAI as red of 2: victory winner=red day=87 score=1.00 [201.1s]
+nCDUR: match    0 FairAI as red of 2: victory winner=red day=108 score=1.00 [206.8s]
+nLWIP: match    0 FairAI as red of 2: victory winner=red day=208 score=1.00 [416.0s]
+nCDLI: match    0 FairAI as red of 2: victory winner=red day=114 score=1.00 [199.6s]
+nCDLWURIP: match    0 FairAI as red of 2: victory winner=red day=96 score=1.00 [208.7s]
+nCDWP: match    0 FairAI as red of 2: victory winner=red day=173 score=1.00 [331.9s]
+base: match    1 FairAI as blue of 2: victory winner=red day=169 score=0.00 [334.2s]
+nCWUI: match    0 FairAI as red of 2: victory winner=red day=238 score=1.00 [460.7s]
