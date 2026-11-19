@@ -357,6 +357,7 @@ public:
 	/// number of turns that AI plays an exchange of blows ahead (it uses 10 from the fourth difficulty
 	/// on, 2 below). 0 = off: the stance decides.
 	std::array<uint8_t, 2> guardModel = {0, 0};
+	int guardModelLastRound = std::numeric_limits<int>::max(); ///< ... up to this round
 
 private:
 	void place(int unit, BattleHex at);
@@ -393,10 +394,10 @@ struct Forecast
 	double ownBefore = 0;
 	double enemyBefore = 0;
 	int plans = 2;
-	std::array<double, 4> ownAfter = {0, 0, 0, 0};
-	std::array<double, 4> enemyAfter = {0, 0, 0, 0};
-	std::array<int, 4> rounds = {0, 0, 0, 0};
-	std::array<int, 4> manaSpent = {0, 0, 0, 0}; ///< spell points our hero uses in the plan
+	std::array<double, 8> ownAfter{};
+	std::array<double, 8> enemyAfter{};
+	std::array<int, 8> rounds{};
+	std::array<int, 8> manaSpent{}; ///< spell points our hero uses in the plan
 
 	/// The plan we would pick. manaPrice: what a spell point is worth, in the value of our army - a
 	/// plan with spells must save more army than its spell points are worth.
@@ -406,8 +407,16 @@ struct Forecast
 	double lossShare(int plan) const;
 };
 
+/// How a forecast plays: as the combat AI plays the battle afterwards
+struct ForecastOptions
+{
+	int ownStances = 2;   ///< plans for our side: 2 = hold, advance; 3 = and lie in wait; 4 = and close ranks (the plans of the combat AI's battle plan). With spells every plan is played twice, the second time with the hero casting.
+	int guardTurns = 0;   ///< > 0: the enemy is played by GuardModel - the copy of VCMI's BattleAI, which plays map guards -, looking this many turns of an exchange ahead (as that AI: 10 on the highest difficulty, 2 below)
+	int guardRounds = 6;  ///< ... for this many rounds, by its stance afterwards (the opening decides; the model costs time)
+};
+
 Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30, Stance enemyStance = Stance::CHARGE,
-	const HeroSpec * ownHero = nullptr, const HeroSpec * enemyHero = nullptr);
+	const HeroSpec * ownHero = nullptr, const HeroSpec * enemyHero = nullptr, const ForecastOptions & options = {});
 
 /// Attacks that reach several hexes (breath, further heads, bursting shots) in the simulator: on or off.
 /// One switch for the whole process (parameter simMultiHex; off until the unit lab and a benchmark confirm it).

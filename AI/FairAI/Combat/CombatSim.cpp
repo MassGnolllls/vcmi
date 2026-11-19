@@ -1651,7 +1651,7 @@ void SimState::playDefault(int unit)
 {
 	const auto & u = units[unit];
 
-	if(guardModel[static_cast<int>(u.side)] > 0)
+	if(guardModel[static_cast<int>(u.side)] > 0 && round <= guardModelLastRound)
 	{
 		SimAction chosen;
 		if(guardAction(*this, unit, guardModel[static_cast<int>(u.side)], chosen))
@@ -2075,7 +2075,7 @@ double Forecast::lossShare(int plan) const
 }
 
 Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds, Stance enemyStance,
-	const HeroSpec * ownHero, const HeroSpec * enemyHero)
+	const HeroSpec * ownHero, const HeroSpec * enemyHero, const ForecastOptions & options)
 {
 	DamageTable table;
 	table.build(stacks);
@@ -2102,13 +2102,21 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 	Forecast result;
 	result.ownBefore = base.sideValue(ownSide);
 	result.enemyBefore = base.sideValue(other);
-	result.plans = ownSpells.empty() ? 2 : 4;
+	static const std::array<Stance, 4> ownPlans = {Stance::HOLD, Stance::CHARGE, Stance::AMBUSH, Stance::GUARD};
+	const int stances = std::clamp(options.ownStances, 2, 4);
+	result.plans = ownSpells.empty() ? stances : 2 * stances;
 	for(int plan = 0; plan < result.plans; ++plan)
 	{
 		SimState sim = base;
-		sim.stance[ownIndex] = plan % 2 == 0 ? Stance::HOLD : Stance::CHARGE;
+		sim.stance[ownIndex] = ownPlans[plan % stances];
 		sim.stance[1 - ownIndex] = enemyStance;
-		sim.heroes[ownIndex].casts = plan >= 2;
+		if(options.guardTurns > 0 && !enemyHero)
+		{
+			sim.guardModel[1 - ownIndex] = static_cast<uint8_t>(std::min(options.guardTurns, 10));
+			sim.guardModelLastRound = options.guardRounds - 1;
+			sim.stance[1 - ownIndex] = Stance::STALK; // (once the model has had its rounds)
+		}
+		sim.heroes[ownIndex].casts = plan >= stances;
 		sim.playout(maxRounds);
 		result.ownAfter[plan] = sim.sideValue(ownSide);
 		result.enemyAfter[plan] = sim.sideValue(other);

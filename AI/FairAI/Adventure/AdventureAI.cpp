@@ -20,6 +20,7 @@
 #include "../../../lib/bonuses/BonusCustomTypes.h"
 #include <vcmi/Faction.h>
 #include "../../../lib/CConfigHandler.h"
+#include "../../../lib/StartInfo.h"
 #include "../../../lib/GameLibrary.h"
 #include "../../../lib/IGameSettings.h"
 #include "../../../lib/callback/CCallback.h"
@@ -307,6 +308,7 @@ void Params::loadOverrides(int playerIndex)
 	read("guardModel", guardModel);
 	read("ownCasters", ownCasters);
 	read("wholeCreatures", wholeCreatures);
+	read("forecastPlans", forecastPlans);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
 	read("maxLossShareIdle", maxLossShareIdle);
@@ -2225,7 +2227,7 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 	{
 		const JsonNode & layout = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS)["default"];
 		Combat::HeroSpec spec;
-		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, spec));
+		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, spec), nullptr, guardForecastOptions());
 		const double pointShare = manaPointShare(hero);
 		const int plan = forecast.bestPlan(pointShare * forecast.ownBefore);
 		result.win = forecast.win(plan);
@@ -2240,6 +2242,18 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 	}
 	forecastCache[key] = result;
 	return result;
+}
+
+Combat::ForecastOptions AdventureAI::guardForecastOptions() const
+{
+	Combat::ForecastOptions options;
+	if(!params.forecastPlans)
+		return options;
+	options.ownStances = 4;
+	// guards are played by the game's neutral battle AI - VCMI's BattleAI unless the game is set up otherwise
+	if(settings["ai"]["combatNeutralAI"].String() == "BattleAI")
+		options.guardTurns = cb->getStartInfo()->difficulty < 4 ? 2 : 10;
+	return options;
 }
 
 double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster, bool simulate) const
@@ -3352,7 +3366,7 @@ AdventureAI::FightForecast AdventureAI::forecastGuards(const CGHeroInstance * he
 		const JsonNode & layouts = cb->getSettings().getValue(EGameSettings::COMBAT_LAYOUTS);
 		const JsonNode & layout = layouts[layoutName].isNull() ? layouts["default"] : layouts[layoutName];
 		Combat::HeroSpec spec;
-		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, spec));
+		const Combat::Forecast forecast = Combat::forecastBattle(stacks, BattleSide::ATTACKER, layout, 30, Combat::Stance::CHARGE, ownSpells(hero, spec), nullptr, guardForecastOptions());
 		const double pointShare = manaPointShare(hero);
 		const int plan = forecast.bestPlan(pointShare * forecast.ownBefore);
 		result.win = forecast.win(plan);

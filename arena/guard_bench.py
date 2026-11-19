@@ -144,6 +144,10 @@ def cmd_play(args) -> int:
                 at = line.find("FairAI forecast|")
                 if at >= 0:  # the simulator's forecast of this battle (see FairBattleAI::logForecast)
                     rec["forecast"] = [float(x) for x in line[at:].strip().split("|")[1:]]
+                at = line.find("FairAI planforecast|")
+                if at >= 0:  # the forecast from the armies alone with the combat AI's four plans and the model of the guards
+                    rec["planforecast"] = [float(x) for x in line[at:].strip().split("|")[1:]]
+                if "forecast" in rec and "planforecast" in rec:
                     break
         if not args.keep_logs and not rec.get("error"):
             shutil.rmtree(out / f"logs_{index:04d}", ignore_errors=True)
@@ -191,14 +195,16 @@ def forecast_report(folder: Path):
         from_map = min(loss(f[10], f[11], f[8]), loss(f[12], f[13], f[8])) if len(f) >= 14 else None
         # ... and with the hero's damage spells played (parameter spellForecast): the better of all four plans
         with_spells = min(from_map, loss(f[14], f[15], f[8]), loss(f[17], f[18], f[8])) if len(f) >= 20 else None
-        rows.append((actual, min(plans), plans[0], plans[1], from_map, with_spells))
+        p = rec.get("planforecast")
+        planned = loss(p[2], p[3], p[0]) if p and len(p) >= 4 else None
+        rows.append((actual, min(plans), plans[0], plans[1], from_map, with_spells, planned, p[5] if p and len(p) >= 6 else None))
     if len(rows) < 5:
         return []
     n = len(rows)
     lines = ["", "## Forecast of the simulator (before the first move) against the real result", "",
              "| forecast | battles | mean forecast loss | mean real loss | mean error | mean absolute error |", "|---|---|---|---|---|---|"]
     for label, pick in (("better of both plans", 1), ("hold", 2), ("advance", 3), ("from the armies alone (as on the map)", 4),
-                        ("from the armies and the hero's damage spells", 5)):
+                        ("from the armies and the hero's damage spells", 5), ("from the armies alone, four plans, guards by the model", 6)):
         chosen = [r for r in rows if r[pick] is not None]
         if not chosen:
             continue
@@ -214,7 +220,11 @@ def forecast_report(folder: Path):
     if var_p > 0 and var_r > 0:
         lines.append("")
         lines.append(f"Correlation of forecast and real loss: {cov / (var_p * var_r) ** 0.5:.2f}.")
-    for title, pick in (("forecast loss", 1), ("forecast loss from the armies alone", 4), ("forecast loss from the armies and the hero's damage spells", 5)):
+    times = sorted(r[7] for r in rows if r[7] is not None)
+    if times:
+        lines.append(f"Forecast with four plans and the model of the guards: {mean(times):.1f} ms each (median {times[len(times) // 2]:.1f}, largest {times[-1]:.1f}).")
+    for title, pick in (("forecast loss", 1), ("forecast loss from the armies alone", 4), ("forecast loss from the armies and the hero's damage spells", 5),
+                        ("forecast loss from the armies alone, four plans, guards by the model", 6)):
         chosen = [r for r in rows if r[pick] is not None]
         if not chosen:
             continue

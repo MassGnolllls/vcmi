@@ -62,6 +62,7 @@ namespace FAI
 namespace Combat
 {
 struct HeroSpec;
+struct ForecastOptions;
 }
 
 class Perception;
@@ -502,6 +503,8 @@ private:
 	FightForecast forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const;
 	/// expected loss (gold) of attacking this stack of wandering monsters; -1: leave it alone
 	double monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster, bool simulate = false) const;
+	/// How a fight against guards is forecast (parameter forecastPlans): as the combat AI will play it
+	Combat::ForecastOptions guardForecastOptions() const;
 	/// same for whatever guards a tile
 	double guardLoss(const CGHeroInstance * hero, const int3 & tile) const;
 	mutable std::map<std::tuple<int, uint64_t, int, int>, FightForecast> forecastCache;

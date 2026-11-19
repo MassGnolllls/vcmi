@@ -1379,6 +1379,19 @@ void FairBattleAI::logForecast(const BattleID & battleID)
 		text += boost::str(boost::format("|%.0f|%.0f|%.0f|%.0f|%.0f|%.0f") % map.ownBefore % map.enemyBefore % map.ownAfter[0] % map.enemyAfter[0] % map.ownAfter[1] % map.enemyAfter[1]);
 		if(map.plans > 2)
 			text += boost::str(boost::format("|%.0f|%.0f|%d|%.0f|%.0f|%d") % map.ownAfter[2] % map.enemyAfter[2] % map.manaSpent[2] % map.ownAfter[3] % map.enemyAfter[3] % map.manaSpent[3]);
+		if(battle->sideToPlayer(other) == PlayerColor::NEUTRAL && !battle->battleGetDefendedTown())
+		{
+			// ... and played the way the combat AI plays guards: four plans for our side, the guards by
+			// the model of VCMI's BattleAI. Logged on a line of its own, with the time it took.
+			ForecastOptions options;
+			options.ownStances = 4;
+			options.guardTurns = env->game()->getStartInfo()->difficulty < 4 ? 2 : 10;
+			const auto started = std::chrono::steady_clock::now();
+			const Forecast planned = forecastBattle(stacks, side, layout, 30, Stance::STALK, nullptr, nullptr, options);
+			const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
+			const int plan = planned.bestPlan();
+			logAi->info("FairAI planforecast|%.0f|%.0f|%.0f|%.0f|%d|%.2f", planned.ownBefore, planned.enemyBefore, planned.ownAfter[plan], planned.enemyAfter[plan], plan, ms);
+		}
 	}
 	catch(const std::exception & e)
 	{
@@ -1578,7 +1591,7 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 	// (the environment variables of the test bench win over the player's parameters)
 	const int oracleRounds = config.oracleRounds > 0 ? config.oracleRounds : guardOracle;
 	const int oracleUntil = config.oracleRounds > 0 ? config.oracleUntilRound : guardOracleUntil;
-	if(oracleRounds > 0 && roundsAhead < 0 && !battle->battleGetFightingHero(otherSide) && battle->battleGetRound() <= oracleUntil)
+	if(oracleRounds > 0 && roundsAhead < 0 && battle->sideToPlayer(otherSide) == PlayerColor::NEUTRAL && battle->battleGetRound() <= oracleUntil)
 	{
 		// Against guards we know the enemy's mind: VCMI's BattleAI plays them, and the oracle runs that
 		// very code on a mirror of each state. Every candidate is played on with our troops once
@@ -1647,7 +1660,8 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		const int planEnd = base.round + std::max(1, config.planRounds);
 		// Guards are played by VCMI's BattleAI (unless the game is set up otherwise), and GuardModel
 		// knows what that AI does: no guessing between "they advance" and "they lie in wait"
-		const bool modelGuards = (config.guardModel >= 0 ? config.guardModel : guardModel) > 0 && !battle->battleGetFightingHero(otherSide)
+		// (neutral troops; an enemy player's troops are played by whatever plays that player)
+		const bool modelGuards = (config.guardModel >= 0 ? config.guardModel : guardModel) > 0 && battle->sideToPlayer(otherSide) == PlayerColor::NEUTRAL
 			&& !battle->battleGetDefendedTown() && settings["ai"]["combatNeutralAI"].String() == "BattleAI";
 		const auto guardTurns = static_cast<uint8_t>(env->game()->getStartInfo()->difficulty < 4 ? 2 : 10); // as BattleAI sets itself up
 		if(modelGuards)
