@@ -353,6 +353,7 @@ void Params::loadOverrides(int playerIndex)
 	read("saveMinScore", saveMinScore);
 	read("towerGuard", towerGuard);
 	read("threatSpend", threatSpend);
+	read("threatSpendHold", threatSpendHold);
 	read("idleGold", idleGold);
 	read("idleRho", idleRho);
 	read("idleReserve", idleReserve);
@@ -396,6 +397,7 @@ void Params::loadOverrides(int playerIndex)
 	read("magicFocus", magicFocus);
 	read("heroChoice", heroChoice);
 	read("fortress", fortress);
+	read("lastStand", lastStand);
 	read("fortressRatio", fortressRatio);
 	read("fortressDays", fortressDays);
 	read("fortressRadius", fortressRadius);
@@ -790,6 +792,10 @@ void AdventureAI::playTurn()
 {
 	const auto turnStart = std::chrono::steady_clock::now();
 	today = cb->getDate(Date::DAY);
+	townsPeak = std::max(townsPeak, static_cast<int>(perception.ownTowns().size())); // (lastStand: have we held more towns than now?)
+	// (test) FAI_TEST_LASTSTAND: the one town we hold counts as the last of several from the first day
+	if(static const bool staged = std::getenv("FAI_TEST_LASTSTAND") != nullptr; staged)
+		townsPeak = std::max(townsPeak, 2);
 	failedToday.clear();
 	wedgedToday.clear();
 	fledToday.clear();
@@ -4464,7 +4470,14 @@ double AdventureAI::outmatchedBy(const CGHeroInstance * hero) const
 	// it comes unseen (out of unexplored land, through a portal). What we can know: an army stronger
 	// than ours has shown itself on our side of the map in the last days, or has beaten one of ours
 	// there. Until it is seen no more, or we have outgrown it, the main hero sleeps behind walls.
-	if(!params.fortress || !hero)
+	// (lastStand) With one town left the same holds wherever that army was seen: it will come for the
+	// town, and without a town the game is over in seven days. The last town is not left to it.
+	// "Last" town: we have held more (level 1), or four weeks have passed (level 2) - not the one town
+	// everybody starts with, where every stronger hero that walks by would keep ours at home.
+	// (test) FAI_TEST_LASTSTAND=2: whatever we hold counts as our last town
+	static const bool stagedLast = std::getenv("FAI_TEST_LASTSTAND") != nullptr && std::string(std::getenv("FAI_TEST_LASTSTAND")) == "2";
+	const bool lastTown = params.lastStand && ((perception.ownTowns().size() == 1 && (townsPeak >= 2 || (params.lastStand >= 2 && today > 28))) || (stagedLast && !perception.ownTowns().empty()));
+	if((!params.fortress && !lastTown) || !hero)
 		return 0;
 	const double own = fieldStrength(hero);
 	const int3 here = hero->visitablePos();
@@ -4472,12 +4485,12 @@ double AdventureAI::outmatchedBy(const CGHeroInstance * hero) const
 	for(const auto & [type, seen] : enemySightings)
 	{
 		const int age = today - seen.day;
-		if(age > params.fortressDays || seen.pos.x < 0)
+		if(age > params.fortressDays || (seen.pos.x < 0 && !lastTown))
 			continue;
 		const double strength = seen.strength * (1.0 + 0.03 * age);
 		if(strength <= params.fortressRatio * own || strength <= worst)
 			continue;
-		bool near = seen.pos.dist2d(here) <= params.fortressRadius;
+		bool near = lastTown || seen.pos.dist2d(here) <= params.fortressRadius;
 		for(const auto * town : perception.ownTowns())
 			near = near || town->visitablePos().dist2d(seen.pos) <= params.fortressRadius;
 		if(near)
@@ -6555,8 +6568,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		else
 			fortressOutside = !perception.ownTowns().empty();
 		if(fortressLog != today)
-			logAi->debug("FairAI %s day %d: %s is outmatched (own %.0f, an enemy army of %.0f seen near us lately): %s", me.toString(), today,
-				hero->getNameTranslated(), fieldStrength(hero), outmatched, fortressOutside ? "heading for a town of ours" : "day trips from the town only");
+			logAi->debug("FairAI %s day %d: %s is outmatched (own %.0f, an enemy army of %.0f seen %s): %s", me.toString(), today,
+				hero->getNameTranslated(), fieldStrength(hero), outmatched, params.lastStand && !params.fortress ? "lately, and we are down to our last town" : "near us lately",
+				fortressOutside ? "heading for a town of ours" : "day trips from the town only");
 		fortressLog = today;
 	}
 	// (safeParts) A real army in the hands of a hero that is not our main hero does not spend the
@@ -9280,6 +9294,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 	const CTown * info = town->getTown();
 	// (saveFor, threatSpend) a hero that beats what the town holds was seen near it: troops come first
 	const bool danger = (params.saveFor || params.threatSpend) && townInDanger(town);
+	const int threatPlanToday = danger ? threatPlan(town) : 0; // (threatSpend 2: only where spending for troops can make the town hold)
 	// (saveFor) what this town saved is its own to spend today (confirmed again below if the building
 	// still cannot be paid); a town in danger needs the gold of any saver
 	if(params.saveFor && today - savingsDay <= 1 && (savingsTown == town->id || danger))
@@ -9494,7 +9509,7 @@ void AdventureAI::buildInTown(const CGTownInstance * town)
 			return;
 		}
 		const ResourceSet & price = info->buildings.at(option.build)->resources;
-		if(params.threatSpend && danger)
+		if(params.threatSpend && danger && threatPlanToday > 0)
 		{
 			// (threatSpend) the enemy is coming: only walls, and what leaves the troops waiting here paid for
 			const bool walls = option.build == BuildingID::FORT || option.build == BuildingID::CITADEL || option.build == BuildingID::CASTLE;
@@ -9668,7 +9683,7 @@ int64_t AdventureAI::sellForGold(int64_t goldWanted, const ResourceSet & keep, b
 	return gained;
 }
 
-bool AdventureAI::townInDanger(const CGTownInstance * town) const
+double AdventureAI::townThreat(const CGTownInstance * town, double * holdsOut) const
 {
 	// what the town holds today, behind its walls
 	double holds = 0;
@@ -9679,16 +9694,82 @@ bool AdventureAI::townInDanger(const CGTownInstance * town) const
 	if(const auto * visitor = town->getVisitingHero(); visitor && visitor->tempOwner == me)
 		holds += static_cast<double>(visitor->getArmyStrength());
 	holds *= defenceWalls(town);
+	if(holdsOut)
+		*holdsOut = holds;
+	double worst = 0;
 	for(const auto & [id, object] : perception.knownObjects())
 	{
 		if(object.type != Obj::HERO || !isEnemy(object.owner) || today - object.lastSeenDay > 3)
 			continue;
 		const double strength = observedDanger(object) * heroFactor(object);
 		// two days of march
-		if(strength > holds && enemyDistance(id, object.visitablePos, strength, town->visitablePos(), 40) <= 40)
-			return true;
+		if(strength > holds && strength > worst && enemyDistance(id, object.visitablePos, strength, town->visitablePos(), 40) <= 40)
+			worst = strength;
 	}
-	return false;
+	return worst;
+}
+
+bool AdventureAI::townInDanger(const CGTownInstance * town) const
+{
+	return townThreat(town) > 0;
+}
+
+int64_t AdventureAI::sellableGold(const ResourceSet & keep) const
+{
+	const IMarket * market = resourceMarket();
+	if(!market)
+		return 0;
+	int64_t possible = 0;
+	for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+	{
+		const int surplus = res == GameResID::GOLD ? 0 : static_cast<int>(spendable()[res]) - keep[res];
+		int give = 0;
+		int get = 0;
+		if(surplus > 0 && market->getOffer(res, GameResID::GOLD, give, get, EMarketMode::RESOURCE_RESOURCE) && give > 0 && get > 0)
+			possible += static_cast<int64_t>(surplus / give) * get;
+	}
+	return possible;
+}
+
+int AdventureAI::threatPlan(const CGTownInstance * town) const
+{
+	if(!params.threatSpend)
+		return 0;
+	double holds = 0;
+	const double threat = townThreat(town, &holds);
+	if(threat <= 0)
+		return 0;
+	if(params.threatSpend < 2)
+		return 2; // level 1: whenever a stronger hero is about - everything into the troops, resources sold for them
+	// (threatSpend 2) Only where it can decide something. The enemy attacks towns it clearly outweighs:
+	// a town that stands at threatSpendHold of what comes is mostly left alone by a computer player,
+	// and costs a human dearly. Three cases:
+	//  - the town stands there already: troops are bought from the gold at hand, nothing is sold
+	//  - what waits here for sale lifts it there: every gold piece into those troops, and resources
+	//    are sold if the gold at hand does not reach
+	//  - not even that is enough: nothing special. Gold and resources thrown into a garrison that
+	//    falls are lost twice (the troops die, and the town's buildings were not built); what is for
+	//    sale is still bought when the enemy stands before the town (defendTowns).
+	const double walls = defenceWalls(town);
+	const double bar = params.threatSpendHold * threat;
+	if(holds >= bar)
+		return 1;
+	ResourceSet keep;
+	for(const auto & entry : town->creatures)
+	{
+		if(entry.first == 0 || entry.second.empty())
+			continue;
+		const CCreature * type = entry.second.back().toCreature();
+		for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+			if(res != GameResID::GOLD)
+				keep[res] += static_cast<int>(entry.first) * type->getRecruitCost(res);
+	}
+	const int64_t gold = spendable()[GameResID::GOLD];
+	if(holds + static_cast<double>(recruitableValue(town, gold)) * walls >= bar)
+		return 1;
+	if(holds + static_cast<double>(recruitableValue(town, gold + sellableGold(keep))) * walls >= bar)
+		return 2;
+	return 0;
 }
 
 bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet & cost, bool forEarmark, const ResourceSet * keep)
@@ -9779,10 +9860,12 @@ void AdventureAI::manageTowns(bool endOfTurn)
 		buildInTown(town);
 		// troops in the garrison defend the town and wait for the main hero
 		int64_t reserve = economy.rho > 1.5 ? 0 : 1000;
-		if(params.threatSpend && townInDanger(town))
+		if(const int plan = threatPlan(town); plan > 0)
 		{
 			// (threatSpend) the enemy is coming: every gold piece into the troops that wait here, and
-			// wood, ore and the rest are sold for them (they are no use to a town that falls)
+			// wood, ore and the rest are sold for them (they are no use to a town that falls).
+			// (Level 2: only where that can make the town hold, and resources are sold only if the gold
+			// at hand does not reach - see threatPlan)
 			reserve = 0;
 			int64_t waiting = 0;
 			ResourceSet keep;
@@ -9797,7 +9880,7 @@ void AdventureAI::manageTowns(bool endOfTurn)
 						keep[res] += static_cast<int>(entry.first) * type->getRecruitCost(res);
 			}
 			const int64_t lack = waiting - static_cast<int64_t>(spendable()[GameResID::GOLD]);
-			if(lack > 0)
+			if(lack > 0 && plan >= 2)
 				sellForGold(lack, keep, false);
 		}
 		recruitInTown(town, town->getUpperArmy(), reserve);

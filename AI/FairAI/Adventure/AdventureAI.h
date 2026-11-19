@@ -163,6 +163,7 @@ public:
 	/// (fortress) the strength of an enemy army seen near us lately that outmatches this hero (0: none)
 	double outmatchedBy(const CGHeroInstance * hero) const;
 	int fortressLog = -1;
+	int townsPeak = 0; ///< (lastStand) the most towns we have held at the start of a turn (since the game was started or loaded)
 	void noteHeroSpell(HeroTypeID hero, SpellID spell, int affected);
 	/// (fightForecast 2) A fight of ours against wandering monsters begins: the battle shows how many really stand
 	/// there. The simulator's forecast for that number is kept and set against the real loss when the fight ends.
@@ -213,6 +214,14 @@ private:
 	int64_t sellForGold(int64_t goldWanted, const ResourceSet & keep, bool onlyIfEnough);
 	/// (threatSpend) An enemy hero that beats what the town holds was seen near it in the last days
 	bool townInDanger(const CGTownInstance * town) const;
+	/// The strongest enemy hero seen in the last three days within two days of march that beats what the
+	/// town holds behind its walls today (0: none). \p holds: what the town holds, walls counted
+	double townThreat(const CGTownInstance * town, double * holds = nullptr) const;
+	/// What our surplus resources would bring at the market (nothing is sold)
+	int64_t sellableGold(const ResourceSet & keep) const;
+	/// (threatSpend) A town in danger: 0 = nothing special, 1 = every gold piece into the troops waiting
+	/// there, 2 = and resources are sold for them
+	int threatPlan(const CGTownInstance * town) const;
 	/// A marketplace of ours that trades resources (nullptr: none)
 	const IMarket * resourceMarket() const;
 	int threatSpendLog = -100;                               ///< day the last "troops come first" line was logged
