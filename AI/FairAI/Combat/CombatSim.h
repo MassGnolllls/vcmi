@@ -56,6 +56,7 @@ struct SimUnit
 
 	int speed = 0;
 	int initiative = 0;
+	int initiativeNext = 0; ///< ... in the next round: differs when haste or slow runs out
 	int shots = 0;
 	int retaliationsLeft = 0;
 	int retaliationsPerRound = 1;
@@ -65,12 +66,16 @@ struct SimUnit
 	bool doubleWide = false;
 	bool canMove = true;
 	bool active = true; ///< false while blinded, paralysed or petrified: skips its turns until attacked
+	bool activeNext = true; ///< ... and in the next round: the effect may run out before
 	bool noDistancePenalty = false;
 	bool blocksRetaliation = false; ///< enemies do not retaliate against this unit
 	bool attacksAllAdjacent = false;
 	bool freeShooting = false; ///< can shoot while blocked
 	int meleeAttacks = 1;
 	int rangedAttacks = 1;
+	int minDamage = 1;        ///< damage of one creature as the creature list has it (the model of the guards needs the span)
+	int maxDamage = 1;
+	int minDamageRanged = 1;
 
 	// --- special abilities, read from the unit's bonuses (so creatures of mods are covered as well)
 	int baseCount = 0;               ///< stack size at the start of the battle (limit for life drain)
@@ -87,6 +92,10 @@ struct SimUnit
 	uint8_t extraCount = 0;
 	std::array<int16_t, 6> extraPath{};
 	uint8_t extraFriendly = 0;       ///< bit i: path i burns our own units too (breath)
+	// The same paths whatever the simulator's switch for such attacks says (setMultiHex): the model of
+	// the guards has to count them the way VCMI's BattleAI does - which sees friend and foe alike on them
+	uint8_t reachCount = 0;
+	std::array<int16_t, 8> reachPath{};
 	bool areaShot = false;           ///< its shot bursts on every hex around the target, friend and foe (lich, magog)
 	bool areaLivingOnly = false;     ///< ... and harms only the living (death cloud)
 	bool areaFire = false;           ///< ... and is fire (fireball): the fire-immune stay unharmed
@@ -125,6 +134,7 @@ struct SimUnit
 
 	bool acted = false;
 	bool waited = false;
+	bool hadMorale = false; ///< got an extra turn from good morale in this round (the game queues such a unit ahead of the others that waited)
 
 	bool alive() const { return count > 0; }
 	int64_t totalHP() const { return count > 0 ? static_cast<int64_t>(count - 1) * maxHP + firstHP : 0; }
@@ -192,6 +202,16 @@ public:
 	/// extra melee damage per creature for every hex walked before the attack (jousting; 0 for everybody else)
 	double chargeStep(size_t attacker, size_t defender) const { return chargeDmg.empty() ? 0.0 : chargeDmg[attacker * n + defender]; }
 	double ranged(size_t attacker, size_t defender, bool far) const { return far ? rangedFar[attacker * n + defender] : rangedNear[attacker * n + defender]; }
+	/// The lowest and the highest melee damage of one creature, before the game rounds the damage of the
+	/// whole stack down (the model of the guards needs the span as the game computes it)
+	double meleeLow(size_t attacker, size_t defender) const { return meleeLowDmg.empty() ? melee(attacker, defender) : meleeLowDmg[attacker * n + defender]; }
+	double meleeHigh(size_t attacker, size_t defender) const { return meleeHighDmg.empty() ? melee(attacker, defender) : meleeHighDmg[attacker * n + defender]; }
+	/// ... and what every hex walked before the blow adds to each (jousting; 0 for everybody else)
+	double chargeLow(size_t attacker, size_t defender) const { return chargeLowDmg.empty() ? chargeStep(attacker, defender) : chargeLowDmg[attacker * n + defender]; }
+	double chargeHigh(size_t attacker, size_t defender) const { return chargeHighDmg.empty() ? chargeStep(attacker, defender) : chargeHighDmg[attacker * n + defender]; }
+	/// What a unit would do to one of its own side hand to hand - the game's estimate, which BattleAI
+	/// uses when it weighs attacks that reach several hexes (0 where no unit of the battle has such an attack)
+	double ownSide(size_t attacker, size_t defender) const { return ownSideDmg.empty() ? 0.0 : ownSideDmg[attacker * n + defender]; }
 
 private:
 	size_t n = 0;
@@ -199,6 +219,11 @@ private:
 	std::vector<double> rangedNear;
 	std::vector<double> rangedFar;
 	std::vector<double> chargeDmg;
+	std::vector<double> meleeLowDmg;
+	std::vector<double> meleeHighDmg;
+	std::vector<double> ownSideDmg;
+	std::vector<double> chargeLowDmg;
+	std::vector<double> chargeHighDmg;
 };
 
 /// How a side behaves in play-outs. Evaluating against several behaviours keeps the search from
@@ -328,6 +353,10 @@ public:
 	/// The units of this side choose their targets by that measure (set for map guards when the
 	/// enemy model is Stance::STALK)
 	std::array<bool, 2> guardValues = {false, false};
+	/// The units of this side are played by GuardModel, the copy of BattleAI's decision rules: the
+	/// number of turns that AI plays an exchange of blows ahead (it uses 10 from the fourth difficulty
+	/// on, 2 below). 0 = off: the stance decides.
+	std::array<uint8_t, 2> guardModel = {0, 0};
 
 private:
 	void place(int unit, BattleHex at);

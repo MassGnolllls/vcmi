@@ -34,6 +34,11 @@ def rows(folders):
                     row["ms"] = float(f[17])
                 if len(f) >= 19:  # the play-outs' shortcut says "it waits" without asking the oracle
                     row["shortcut"] = f[18] == "1"
+                if len(f) >= 28:  # the native copy of BattleAI's rules (GuardModel), its time in microseconds, same answer as the oracle?
+                    row["native"] = (f[19], f[20] == "1", int(f[21]))
+                    row["micros"] = float(f[22])
+                    row["agree"] = f[23] == "1"
+                    row["answers"] = (int(f[24]), int(f[25]), int(f[26]), int(f[27]))
                 yield row
 
 
@@ -43,7 +48,7 @@ def main():
         print("no policycheck lines found")
         return 1
     print(f"{len(data)} enemy actions")
-    models = ["charge", "stalk"] + (["oracle"] if all("oracle" in r for r in data) else [])
+    models = ["charge", "stalk"] + (["oracle"] if all("oracle" in r for r in data) else []) + (["native"] if all("native" in r for r in data) else [])
     for model in models:
         print(f"\n## simulator's enemy: {model}")
         print("| real action | n | same kind | same kind and target | sim does instead |")
@@ -74,6 +79,28 @@ def main():
                 misses[(r["creature"], r["kind"], r["oracle"][0])] += 1
         for (creature, real, told), n in misses.most_common(15):
             print(f"- {creature}: does {real}, oracle says {told} ({n})")
+    if "native" in models:
+        us = sorted(r["micros"] for r in data)
+        agree = sum(1 for r in data if r["agree"])
+        print(f"\n## native model against the oracle")
+        print(f"same answer in {agree} of {len(data)} decisions ({agree / len(data):.1%}); "
+              f"{sum(us) / len(us):.0f} microseconds per decision (median {us[len(us) // 2]:.0f}, 90 % under {us[int(len(us) * 0.9)]:.0f}, max {us[-1]:.0f})")
+        print("| oracle says | n | native agrees | native says instead |")
+        print("|---|---|---|---|")
+        for kind in ("wait", "defend", "move", "attack", "shoot"):
+            sel = [r for r in data if r["oracle"][0] == kind]
+            if not sel:
+                continue
+            ok = sum(1 for r in sel if r["agree"])
+            other = collections.Counter(r["native"][0] + (" (other target or hex)" if r["native"][0] == kind else "") for r in sel if not r["agree"])
+            print(f"| {kind} | {len(sel)} | {ok / len(sel):.0%} | {', '.join(f'{k} {v}' for k, v in other.most_common()) or '-'} |")
+        misses = collections.Counter()
+        for r in data:
+            if not r["agree"]:
+                misses[(r["creature"], r["oracle"][0], r["native"][0])] += 1
+        print("\nmost frequent disagreements:")
+        for (creature, told, native), n in misses.most_common(12):
+            print(f"- {creature}: oracle {told}, native {native} ({n})")
     if all("shortcut" in r for r in data):
         short = [r for r in data if r["shortcut"]]
         wrong = [r for r in short if r["kind"] != "wait"]

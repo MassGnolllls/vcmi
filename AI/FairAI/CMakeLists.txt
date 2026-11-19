@@ -3,6 +3,7 @@ set(fairAI_SRCS
 		Status.cpp
 		Perception/Perception.cpp
 		Combat/CombatSim.cpp
+		Combat/GuardModel.cpp
 		Combat/SpellSim.cpp
 		Combat/FairBattleAI.cpp
 		Adventure/AdventureAI.cpp
@@ -31,6 +32,7 @@ set(fairAI_HEADERS
 		Status.h
 		Perception/Perception.h
 		Combat/CombatSim.h
+		Combat/GuardModel.h
 		Combat/SpellSim.h
 		Combat/FairBattleAI.h
 		Adventure/AdventureAI.h

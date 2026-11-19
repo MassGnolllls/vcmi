@@ -9,6 +9,7 @@
 #include "FairBattleAI.h"
 #include "../../../lib/battle/BattleStateInfoForRetreat.h"
 #include "CombatSim.h"
+#include "GuardModel.h"
 #include "SpellSim.h"
 #include "../Adventure/Params.h"
 #include "../Status.h"
@@ -18,6 +19,7 @@
 #include "../../BattleAI/BattleEvaluator.h"
 #include "../../BattleAI/BattleExchangeVariant.h"
 #include "../../../lib/battle/BattleUnitTurnReason.h"
+#include "../../../lib/CConfigHandler.h"
 #include "../../BattleAI/PotentialTargets.h"
 #include "../../BattleAI/StackWithBonuses.h"
 #include "../../BattleAI/SpellTargetsEvaluator.h"
@@ -70,6 +72,7 @@ struct SearchSettings
 	int ambush = envInt("FAI_AMBUSH", 0);                  ///< battle plan: a third plan for our side besides holding and advancing - lying in wait (Stance::AMBUSH)
 	int corner = envInt("FAI_CORNER", 0);                  ///< move candidate: into the nearer corner of our side
 	int guardValues = envInt("FAI_GUARD_VALUES", 1);       ///< the stalking enemy of the play-outs chooses its targets by BattleAI's own measure (damage it is spared), not by army value
+	int guardModel = envInt("FAI_GUARD_MODEL", -1);        ///< battle plan against guards: the guards are played by GuardModel (1) or by a stance (0); -1 = the player's parameter guardModel decides
 	int spellRounds = envInt("FAI_SPELL_ROUNDS", 2);        ///< spell search: rounds after the current one
 	int manaPricePermille = envInt("FAI_MANA_PRICE", 4);   ///< spell search: price of a scarce spell point, per mille of our army
 };
@@ -129,6 +132,13 @@ bool policyCheckEnabled()
 	return enabled;
 }
 
+/// 2: where the fast model of the guards and the oracle disagree, both views are logged side by side
+int policyCheckLevel()
+{
+	static const int level = std::getenv("FAI_POLICYCHECK") ? std::atoi(std::getenv("FAI_POLICYCHECK")) : 0;
+	return level;
+}
+
 bool simCheckEnabled()
 {
 	static const bool enabled = std::getenv("FAI_SIMCHECK") != nullptr;
@@ -164,7 +174,7 @@ void FairBattleAI::battleStacksAttacked(const BattleID & battleID, const std::ve
 		quietDecisions = 0;
 }
 
-bool FairBattleAI::oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out)
+bool FairBattleAI::oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out, std::string * trace)
 {
 	const auto & actor = sim.units[unit];
 	using Clock = std::chrono::steady_clock;
@@ -229,6 +239,50 @@ bool FairBattleAI::oracleAction(const std::shared_ptr<CBattleInfoCallback> & rea
 
 	auto moveTarget = scoreEvaluator.findMoveTowardsUnreachable(active, targets, damageCache, hb);
 	lap(oracleProfile[4]);
+	if(trace)
+	{
+		// what BattleAI sees, in the format of GuardModel's own trace
+		auto hbWaited = std::make_shared<HypotheticBattle>(env.get(), hb);
+		hbWaited->makeWait(active);
+		for(int variant = 0; variant < 2; ++variant)
+		{
+			std::vector<battle::Units> turnOrder;
+			(variant ? hbWaited : hb)->battleGetTurnOrder(turnOrder, std::numeric_limits<int>::max(), 2);
+			for(size_t t = 0; t < turnOrder.size(); ++t)
+			{
+				*trace += boost::str(boost::format("\n  order%s%d:") % (variant ? "W" : "") % t);
+				for(const auto * u : turnOrder[t])
+					*trace += boost::str(boost::format(" %d") % sim.indexOf(u->unitId()));
+			}
+		}
+		*trace += "\n  unreachable:";
+		for(const auto * u : targets.unreachableEnemies)
+			*trace += boost::str(boost::format(" %d") % sim.indexOf(u->unitId()));
+		std::vector<float> waitedScores;
+		if(!active->waited())
+		{
+			scoreEvaluator.updateReachabilityMap(hbWaited);
+			for(const auto & ap : targets.possibleAttacks)
+				waitedScores.push_back(scoreEvaluator.evaluateExchange(ap, 0, targets, damageCache, hbWaited));
+		}
+		scoreEvaluator.updateReachabilityMap(hb);
+		size_t index = 0;
+		for(const auto & ap : targets.possibleAttacks)
+		{
+			const float now = scoreEvaluator.evaluateExchange(ap, 0, targets, damageCache, hb);
+			*trace += boost::str(boost::format("\n  ap|%d|%d|%d|%.1f|%.1f|%d|%.1f|%.1f|") % sim.indexOf(ap.attack.defender->unitId()) % (ap.attack.shooting ? -1 : ap.from.toInt()) % (ap.attack.shooting ? 1 : 0)
+				% ap.defenderDamageReduce % ap.attackerDamageReduce % ap.shootersBlockedDmg % now % (index < waitedScores.size() ? waitedScores[index] : 0.0f));
+			std::set<int> members;
+			for(const auto & [turn, units] : scoreEvaluator.getExchangeUnits(ap, 0, targets, hb).units)
+				for(const auto * u : units)
+					members.insert(sim.indexOf(u->unitId()));
+			for(int member : members)
+				*trace += boost::str(boost::format("%d,") % member);
+			*trace += boost::str(boost::format("|%.1f") % ap.collateralDamageReduce);
+			++index;
+		}
+		*trace += boost::str(boost::format("\n  move|%.1f|%d|%d") % moveTarget.score % (moveTarget.positions.empty() ? -1 : moveTarget.positions.front().toInt()) % static_cast<int>(moveTarget.turnsToReach));
+	}
 	float score = EvaluationResult::INEFFECTIVE_SCORE;
 	if(!targets.possibleAttacks.empty())
 	{
@@ -416,13 +470,50 @@ void FairBattleAI::policyCheck(const BattleID & battleID, const BattleAction & a
 		// ... and the oracle: BattleAI's own evaluation on a mirror of this state
 		SimAction told;
 		const auto started = std::chrono::steady_clock::now();
-		if(oracleAction(battle, state, me, state.round, told))
+		const bool haveOracle = oracleAction(battle, state, me, state.round, told);
+		if(haveOracle)
 			add(told);
 		else
 			line += "|none|0|-1";
 		line += boost::str(boost::format("|%.2f") % std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count());
 		// the shortcut of the play-outs: a unit with nothing to attack that has not waited yet waits
 		line += !actor->waited() && state.units[me].active && !state.hasAttack(me) ? "|1" : "|0";
+		// ... and the fast copy of BattleAI's rules: the same answer as the oracle, in microseconds?
+		SimAction native;
+		const auto nativeStarted = std::chrono::steady_clock::now();
+		const bool haveNative = guardAction(state, me, env->game()->getStartInfo()->difficulty < 4 ? 2 : 10, native);
+		const double micros = std::chrono::duration<double, std::micro>(std::chrono::steady_clock::now() - nativeStarted).count();
+		if(haveNative)
+			add(native);
+		else
+			line += "|none|0|-1";
+		auto same = [](const SimAction & a, const SimAction & b)
+		{
+			if(a.type != b.type)
+				return false;
+			if((a.type == SimActionType::ATTACK || a.type == SimActionType::SHOOT) && a.target != b.target)
+				return false;
+			return (a.type != SimActionType::ATTACK && a.type != SimActionType::MOVE) || a.hex == b.hex;
+		};
+		line += boost::str(boost::format("|%.1f|%d|%d|%d|%d|%d") % micros % (haveOracle && haveNative && same(told, native) ? 1 : 0)
+			% told.target % (told.hex.isValid() ? told.hex.toInt() : -1) % native.target % (native.hex.isValid() ? native.hex.toInt() : -1));
+		if(policyCheckLevel() >= 2 && haveOracle && haveNative && !same(told, native))
+		{
+			// both views side by side, to find where the copy differs
+			std::string oracleView;
+			std::string nativeView;
+			SimAction again;
+			oracleAction(battle, state, me, state.round, again, &oracleView);
+			guardAction(state, me, env->game()->getStartInfo()->difficulty < 4 ? 2 : 10, again, &nativeView);
+			std::string unitsView;
+			for(size_t i = 0; i < state.units.size(); ++i)
+			{
+				const auto & u = state.units[i];
+				unitsView += boost::str(boost::format("\n  unit %d: %s x%d side %d pos %d speed %d init %d hp %d/%d shots %d ret %d acted %d waited %d%s") % i % creatureKey(battle->battleGetStackByID(u.id, false)) % u.count
+					% static_cast<int>(u.side) % u.pos.toInt() % u.speed % u.initiative % u.firstHP % u.maxHP % u.shots % u.retaliationsLeft % (u.acted ? 1 : 0) % (u.waited ? 1 : 0) % (static_cast<int>(i) == me ? " <- active" : ""));
+			}
+			logAi->info("FairAI guardmodel differs for unit %d%s\n oracle:%s\n native:%s", me, unitsView, oracleView, nativeView);
+		}
 		logAi->info(line);
 	}
 	catch(const std::exception & e)
@@ -644,6 +735,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	guardPlan = params.battlePlan >= 3;
 	cornerMove = params.battlePlan >= 4;
 	guardOracleUntil = params.guardOracleUntil;
+	guardModel = params.guardModel;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -1470,6 +1562,13 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		// while our shooters work" from "close in before their shooters wear us down".
 		const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
 		const int planEnd = base.round + std::max(1, config.planRounds);
+		// Guards are played by VCMI's BattleAI (unless the game is set up otherwise), and GuardModel
+		// knows what that AI does: no guessing between "they advance" and "they lie in wait"
+		const bool modelGuards = (config.guardModel >= 0 ? config.guardModel : guardModel) > 0 && !battle->battleGetFightingHero(otherSide)
+			&& !battle->battleGetDefendedTown() && settings["ai"]["combatNeutralAI"].String() == "BattleAI";
+		const auto guardTurns = static_cast<uint8_t>(env->game()->getStartInfo()->difficulty < 4 ? 2 : 10); // as BattleAI sets itself up
+		if(modelGuards)
+			enemyStances = {Stance::STALK};
 		for(auto & c : candidates)
 		{
 			double bestPlan = -std::numeric_limits<double>::max();
@@ -1481,6 +1580,8 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 					SimState sim = base;
 					sim.stance[ownSide] = ownStance;
 					sim.stance[enemySide] = enemyStance;
+					if(modelGuards)
+						sim.guardModel[enemySide] = guardTurns;
 					if(c.outcome && config.engineOutcome)
 						sim.applyOutcome(me, *c.outcome);
 					else

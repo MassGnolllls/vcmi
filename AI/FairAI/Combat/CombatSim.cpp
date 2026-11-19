@@ -7,6 +7,7 @@
  */
 #include "../StdInc.h"
 #include "CombatSim.h"
+#include "GuardModel.h"
 #include "SpellSim.h"
 
 #include "../../../lib/CBonusTypeHandler.h"
@@ -127,12 +128,40 @@ void DamageTable::build(const CBattleInfoCallback & cb, const std::vector<const 
 	meleeDmg.assign(n * n, 0.0);
 	rangedNear.assign(n * n, 0.0);
 	rangedFar.assign(n * n, 0.0);
+	meleeLowDmg.assign(n * n, 0.0);
+	meleeHighDmg.assign(n * n, 0.0);
+	ownSideDmg.clear();
+	chargeLowDmg.clear();
+	chargeHighDmg.clear();
+	// does any unit strike several hexes at once? BattleAI then counts what such a blow does to the
+	// striker's own side with the game's estimate
+	bool anyReach = false;
+	for(const battle::Unit * unit : units)
+	{
+		for(const auto type : {BonusType::ATTACKS_ALL_ADJACENT, BonusType::THREE_HEADED_ATTACK, BonusType::WIDE_BREATH, BonusType::TWO_HEX_ATTACK_BREATH,
+			BonusType::PRISM_HEX_ATTACK_BREATH, BonusType::MULTIHEX_UNIT_ATTACK, BonusType::MULTIHEX_ENEMY_ATTACK})
+			anyReach = anyReach || unit->hasBonusOfType(type);
+	}
+	if(anyReach)
+		ownSideDmg.assign(n * n, 0.0);
 
 	for(size_t a = 0; a < n; ++a)
 	{
 		const battle::Unit * attacker = units[a];
 		const double count = std::max(1, attacker->getCount());
 		const bool hitsOwn = canHitOwn(*attacker);
+		// The same unit a hundred thousand strong: the game rounds the damage of a whole stack down, so
+		// only a big stack tells the lowest and highest damage of one creature precisely
+		auto many = attacker->acquireState();
+		// (not for a unit whose damage depends on how many of the stack have fallen - the haspid's revenge)
+		if(!attacker->hasBonusOfType(BonusType::REVENGE))
+		{
+			const int64_t wanted = std::max<int64_t>(100000, 1000 * static_cast<int64_t>(count));
+			int64_t more = (wanted - many->getCount()) * static_cast<int64_t>(many->getMaxHealth());
+			if(more > 0)
+				many->heal(more, EHealLevel::OVERHEAL, EHealPower::PERMANENT);
+		}
+		const double manyCount = std::max(1, many->getCount());
 
 		for(size_t d = 0; d < n; ++d)
 		{
@@ -141,6 +170,11 @@ void DamageTable::build(const CBattleInfoCallback & cb, const std::vector<const 
 				continue;
 			if(attacker->unitSide() == defender->unitSide())
 			{
+				if(anyReach)
+				{
+					BattleAttackInfo ownInfo(attacker, defender, 0, false);
+					ownSideDmg[a * n + d] = average(cb.battleEstimateDamage(ownInfo).damage) / count;
+				}
 				// breath and bursting shots do not tell friend from foe
 				if(hitsOwn)
 				{
@@ -155,6 +189,24 @@ void DamageTable::build(const CBattleInfoCallback & cb, const std::vector<const 
 
 			BattleAttackInfo meleeInfo(attacker, defender, 0, false);
 			meleeDmg[a * n + d] = average(cb.battleEstimateDamage(meleeInfo).damage) / count;
+			{
+				BattleAttackInfo manyInfo(many.get(), defender, 0, false);
+				const auto span = cb.battleEstimateDamage(manyInfo).damage;
+				meleeLowDmg[a * n + d] = span.min / manyCount;
+				meleeHighDmg[a * n + d] = span.max / manyCount;
+				if(abilities && attacker->hasBonusOfType(BonusType::JOUSTING))
+				{
+					if(chargeLowDmg.empty())
+					{
+						chargeLowDmg.assign(n * n, 0.0);
+						chargeHighDmg.assign(n * n, 0.0);
+					}
+					BattleAttackInfo manyCharge(many.get(), defender, 1, false);
+					const auto charged = cb.battleEstimateDamage(manyCharge).damage;
+					chargeLowDmg[a * n + d] = std::max(0.0, charged.min / manyCount - meleeLowDmg[a * n + d]);
+					chargeHighDmg[a * n + d] = std::max(0.0, charged.max / manyCount - meleeHighDmg[a * n + d]);
+				}
+			}
 			if(abilities && attacker->hasBonusOfType(BonusType::JOUSTING))
 			{
 				if(chargeDmg.empty())
@@ -250,6 +302,11 @@ void DamageTable::build(const std::vector<StackSpec> & stacks)
 {
 	n = stacks.size();
 	chargeDmg.clear();
+	meleeLowDmg.clear();
+	meleeHighDmg.clear();
+	ownSideDmg.clear();
+	chargeLowDmg.clear();
+	chargeHighDmg.clear();
 	meleeDmg.assign(n * n, 0.0);
 	rangedNear.assign(n * n, 0.0);
 	rangedFar.assign(n * n, 0.0);
@@ -309,10 +366,12 @@ void SimState::init(const CBattleInfoCallback & cb, const std::vector<const batt
 		s.firstHP = u->getFirstHPleft();
 		s.speed = static_cast<int>(u->getMovementRange(0));
 		s.initiative = state->getInitiative(0);
+		s.initiativeNext = state->getInitiative(1);
 		s.shooter = u->isShooter();
 		s.shots = s.shooter ? state->shots.available() : 0;
 		s.doubleWide = u->doubleWide();
-		s.canMove = !u->hasBonusOfType(BonusType::SIEGE_WEAPON) && s.speed > 0;
+		// (a unit held by roots has no movement left but still strikes what stands next to it)
+		s.canMove = !u->hasBonusOfType(BonusType::SIEGE_WEAPON);
 		s.freeShooting = u->canShootBlocked();
 		s.meleeAttacks = std::max(1, u->getTotalAttacks(false));
 		s.rangedAttacks = std::max(1, u->getTotalAttacks(true));
@@ -329,8 +388,10 @@ void SimState::init(const CBattleInfoCallback & cb, const std::vector<const batt
 		}
 		s.pos = u->getPosition();
 		s.active = !u->hasBonusOfType(BonusType::NOT_ACTIVE);
+		s.activeNext = u->canMove(1);
 		s.acted = u->moved() || !s.active || (!s.canMove && !s.shooter);
 		s.waited = u->waited();
+		s.hadMorale = state->hadMorale;
 		units.push_back(s);
 	}
 
@@ -356,6 +417,7 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	s.value = type ? std::max(1, type->getAIValue()) : 1;
 	s.speed = static_cast<int>(creature.getMovementRange());
 	s.initiative = creature.getInitiative();
+	s.initiativeNext = s.initiative;
 	s.spellResist = spellResistance(u);
 	s.resistAura = std::clamp(u.valOfBonuses(BonusType::SPELL_RESISTANCE_AURA), 0, 100) / 100.0;
 	s.shots = std::max(0, u.valOfBonuses(BonusType::SHOTS));
@@ -367,6 +429,9 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 	s.blocksRetaliation = u.hasBonusOfType(BonusType::BLOCKS_RETALIATION);
 	s.attacksAllAdjacent = u.hasBonusOfType(BonusType::ATTACKS_ALL_ADJACENT);
 	s.freeShooting = u.hasBonusOfType(BonusType::FREE_SHOOTING) || u.hasBonusOfType(BonusType::SIEGE_WEAPON);
+	s.minDamage = creature.getMinDamage(false);
+	s.maxDamage = creature.getMaxDamage(false);
+	s.minDamageRanged = creature.getMinDamage(true);
 	s.meleeAttacks = std::max(1, 1 + u.getBonusesOfType(BonusType::ADDITIONAL_ATTACK)->valOfBonuses(meleeOnly));
 	s.rangedAttacks = std::max(1, 1 + u.getBonusesOfType(BonusType::ADDITIONAL_ATTACK)->valOfBonuses(rangedOnly));
 	if(u.hasBonusOfType(BonusType::NO_RETALIATION))
@@ -408,6 +473,33 @@ void SimState::describe(SimUnit & s, const ACreature & creature, const CCreature
 			s.extraFriendly |= static_cast<uint8_t>(1u << s.extraCount);
 		s.extraPath[s.extraCount++] = static_cast<int16_t>(path);
 	};
+	s.reachCount = 0;
+	auto addReach = [&s](int path)
+	{
+		if(path <= 0 || path > 30000 || s.reachCount >= s.reachPath.size())
+			return;
+		for(int i = 0; i < s.reachCount; ++i)
+			if(s.reachPath[i] == path)
+				return;
+		s.reachPath[s.reachCount++] = static_cast<int16_t>(path);
+	};
+	for(const auto type : {BonusType::MULTIHEX_UNIT_ATTACK, BonusType::MULTIHEX_ENEMY_ATTACK})
+		for(const auto & bonus : *u.getBonusesOfType(type))
+			if(bonus->parameters)
+				for(int path : bonus->parameters->toVector())
+					addReach(path);
+	if(u.hasBonusOfType(BonusType::THREE_HEADED_ATTACK))
+		for(int path : {2, 6})
+			addReach(path);
+	if(u.hasBonusOfType(BonusType::WIDE_BREATH))
+		for(int path : {11, 111, 2, 12, 6, 16})
+			addReach(path);
+	if(u.hasBonusOfType(BonusType::TWO_HEX_ATTACK_BREATH))
+		addReach(11);
+	if(u.hasBonusOfType(BonusType::PRISM_HEX_ATTACK_BREATH))
+		for(int path : {11, 12, 16})
+			addReach(path);
+
 	if(multiHexEnabled)
 	{
 	for(const auto & bonus : *u.getBonusesOfType(BonusType::MULTIHEX_UNIT_ATTACK))
@@ -769,6 +861,10 @@ int SimState::nextActiveUnit()
 		if(battleOver())
 			return -1;
 
+		// who goes first among equally fast units: the side that did not move last - at the very
+		// start of a battle the attacker
+		const BattleSide preferred = lastMoved == BattleSide::NONE ? BattleSide::ATTACKER
+			: (lastMoved == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER);
 		for(bool waitPhase : {false, true})
 		{
 			int best = -1;
@@ -790,9 +886,9 @@ int SimState::nextActiveUnit()
 					if(waitPhase ? u.initiative < b.initiative : u.initiative > b.initiative)
 						best = i;
 				}
-				else if(u.side != b.side && u.side != lastMoved)
+				else if(u.side != b.side && u.side == preferred)
 				{
-					best = i; // engine rule: on ties the side that did not move last goes first
+					best = i; // engine rule: on ties the side that did not move last goes first, its lowest slot
 				}
 			}
 			if(best >= 0)
@@ -808,8 +904,18 @@ int SimState::nextActiveUnit()
 		round++;
 		for(auto & u : units)
 		{
+			if(u.alive() && !u.active && u.activeNext)
+				u.active = true; // blindness or petrification has run out
+			if(u.initiativeNext != u.initiative)
+			{
+				// haste or slow has run out
+				if(u.speed == u.initiative)
+					u.speed = u.initiativeNext;
+				u.initiative = u.initiativeNext;
+			}
 			u.acted = !u.alive() || !u.active || (!u.canMove && !u.shooter);
 			u.waited = false;
+			u.hadMorale = false;
 			u.retaliationsLeft = u.retaliationsPerRound;
 		}
 	}
@@ -914,7 +1020,12 @@ bool SimState::canShoot(int unit) const
 
 bool SimState::shotIsFar(int attacker, int target) const
 {
-	return BattleHex::getDistance(units[attacker].pos, units[target].pos) > 10;
+	// the engine's rule: no range penalty if any hex of the target is within range
+	const auto & t = units[target];
+	for(const auto & hex : battle::Unit::getHexes(t.pos, t.doubleWide, t.side))
+		if(BattleHex::getDistance(units[attacker].pos, hex) <= GameConstants::BATTLE_SHOOTING_PENALTY_DISTANCE)
+			return false;
+	return true;
 }
 
 // ------------------------------------------------------------------ actions
@@ -1529,6 +1640,16 @@ BattleHex SimState::rallyHex(int unit) const
 void SimState::playDefault(int unit)
 {
 	const auto & u = units[unit];
+
+	if(guardModel[static_cast<int>(u.side)] > 0)
+	{
+		SimAction chosen;
+		if(guardAction(*this, unit, guardModel[static_cast<int>(u.side)], chosen))
+		{
+			apply(unit, chosen);
+			return;
+		}
+	}
 
 	if(canShoot(unit))
 	{

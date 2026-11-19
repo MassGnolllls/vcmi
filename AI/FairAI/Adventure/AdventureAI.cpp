@@ -304,6 +304,7 @@ void Params::loadOverrides(int playerIndex)
 	read("battlePlan", battlePlan);
 	read("guardOracle", guardOracle);
 	read("guardOracleUntil", guardOracleUntil);
+	read("guardModel", guardModel);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
 	read("maxLossShareIdle", maxLossShareIdle);

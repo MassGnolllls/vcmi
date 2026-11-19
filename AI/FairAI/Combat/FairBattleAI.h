@@ -75,7 +75,7 @@ private:
 	/// \p baseRound: the simulator's round in which the real battle stands. False: no answer.
 	long oracleCallsMade = 0; ///< oracle calls of this battle AI (statistics)
 	std::array<double, 6> oracleProfile{}; ///< calls, and milliseconds spent on: the mirror, the damage cache, the targets, the move target, the best target
-	bool oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out);
+	bool oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out, std::string * trace = nullptr);
 	std::map<uint32_t, int64_t> lastHealth; ///< unit -> health after the previous action (changes in between: regeneration, poison...)
 	bool lastActionWasSpell = false;
 	int quietDecisions = 0; ///< our decisions since anybody was hurt (the attacker must not let a battle stand still)
@@ -101,6 +101,7 @@ private:
 	bool guardPlan = false;   ///< battlePlan 3: closing ranks around our shooter is a fourth
 	bool cornerMove = false;  ///< battlePlan 4: a move into the nearer corner of our side is among the candidates
 	int guardOracleUntil = 3; ///< ... in the first rounds of a battle only
+	int guardModel = 0;       ///< from the player's FairAI parameters: the play-outs of the battle plan play guards by GuardModel
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);

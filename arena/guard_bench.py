@@ -133,7 +133,7 @@ def cmd_play(args) -> int:
     out = Path(args.out).resolve()
     out.mkdir(parents=True, exist_ok=True)
     play_args = SimpleNamespace(client=args.client, base_port=args.base_port, timeout=300, stall_seconds=60, keep_logs=True,
-                                mods=args.mods, max_days=3, difficulty=4, ai_params=args.ai_params, battle_params=args.ai_params)
+                                mods=args.mods, max_days=3, difficulty=args.difficulty, ai_params=args.ai_params, battle_params=args.ai_params)
     done = errors = 0
 
     def one(index, path):
@@ -336,6 +336,7 @@ def main() -> int:
     p.add_argument("--seed", type=int, default=9000)
     p.add_argument("--base-port", type=int, default=7000)
     p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the hero's side")
+    p.add_argument("--difficulty", type=int, default=4, help="game difficulty 0-4 (VCMI's BattleAI, which plays the guards, looks 10 turns of an exchange ahead on 4 and 2 below)")
     p.add_argument("--keep-logs", action="store_true")
     r = sub.add_parser("report")
     r.add_argument("--out", required=True)
