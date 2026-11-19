@@ -387,6 +387,23 @@ void TurnOrderProcessor::onGameStarted()
 			// arena: a hero against map guards (stacks split by the game's own rules);
 			// splitting the guards must not count as "battle over" yet
 			battleOnlySetup = true;
+			// arena: the spell points the hero goes into the battle with, if the map's description names
+			// them ("arena-mana=N", written by the arena's scenario builder for fights taken from games)
+			{
+				const std::string description = gameHandler->gameInfo().getMapHeader()->description.toString();
+				const std::string key = "arena-mana=";
+				if(const auto at = description.find(key); at != std::string::npos)
+				{
+					try
+					{
+						gameHandler->setManaPoints(heroes.at(0)->id, std::max(0, std::stoi(description.substr(at + key.size()))));
+					}
+					catch(const std::exception &)
+					{
+						// not a number: the hero keeps its full store
+					}
+				}
+			}
 			monsters.at(0)->onHeroVisit(*gameHandler, heroes.at(0));
 			battleOnlySetup = false;
 		}

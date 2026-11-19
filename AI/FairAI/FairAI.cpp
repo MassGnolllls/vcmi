@@ -29,6 +29,9 @@
 #include "../../lib/CCreatureHandler.h"
 #include "../../lib/CStack.h"
 #include "../../lib/spells/CSpellHandler.h"
+#include "../../lib/GameLibrary.h"
+#include "../../lib/CSkillHandler.h"
+#include "../../lib/entities/hero/CHero.h"
 #include "../../lib/CConfigHandler.h"
 #include "../../lib/json/JsonNode.h"
 #include "../../lib/CThreadHelper.h"
@@ -586,6 +589,32 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 				playerID.toString(), enemyHero ? "hero" : "army", (unsigned long long)seen.minStrength(), (unsigned long long)seen.maxStrength(),
 				(unsigned long long)seen.expectedStrength(), (unsigned long long)enemyArmy->getArmyStrength(), enemyHero ? enemyHero->getFightingStrength() : 1.0);
 		}
+	}
+	if(const CGHeroInstance * own = side == BattleSide::ATTACKER ? hero1 : hero2; own && logAi->isDebugEnabled())
+	{
+		// diagnostics: our own hero as it goes into the battle - arena/game_fights.py stages the fights of
+		// logged games again with the hero as it was (skills with artifacts counted in, spell points, spells)
+		std::string skills;
+		for(const auto & skill : own->secSkills)
+		{
+			if(skill.first.hasValue() && skill.second > 0)
+				skills += (skills.empty() ? "" : ",") + LIBRARY->skillh->objects.at(skill.first.getNum())->getJsonKey() + "=" + std::to_string(static_cast<int>(skill.second));
+		}
+		std::string spells;
+		for(const auto & spell : LIBRARY->spellh->objects)
+		{
+			if(spell && spell->isCombat() && !spell->isCreatureAbility() && own->canCastThisSpell(spell.get()))
+				spells += (spells.empty() ? "" : ",") + spell->getJsonKey();
+		}
+		std::string machines;
+		for(const auto & machine : {std::make_pair(ArtifactID(ArtifactID::BALLISTA), "ballista"), std::make_pair(ArtifactID(ArtifactID::AMMO_CART), "ammoCart"), std::make_pair(ArtifactID(ArtifactID::FIRST_AID_TENT), "firstAidTent")})
+		{
+			if(own->hasArt(machine.first, true))
+				machines += (machines.empty() ? "" : ",") + std::string(machine.second);
+		}
+		logAi->debug("FairAI %s battle hero|%s|%d|%d|%d|%d|%d|%d|%d|%s|%s|%s", playerID.toString(), own->getHeroType()->getJsonKey(), static_cast<int>(own->level),
+			own->getPrimSkillLevel(PrimarySkill::ATTACK), own->getPrimSkillLevel(PrimarySkill::DEFENSE), own->getPrimSkillLevel(PrimarySkill::SPELL_POWER),
+			own->getPrimSkillLevel(PrimarySkill::KNOWLEDGE), static_cast<int>(own->mana), static_cast<int>(own->manaLimit()), skills, spells, machines);
 	}
 	CAdventureAI::battleStart(battleID, army1, army2, tile, hero1, hero2, side, replayAllowed);
 	if(adventure)

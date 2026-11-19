@@ -5,8 +5,11 @@ The guard benchmark (guard_bench.py) lets made-up armies meet guards at fixed st
 fights are different: most are easy, a few are dear, the armies are what a town had to offer by then.
 This tool reads the fights FairAI really fought from the logs of games (client logs written with
 ARENA_AI_LOG=debug: battle actions and hits name every stack) and stages them again - our army as it
-stood, the guards as one stack of their kind and number (the game splits them by its own rule), the
-hero by name with the skills of the benchmark's stage and without spells.
+stood, the guards as one stack of their kind and number (the game splits them by its own rule), and
+the hero as it went into the fight: level, the four skills with its artifacts counted in, secondary
+skills, the spells it could cast, its spell points, its war machines (logs since 20.11.2026 have a
+line "battle hero|..." for that; from older logs the hero comes by name with the skills of the
+benchmark's stage and without spells - as with --plain-hero).
 
   game_fights.py collect --logs 'DIR/*/VCMI_Client_log.txt' ... --out arena/gamefights/NAME.json
                          [--min-loss 0.2 --min-miss 0.1] [--sample 300 --seed 7] --suffix __s0 --client CLIENT
@@ -34,6 +37,7 @@ sys.path.insert(0, str(HERE))
 import battle_scenarios  # noqa: E402
 import run_tournament as rt  # noqa: E402
 
+MASTERY = {1: "basic", 2: "advanced", 3: "expert"}
 STACK = re.compile(r"(\w+) battle stack \[(\d+)\]: (\d+) of (\S+) from slot (-?\d+) of armyobj=(\d+)")
 
 
@@ -77,6 +81,14 @@ def read_fights(patterns):
                     continue
                 if "FairAI planforecast|" in line:
                     cur["plan"] = [float(x) for x in line.strip().split("FairAI planforecast|")[1].split("|")]
+                elif " battle hero|" in line:
+                    # our hero as it went into the fight: key | level | attack | defence | power | knowledge (artifacts
+                    # counted in) | spell points | their limit | skill=level,... | spells it can cast | war machines
+                    part = line.rstrip("\n").split(" battle hero|")[1].split("|")
+                    if len(part) >= 11:
+                        cur["heroIs"] = {"id": part[0], "level": int(part[1]), "primary": [int(x) for x in part[2:6]], "mana": int(part[6]), "manaLimit": int(part[7]),
+                                         "secondary": [[k, MASTERY[int(v)]] for k, v in (item.split("=") for item in part[8].split(",") if item) if 1 <= int(v) <= 3],
+                                         "spells": [x for x in part[9].split(",") if x], "machines": [x for x in part[10].split(",") if x]}
                 elif "battle spell: our hero" in line:
                     cur["spells"] += 1
                 elif "battle action:" in line or "battle hit:" in line:
@@ -149,10 +161,20 @@ def cmd_collect(args):
             continue
         own_value = sum(value[c] * k for c, k, _ in own)
         stage_name = "early" if own_value < 15000 else ("mid" if own_value < 60000 else "late")
-        scenarios.append({"name": f"game-{f['game']}-d{f['day']:02d}-{n:03d}{args.suffix}", "terrain": "grass", "kind": "guard", "stage": stage_name, "magic": False,
-                          "sides": [{"hero": hero["id"], "primary": battle_scenarios.STAGES[stage_name]["primary"], "army": [[c, k] for c, k, _ in own], "spellBook": False, "spells": []},
-                                    {"guard": [base, sum(kinds.values())]}],
-                          "inGame": {"day": f["day"], "lost": round(f["real"], 3), "forecast": None if f["forecast"] is None else round(f["forecast"], 3), "heroCast": f["spells"]}})
+        is_ = f.get("heroIs")
+        if is_ and not args.plain_hero:
+            # the hero as the log has it. Intelligence only raises the limit of spell points, and the staged
+            # hero is given its points directly: left out, so that the limit is not counted twice
+            side = {"hero": is_["id"], "level": is_["level"], "primary": is_["primary"], "mana": {"full": is_["manaLimit"], "none": 0}.get(args.mana, is_["mana"]),
+                    "secondary": [x for x in is_["secondary"] if x[0] not in ("core:intelligence", "intelligence")],
+                    "army": [[c, k] for c, k, _ in own], "spellBook": bool(is_["spells"]), "spells": [x for x in is_["spells"] if x not in battle_scenarios.EXCLUDED_SPELLS],
+                    "machines": is_["machines"]}
+        else:
+            side = {"hero": hero["id"], "primary": battle_scenarios.STAGES[stage_name]["primary"], "army": [[c, k] for c, k, _ in own], "spellBook": False, "spells": []}
+        scenarios.append({"name": f"game-{f['game']}-d{f['day']:02d}-{n:03d}{args.suffix}", "terrain": "grass", "kind": "guard", "stage": stage_name, "magic": bool(side["spells"]),
+                          "sides": [side, {"guard": [base, sum(kinds.values())]}],
+                          "inGame": {"day": f["day"], "lost": round(f["real"], 3), "forecast": None if f["forecast"] is None else round(f["forecast"], 3), "heroCast": f["spells"],
+                                     **({"manaLimit": is_["manaLimit"]} if is_ else {})}})
     Path(args.out).write_text(json.dumps(scenarios, indent=1) + "\n")
     print(f"{len(scenarios)} fights written to {args.out}")
     return 0 if stage(scenarios, args) else 1
@@ -177,6 +199,8 @@ def main():
     c.add_argument("--min-miss", type=float, default=2.0, help="... or this much more than the combat AI's forecast at the first move")
     c.add_argument("--sample", type=int, default=0, help="this many of the fights, drawn at random")
     c.add_argument("--seed", type=int, default=1)
+    c.add_argument("--mana", choices=["logged", "full", "none"], default="logged", help="spell points the hero starts the staged fight with: as in the game, its full store, or none (what its spells are worth)")
+    c.add_argument("--plain-hero", action="store_true", help="the hero by name with the skills of the benchmark's stage and without spells, even where the log has the hero as it was")
     c.set_defaults(func=cmd_collect)
     g = sub.add_parser("gen")
     g.add_argument("--set", required=True)

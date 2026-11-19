@@ -737,6 +737,15 @@ int generateBattleMap(const po::variables_map & vm)
 			const auto & primary = side["primary"].Vector();
 			for(size_t i = 0; i < GameConstants::PRIMARY_SKILLS; i++)
 				hero->pushPrimSkill(PrimarySkill(i), i < primary.size() ? primary[i].Integer() : 0);
+			// the hero's level (what a specialty adds grows with it): stored as experience - a map's hero
+			// stands at the level of its experience, with the skills the map names and none rolled on top
+			if(side["level"].Integer() > 1)
+				hero->setExperience(LIBRARY->heroh->reqExp(static_cast<ui32>(side["level"].Integer())), ChangeValueMode::ABSOLUTE);
+			// spell points it goes into the battle with (a hero of a new map starts with a full store): the
+			// map format has no place for them, so the map's description carries them to the server, which
+			// sets them before the battle begins (TurnOrderProcessor::onGameStarted)
+			if(sel == 0 && !side["mana"].isNull())
+				map->description.appendRawString("arena-mana=" + std::to_string(std::max<int64_t>(0, side["mana"].Integer())));
 
 			hero->clearSlots();
 			const auto & army = side["army"].Vector();
@@ -759,6 +768,16 @@ int generateBattleMap(const po::variables_map & vm)
 				hero->putArtifact(ArtifactPosition::MACH1, map->createArtifact(ArtifactID::BALLISTA));
 				hero->putArtifact(ArtifactPosition::MACH2, map->createArtifact(ArtifactID::AMMO_CART));
 				hero->putArtifact(ArtifactPosition::MACH3, map->createArtifact(ArtifactID::FIRST_AID_TENT));
+			}
+			// ... or the machines one by one, as the hero of a logged game had them
+			for(const auto & machine : side["machines"].Vector())
+			{
+				if(machine.String() == "ballista" && !hero->getArt(ArtifactPosition::MACH1))
+					hero->putArtifact(ArtifactPosition::MACH1, map->createArtifact(ArtifactID::BALLISTA));
+				else if(machine.String() == "ammoCart" && !hero->getArt(ArtifactPosition::MACH2))
+					hero->putArtifact(ArtifactPosition::MACH2, map->createArtifact(ArtifactID::AMMO_CART));
+				else if(machine.String() == "firstAidTent" && !hero->getArt(ArtifactPosition::MACH3))
+					hero->putArtifact(ArtifactPosition::MACH3, map->createArtifact(ArtifactID::FIRST_AID_TENT));
 			}
 
 			for(const auto & spell : side["spells"].Vector())
@@ -819,6 +838,9 @@ void onBattleResult(CClient & client, const BattleResult & result)
 			lost += static_cast<uint64_t>(casualty.first.toCreature()->getAIValue()) * casualty.second;
 		s["initialStrength"].Integer() = initial;
 		s["lostStrength"].Integer() = lost;
+		// spell points the side's hero has left (what a fight costs besides troops)
+		if(const auto * sideHero = battle->getSideHero(side))
+			s["heroMana"].Integer() = sideHero->mana;
 		s["remainingFraction"].Float() = initial ? std::max(0.0, 1.0 - static_cast<double>(lost) / initial) : 0.0;
 		info["sides"].Vector().push_back(s);
 	}
