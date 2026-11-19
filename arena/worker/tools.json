@@ -1,7 +1,17 @@
 {
  "onnxruntime": {
-  "note": "ONNX Runtime 1.18.1 for Linux x64 from Microsoft's official releases - the version and place VCMI's build instructions name (docs/developers/Building_Linux.md). MMAI computes its models with it. Pinned by the content of every file that is used: a file that differs is not written to disk",
-  "archive": "https://github.com/microsoft/onnxruntime/releases/download/v1.18.1/onnxruntime-linux-x64-1.18.1.tgz",
+  "note": "ONNX Runtime 1.18.1 for Linux x64, Microsoft's own build. MMAI computes its models with it. Since 19.11.2026 taken from Microsoft's official NuGet package Microsoft.ML.OnnxRuntime 1.18.1 (the owner's word of that day): the release file on GitHub, the place VCMI's build instructions name (docs/developers/Building_Linux.md), answers 404. Pinned by the content of every file that is used, as it was in that release: a file that differs is not written to disk. Headers are compared with Unix line ends (a package put together on Windows may hold them with CR LF); what is written is the pinned content byte for byte. The three headers of the training interface are not part of this package and are not needed",
+  "archive": "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.18.1/microsoft.ml.onnxruntime.1.18.1.nupkg",
+  "format": "zip",
+  "from": {
+   "runtimes/linux-x64/native/libonnxruntime.so": "lib/libonnxruntime.so.1.18.1",
+   "build/native/include/": "include/"
+  },
+  "optional": [
+   "include/onnxruntime_training_c_api.h",
+   "include/onnxruntime_training_cxx_api.h",
+   "include/onnxruntime_training_cxx_inline.h"
+  ],
   "files": {
    "include/cpu_provider_factory.h": "0de52d129c718c07ee71a16b4953d8d483df019746a11caad77a0650a2f4ed47",
    "include/onnxruntime_c_api.h": "1e12ca259f96f6311bc7a4f66d8c61a7c158eeb1c341dd39be9dd1ebf1ef5b75",

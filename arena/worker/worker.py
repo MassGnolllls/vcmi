@@ -182,10 +182,20 @@ def vcmi_mods_dir() -> Path:
     return Path(base) / "vcmi" / "Mods"
 
 
+# Where a download may come from. Everything fetched is pinned in the fork (mods.json, tools.json) by
+# commit or checksum; this list is the second lock. The NuGet line is one package in one version -
+# Microsoft's own build of ONNX Runtime 1.18.1 (the owner's word of 19.11.2026: its release file on
+# GitHub answers 404) - and nothing else from that place.
+DOWNLOAD_SOURCES = (
+    "https://github.com/",
+    "https://api.nuget.org/v3-flatcontainer/microsoft.ml.onnxruntime/1.18.1/",
+)
+
+
 def fetch(url: str, dest: Path, limit: int = 400_000_000) -> None:
     """Plain HTTPS download: no token, no credentials of any kind. Only URLs pinned in the fork get here."""
     import urllib.request
-    if not url.startswith("https://github.com/"):
+    if not url.startswith(DOWNLOAD_SOURCES):
         raise RuntimeError(f"refusing to download from {url}")
     request = urllib.request.Request(url, headers={"User-Agent": "fairai-worker"})
     total = 0
@@ -292,12 +302,15 @@ def ensure_mods(names) -> None:
 
 
 def ensure_onnxruntime() -> Path:
-    """The library MMAI computes its models with, from the release pinned in tools.json. Only the files
+    """The library MMAI computes its models with, from the archive pinned in tools.json. Only the files
     named there are taken from the archive, each only if its content is the pinned one."""
     import tarfile
+    import zipfile
     spec = json.loads((SRC / "arena" / "worker" / "tools.json").read_text())["onnxruntime"]
     wanted = dict(spec["files"])
-    pin = hashlib.sha256(json.dumps([spec["archive"], spec["files"], spec.get("links", {})], sort_keys=True).encode()).hexdigest()
+    optional = set(spec.get("optional", []))
+    places = spec.get("from", {})
+    pin = hashlib.sha256(json.dumps([spec["archive"], spec["files"], spec.get("links", {}), places, sorted(optional)], sort_keys=True).encode()).hexdigest()
     target = ROOT / "onnxruntime"
     marker = target / ".fairai-pin"
     if marker.exists() and marker.read_text().strip() == pin:
@@ -306,29 +319,62 @@ def ensure_onnxruntime() -> Path:
     tmp = ROOT / ".onnxruntime-download"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
+    seen = []  # what the archive holds where we look (for the message when something is missing)
+
+    def place_of(name: str):
+        """Where a file of a package (NuGet: a zip archive with its own layout) belongs in our folder."""
+        name = name.replace("\\", "/")
+        for source, place in places.items():
+            if source.endswith("/") and name.startswith(source):
+                seen.append(name)
+                return place + name[len(source):]
+            if name == source:
+                seen.append(name)
+                return place
+        return None
+
+    def members(archive: Path):
+        if spec.get("format") == "zip":
+            with zipfile.ZipFile(archive) as z:
+                for info in z.infolist():
+                    rel = None if info.is_dir() else place_of(info.filename)
+                    if rel in wanted:
+                        if info.file_size > 200_000_000:
+                            raise RuntimeError(f"ONNX Runtime: {info.filename} is larger than expected")
+                        yield rel, z.read(info)
+        else:
+            with tarfile.open(archive) as tar:
+                for member in tar:
+                    if not member.isfile():
+                        continue
+                    rel = member.name.split("/", 1)[1] if "/" in member.name else member.name  # below the archive's top folder
+                    if rel in wanted:
+                        yield rel, tar.extractfile(member).read()
+
     try:
-        archive = tmp / "archive.tgz"
+        archive = tmp / "archive"
         fetch(spec["archive"], archive)
         out = tmp / "root"
-        with tarfile.open(archive) as tar:
-            for member in tar:
-                if not member.isfile():
-                    continue
-                rel = member.name.split("/", 1)[1] if "/" in member.name else member.name  # below the archive's top folder
-                if rel not in wanted:
-                    continue
-                data = tar.extractfile(member).read()
-                got = hashlib.sha256(data).hexdigest()
-                if got != wanted[rel]:
-                    raise RuntimeError(f"ONNX Runtime: {rel} has SHA-256 {got}, pinned is {wanted[rel]}")
-                dest = out / safe_relative(rel)
-                dest.parent.mkdir(parents=True, exist_ok=True)
-                dest.write_bytes(data)
-                if rel.startswith("lib/"):
-                    dest.chmod(0o755)
-                del wanted[rel]
-        if wanted:
-            raise RuntimeError("ONNX Runtime: the archive lacks " + ", ".join(sorted(wanted)))
+        for rel, data in members(archive):
+            got = hashlib.sha256(data).hexdigest()
+            if got != wanted[rel] and rel.startswith("include/"):
+                # a package put together on Windows may hold the headers with CR LF: compared - and
+                # written - with Unix line ends, so what lands on disk is the pinned content byte for byte
+                unix = data.replace(b"\r\n", b"\n")
+                if hashlib.sha256(unix).hexdigest() == wanted[rel]:
+                    data, got = unix, wanted[rel]
+            if got != wanted[rel]:
+                raise RuntimeError(f"ONNX Runtime: {rel} has SHA-256 {got}, pinned is {wanted[rel]}")
+            dest = out / safe_relative(rel)
+            dest.parent.mkdir(parents=True, exist_ok=True)
+            dest.write_bytes(data)
+            if rel.startswith("lib/"):
+                dest.chmod(0o755)
+            del wanted[rel]
+        missing = sorted(name for name in wanted if name not in optional)
+        if missing:
+            raise RuntimeError("ONNX Runtime: the archive lacks " + ", ".join(missing)
+                               + (" (it holds: " + ", ".join(sorted(seen)[:40]) + ")" if places else ""))
         for link, to in spec.get("links", {}).items():
             os.symlink(to, out / safe_relative(link))
         (out / ".fairai-pin").write_text(pin + "\n")

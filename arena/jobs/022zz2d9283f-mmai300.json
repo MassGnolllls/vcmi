@@ -1,0 +1,30 @@
+{
+ "note": "Where FairAI stands against Nullkiller2 with the MMAI battle AI, played to the end: the twelve medium land maps, both seats, day limit 300. Two configurations: the base of the current tests {\"magicWorth\": 2}, and the base with the combat package of 19.11. (battlePlan 3, guardModel 1, ownCasters 1, wholeCreatures 1). So far there is one small local series against this opponent with the standard of 18.11. (24 games: 15 won, 9 lost). First job that needs MMAI on the worker: the mod archive (mods.json) and the ONNX Runtime (tools.json) - since 19.11. from Microsoft's official NuGet package (the owner's word of that day; the release file on GitHub answers 404), every file pinned by its content as before. If either cannot be had as pinned the job fails and the next one runs.",
+ "script": "matrix.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "play",
+  "--client",
+  "{client}",
+  "--spec",
+  "matrix_long300.json",
+  "--out",
+  "{out}",
+  "--jobs",
+  "{jobs}",
+  "--seeds",
+  "65",
+  "--only",
+  "m-land-2p",
+  "--ai",
+  "FairAI+FairAI",
+  "--opponent",
+  "Nullkiller2+MMAI",
+  "--configs",
+  "{\"base\": {\"magicWorth\": 2}, \"nG\": {\"magicWorth\": 2, \"battlePlan\": 3, \"guardModel\": 1, \"ownCasters\": 1, \"wholeCreatures\": 1}}",
+  "--shared-pool"
+ ],
+ "jobs": 6
+}

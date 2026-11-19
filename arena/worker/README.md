@@ -22,6 +22,6 @@ Nur, was der Besitzer des Rechners ausdrücklich erlaubt hat, und nur in dem Sta
 |---|---|---|---|
 | Horn of the Abyss (Mod) | `vcmi-mods/horn-of-the-abyss` | Git-Commit | `mods.json` |
 | MMAI: Modelle und Einstellungen (Mod, nur Daten) | Veröffentlichung von `vcmi-mods/mmai`, das Archiv, das auch der VCMI-Launcher installiert | SHA-256 des Archivs | `mods.json` |
-| ONNX Runtime 1.18.1 (Bibliothek, mit der MMAI seine Modelle rechnet) | offizielle Veröffentlichung von `microsoft/onnxruntime`, wie in der VCMI-Bauanleitung genannt | SHA-256 jeder verwendeten Datei; eine abweichende Datei wird nicht auf die Platte geschrieben | `tools.json` |
+| ONNX Runtime 1.18.1 (Bibliothek, mit der MMAI seine Modelle rechnet) | Microsofts offizielles NuGet-Paket `Microsoft.ML.OnnxRuntime` 1.18.1 – genau dieses Paket in dieser Version, sonst nichts von dort (erlaubt am 19.11.2026; die Datei der Veröffentlichung von `microsoft/onnxruntime` auf GitHub, die die VCMI-Bauanleitung nennt, antwortet mit 404) | SHA-256 jeder verwendeten Datei, so wie sie in jener Veröffentlichung war; eine abweichende Datei wird nicht auf die Platte geschrieben | `tools.json` |
 
 Ein Job fordert Mods mit `"mods": ["hota"]` bzw. `"mods": ["mmai"]` an. Für MMAI nimmt der Worker die Bibliothek in den Build auf (nur MMAI selbst wird dabei übersetzt). Lässt sich etwas nicht im hinterlegten Stand beschaffen, schlägt nur dieser Job fehl; der nächste läuft.
