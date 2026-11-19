@@ -68,6 +68,7 @@ struct ForecastOptions;
 class Perception;
 class FairAIGateway;
 struct ObservedObject;
+struct ObservedStack;
 struct RewardTable;
 
 /// A visible (or recently seen) enemy hero and how far it may move until our next turn
@@ -163,6 +164,10 @@ public:
 	double outmatchedBy(const CGHeroInstance * hero) const;
 	int fortressLog = -1;
 	void noteHeroSpell(HeroTypeID hero, SpellID spell, int affected);
+	/// (fightForecast 2) A fight of ours against wandering monsters begins: the battle shows how many really stand
+	/// there. The simulator's forecast for that number is kept and set against the real loss when the fight ends.
+	void noteGuardFightStart(const CGHeroInstance * hero, CreatureID creature, int count, const CArmedInstance * guards = nullptr);
+	void noteGuardFightEnd(bool won, double lostShare);
 	/// A battle is lost: is buying our army free for `cost` gold the better end? ownValue: AI value we
 	/// still have on the field, enemyLoss: what it would still kill (parameter surrender)
 	bool surrenderWorth(int cost, double ownValue, double enemyLoss) const;
@@ -501,6 +506,43 @@ private:
 	/// army and (with spellForecast) spell points and spells of a hero: the same hash, the same forecast
 	uint64_t fightSignature(const CGHeroInstance * hero) const;
 	FightForecast forecastMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const;
+	/// the same without the cache (also called from the battle callbacks, on another thread)
+	FightForecast simulateMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const;
+	/// (fightForecast 2) How a stack of wandering monsters is judged: two simulated fights over the range the map shows
+	struct MonsterJudgement
+	{
+		double cost = -1;        ///< expected loss in gold; -1: leave it alone
+		double share = 1.0;      ///< expected share of the army lost (scaled by calibration)
+		int lowCount = 0;        ///< the two numbers simulated ...
+		int highCount = 0;
+		FightForecast low;       ///< ... and how those fights go
+		FightForecast high;
+		double calibration = 1.0;
+		const char * verdict = "";
+	};
+	MonsterJudgement judgeMonster(const CGHeroInstance * hero, const ObservedStack & seen, bool belowWorstCase, bool useCache = true) const;
+	/// (fightForecast 2) what this hero's fights against guards really cost, as a share of the forecast
+	double forecastCalibration(const CGHeroInstance * hero) const;
+	struct ForecastRecord
+	{
+		double forecast = 0; ///< summed forecast loss (shares of the army) of the fights so far ...
+		double real = 0;     ///< ... and what they really cost
+		int fights = 0;
+	};
+	struct PendingFight
+	{
+		int hero = -1;
+		double forecast = 0;
+		bool win = false;
+		bool set = false;
+		bool count = false;  ///< the fight goes into the record (fightForecast 2)
+		double judged = -2;  ///< (diagnostics) share of the army the rule expected over the range the map showed; -1: it would not fight
+		double old = -2;     ///< (diagnostics) the same by the old rule (army values)
+	};
+	mutable std::mutex calibMutex; ///< the records below are written from the battle callbacks
+	ForecastRecord calibAll;
+	std::map<int, ForecastRecord> calibHero;
+	PendingFight pendingFight;
 	/// expected loss (gold) of attacking this stack of wandering monsters; -1: leave it alone
 	double monsterLoss(const CGHeroInstance * hero, const ObservedObject & monster, bool simulate = false) const;
 	/// How a fight against guards is forecast (parameter forecastPlans): as the combat AI will play it

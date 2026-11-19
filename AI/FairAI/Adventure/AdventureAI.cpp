@@ -317,6 +317,10 @@ void Params::loadOverrides(int playerIndex)
 	read("maxLossShare", maxLossShare);
 	read("maxLossShareIdle", maxLossShareIdle);
 	read("maxLossShareSecondary", maxLossShareSecondary);
+	read("forecastCalib", forecastCalib);
+	read("forecastCalibWeight", forecastCalibWeight);
+	read("forecastCalibMemory", forecastCalibMemory);
+	read("forecastSafeShare", forecastSafeShare);
 	read("guardKillValue", guardKillValue);
 	read("couriers", couriers);
 	read("earlyGoldDays", earlyGoldDays);
@@ -2245,6 +2249,17 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 	const auto key = std::make_tuple(hero->id.getNum(), signature, creature.getNum(), count);
 	if(auto cached = forecastCache.find(key); cached != forecastCache.end())
 		return cached->second;
+	result = simulateMonsterFight(hero, creature, count);
+	forecastCache[key] = result;
+	return result;
+}
+
+AdventureAI::FightForecast AdventureAI::simulateMonsterFight(const CGHeroInstance * hero, CreatureID creature, int count) const
+{
+	FightForecast result;
+	const CCreature * type = creature.toCreature();
+	if(!hero || !type || count <= 0 || hero->stacksCount() == 0)
+		return result;
 
 	std::vector<Combat::StackSpec> stacks;
 	for(const auto & [slot, stack] : hero->Slots())
@@ -2285,7 +2300,149 @@ AdventureAI::FightForecast AdventureAI::forecastMonsterFight(const CGHeroInstanc
 	{
 		logAi->warn("FairAI %s: battle forecast failed (%s)", me.toString(), e.what());
 	}
-	forecastCache[key] = result;
+	return result;
+}
+
+double AdventureAI::forecastCalibration(const CGHeroInstance * hero) const
+{
+	// The simulator plays our side by one plan from the first move to the last; in the game the combat
+	// AI searches every move, and our hero casts. In the first week of a game the forecast is about
+	// right all the same (real loss 0.95 to 1.16 of it), from the third week on real fights cost 0.5
+	// to 0.7 of it (three sets of 13 logged games, 689 fights). What it is for this player and this
+	// hero right now shows as the game goes: real loss over forecast loss of the last fights (the
+	// forecast for the number that really stood there), starting from forecastCalib. A hero's own
+	// record counts on top of the record of all our heroes.
+	std::lock_guard<std::mutex> lock(calibMutex);
+	const double weight = std::max(0.01, params.forecastCalibWeight);
+	double scale = (params.forecastCalib * weight + calibAll.real) / (weight + calibAll.forecast);
+	if(hero)
+	{
+		if(auto own = calibHero.find(hero->id.getNum()); own != calibHero.end())
+			scale = (scale * weight + own->second.real) / (weight + own->second.forecast);
+	}
+	return std::clamp(scale, 0.4, 1.3);
+}
+
+void AdventureAI::noteGuardFightStart(const CGHeroInstance * hero, CreatureID creature, int count, const CArmedInstance * guards)
+{
+	PendingFight pending;
+	const bool diagnostics = logAi->isDebugEnabled();
+	if((params.fightForecast >= 2 || diagnostics) && hero && creature.hasValue() && count > 0)
+	{
+		const FightForecast forecast = simulateMonsterFight(hero, creature, count);
+		pending.hero = hero->id.getNum();
+		pending.forecast = forecast.lossShare;
+		pending.win = forecast.win;
+		pending.set = true;
+		pending.count = params.fightForecast >= 2;
+		if(diagnostics && guards)
+		{
+			// what either rule made of this stack when only the range on the map was known (for the
+			// battle the game has split the stack: what we saw of it before is in what we remember)
+			ObservedObject seen;
+			const auto known = perception.knownObjects();
+			if(auto remembered = known.find(guards->id); remembered != known.end())
+				seen = remembered->second;
+			const double army = static_cast<double>(hero->getArmyStrength());
+			const double price = army * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+			if(seen.army && seen.army->units.size() == 1 && seen.army->units.front().creature.hasValue() && price > 0)
+			{
+				const bool below = params.worstCaseRatio > 0 && army < params.worstCaseRatio * static_cast<double>(seen.army->maxStrength());
+				const double old = below ? -1 : expectedLoss(hero, observedDanger(seen));
+				pending.old = old < 0 ? -1 : old / price;
+				const MonsterJudgement judged = judgeMonster(hero, seen.army->units.front(), below, false);
+				pending.judged = judged.cost < 0 ? -1 : judged.share;
+			}
+		}
+	}
+	std::lock_guard<std::mutex> lock(calibMutex);
+	pendingFight = pending;
+}
+
+void AdventureAI::noteGuardFightEnd(bool won, double lostShare)
+{
+	std::lock_guard<std::mutex> lock(calibMutex);
+	if(!pendingFight.set)
+		return;
+	const PendingFight fight = pendingFight;
+	pendingFight = PendingFight();
+	const double real = won ? std::clamp(lostShare, 0.0, 1.0) : 1.0;
+	// a fight the simulator gave up for lost has no forecast loss to scale: logged, not counted
+	if(fight.win && fight.count)
+	{
+		const double keep = std::clamp(params.forecastCalibMemory, 0.0, 1.0);
+		calibAll.forecast = calibAll.forecast * keep + fight.forecast;
+		calibAll.real = calibAll.real * keep + real;
+		++calibAll.fights;
+		ForecastRecord & own = calibHero[fight.hero];
+		own.forecast = own.forecast * keep + fight.forecast;
+		own.real = own.real * keep + real;
+		++own.fights;
+	}
+	const double weight = std::max(0.01, params.forecastCalibWeight);
+	const double scale = std::clamp((params.forecastCalib * weight + calibAll.real) / (weight + calibAll.forecast), 0.4, 1.3);
+	std::string before;
+	if(fight.judged > -2)
+		before = boost::str(boost::format(" (from the range on the map: forecast rule %.3f, old rule %.3f)") % fight.judged % fight.old);
+	if(fight.count)
+		logAi->info("FairAI %s forecast check: %s %.3f of the army, real %s%.3f%s; after %d fights the forecast is scaled by %.2f", me.toString(),
+			fight.win ? "forecast" : "forecast LOST,", fight.forecast, won ? "" : "LOST, ", real, before, calibAll.fights, scale);
+	else
+		logAi->debug("FairAI %s forecast check: %s %.3f of the army, real %s%.3f%s", me.toString(),
+			fight.win ? "forecast" : "forecast LOST,", fight.forecast, won ? "" : "LOST, ", real, before);
+}
+
+AdventureAI::MonsterJudgement AdventureAI::judgeMonster(const CGHeroInstance * hero, const ObservedStack & seen, bool belowWorstCase, bool useCache) const
+{
+	// (fightForecast 2) The map shows a range ("a pack": 20 to 49). In 554 logged fights the real number
+	// lay evenly over it (mean position 0.45). The expected loss over an even spread is taken from two
+	// simulated fights, at 21 % and at 79 % of the range (Gauss' rule with two points: exact for every
+	// cost that bends no more than a cubic) - and the fight at 79 % has to be won.
+	MonsterJudgement result;
+	// (the battle callbacks ask from another thread: no cache there)
+	const auto fight = [&](int count) { return useCache ? forecastMonsterFight(hero, seen.creature, count) : simulateMonsterFight(hero, seen.creature, count); };
+	const int least = std::max(1, seen.minCount);
+	const int most = std::max(least, seen.maxCount);
+	const double middle = 0.5 * (least + most);
+	const double reach = 0.5 * (most - least) / std::sqrt(3.0);
+	result.lowCount = std::clamp(static_cast<int>(std::lround(middle - reach)), least, most);
+	result.highCount = std::clamp(static_cast<int>(std::lround(middle + reach)), least, most);
+	result.calibration = forecastCalibration(hero);
+	result.high = fight(result.highCount);
+	if(!result.high.win)
+	{
+		result.verdict = "lost in the upper part of the range";
+		return result;
+	}
+	result.low = result.lowCount < result.highCount ? fight(result.lowCount) : result.high;
+	if(!result.low.win)
+	{
+		result.verdict = "lost in the lower part of the range";
+		return result;
+	}
+	if(belowWorstCase)
+	{
+		// The army is worth less than worstCaseRatio times the largest stack the range allows. Judged
+		// by army values such fights were lost outright too often; the simulator may overrule that -
+		// when the fight against the largest number is a clear win as simulated (not scaled down).
+		const FightForecast top = most > result.highCount ? fight(most) : result.high;
+		if(!top.win || top.lossShare > params.forecastSafeShare)
+		{
+			result.verdict = "may be as strong as we are";
+			return result;
+		}
+	}
+	const double scale = result.calibration;
+	result.share = 0.5 * (std::min(1.0, scale * result.low.lossShare) + std::min(1.0, scale * result.high.lossShare));
+	const double mana = 0.5 * (result.low.manaShare + result.high.manaShare); // the spell points the fight takes, priced like troops
+	const double limit = isMain(hero) ? std::min(0.6, params.maxLossShare + params.maxLossShareIdle * idleDays) : (leads(hero) ? params.maxLossShare : params.maxLossShareSecondary);
+	if(result.share > limit)
+	{
+		result.verdict = "costs too much";
+		return result;
+	}
+	result.cost = (result.share + mana) * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue * params.lossAversion * std::sqrt(economy.armyPremium);
+	result.verdict = "taken";
 	return result;
 }
 
@@ -2313,7 +2470,11 @@ double AdventureAI::monsterLoss(const CGHeroInstance * hero, const ObservedObjec
 	// logged fights a tenth of the stacks were a third stronger than assumed, the strongest 1.8
 	// times). With an army worth less than 1.1 times the largest stack the range allows we lost 8 of
 	// 367 fights outright and a quarter of the army on average; above that, 2 of 4,837.
-	if(params.worstCaseRatio > 0 && static_cast<double>(hero->getArmyStrength()) < params.worstCaseRatio * static_cast<double>(monster.army->maxStrength()))
+	const bool belowWorstCase = params.worstCaseRatio > 0 && static_cast<double>(hero->getArmyStrength()) < params.worstCaseRatio * static_cast<double>(monster.army->maxStrength());
+	// (fightForecast 2) the simulator decides, scaled by what our fights have really cost
+	if(params.fightForecast >= 2 && monster.army->units.size() == 1 && monster.army->units.front().creature.hasValue())
+		return judgeMonster(hero, monster.army->units.front(), belowWorstCase).cost;
+	if(belowWorstCase)
 		return -1;
 	if((!params.fightForecast && !simulate) || monster.army->units.size() != 1 || !monster.army->units.front().creature.hasValue())
 		return expectedLoss(hero, observedDanger(monster));
@@ -7182,15 +7343,29 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			// once a day: how the main hero judges every guard in reach (diagnostics)
 			const ObservedStack & seen = object.army->units.front();
-			const double middle = 0.5 * (seen.minCount + seen.maxCount);
-			const int likelyCount = std::max(1, static_cast<int>(std::lround((1 - params.dangerUpperWeight) * middle + params.dangerUpperWeight * seen.maxCount)));
-			const FightForecast likely = forecastMonsterFight(hero, seen.creature, likelyCount);
-			const FightForecast worst = forecastMonsterFight(hero, seen.creature, seen.maxCount);
-			forecastLines += boost::str(boost::format(" [%s %d-%d: %s %.2f, at most %s %.2f, old rule %s, loss %.0f%s]")
-				% (seen.creature.hasValue() ? seen.creature.toCreature()->getJsonKey() : std::string("?")) % seen.minCount % seen.maxCount
-				% (likely.win ? "win" : "LOSE") % likely.lossShare % (worst.win ? "win" : "LOSE") % worst.lossShare
-				% (expectedLoss(hero, danger) < 0 ? "no" : "yes") % loss
-				% (likely.mana + worst.mana > 0 ? boost::str(boost::format(", spells for %d to %d points") % likely.mana % worst.mana) : std::string()));
+			if(params.fightForecast >= 2 && seen.creature.hasValue())
+			{
+				const bool below = params.worstCaseRatio > 0 && static_cast<double>(hero->getArmyStrength()) < params.worstCaseRatio * static_cast<double>(object.army->maxStrength());
+				const MonsterJudgement judged = judgeMonster(hero, seen, below);
+				const double old = below ? -1 : expectedLoss(hero, danger);
+				forecastLines += boost::str(boost::format(" [%s %d-%d: against %d %s %.2f, against %d %s %.2f, scaled by %.2f: %.3f of the army, %s; old rule %s, loss %.0f against %.0f]")
+					% seen.creature.toCreature()->getJsonKey() % seen.minCount % seen.maxCount
+					% judged.lowCount % (judged.low.win ? "win" : "LOSE") % judged.low.lossShare
+					% judged.highCount % (judged.high.win ? "win" : "LOSE") % judged.high.lossShare
+					% judged.calibration % judged.share % judged.verdict % (old < 0 ? "no" : "yes") % loss % old);
+			}
+			else
+			{
+				const double middle = 0.5 * (seen.minCount + seen.maxCount);
+				const int likelyCount = std::max(1, static_cast<int>(std::lround((1 - params.dangerUpperWeight) * middle + params.dangerUpperWeight * seen.maxCount)));
+				const FightForecast likely = forecastMonsterFight(hero, seen.creature, likelyCount);
+				const FightForecast worst = forecastMonsterFight(hero, seen.creature, seen.maxCount);
+				forecastLines += boost::str(boost::format(" [%s %d-%d: %s %.2f, at most %s %.2f, old rule %s, loss %.0f%s]")
+					% (seen.creature.hasValue() ? seen.creature.toCreature()->getJsonKey() : std::string("?")) % seen.minCount % seen.maxCount
+					% (likely.win ? "win" : "LOSE") % likely.lossShare % (worst.win ? "win" : "LOSE") % worst.lossShare
+					% (expectedLoss(hero, danger) < 0 ? "no" : "yes") % loss
+					% (likely.mana + worst.mana > 0 ? boost::str(boost::format(", spells for %d to %d points") % likely.mana % worst.mana) : std::string()));
+			}
 		}
 		if(loss < 0 && (weakestRejected == 0 || danger < weakestRejected))
 			weakestRejected = danger;

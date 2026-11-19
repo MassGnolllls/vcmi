@@ -25,6 +25,7 @@
 #include <mutex>
 #include "../../lib/UnlockGuard.h"
 #include "../../lib/mapObjects/CGDwelling.h"
+#include "../../lib/mapObjects/CGCreature.h"
 #include "../../lib/CCreatureHandler.h"
 #include "../../lib/CStack.h"
 #include "../../lib/spells/CSpellHandler.h"
@@ -587,6 +588,19 @@ void FairAIGateway::battleStart(const BattleID & battleID, const CCreatureSet * 
 		}
 	}
 	CAdventureAI::battleStart(battleID, army1, army2, tile, hero1, hero2, side, replayAllowed);
+	if(adventure)
+	{
+		// (fightForecast 2) our hero attacks wandering monsters: the battle shows how many there are.
+		// The simulator's forecast for that number is set against the real loss when the fight ends.
+		const auto * monsters = side == BattleSide::ATTACKER && hero1 && !hero2 ? dynamic_cast<const CGCreature *>(army2) : nullptr;
+		int count = 0;
+		if(monsters)
+		{
+			for(const auto & slot : monsters->Slots())
+				count += slot.second ? slot.second->getCount() : 0;
+		}
+		adventure->noteGuardFightStart(monsters ? hero1 : nullptr, monsters ? monsters->getCreatureID() : CreatureID(), count, monsters);
+	}
 	if(auto battle = cb->getBattle(battleID))
 	{
 		// In battle the game shows the enemy hero's primary skills (its window on the battlefield):
@@ -681,6 +695,8 @@ void FairAIGateway::battleEnd(const BattleID & battleID, const BattleResult * br
 		logAi->info("FairAI %s battle result: %s, %d of our creatures died (value %llu of %llu, enemy %llu)", playerID.toString(),
 			br->winner == battleSide ? "won" : "lost", lost, (unsigned long long)lostValue, (unsigned long long)battleOwnStrength,
 			(unsigned long long)battleEnemyStrength);
+		if(adventure)
+			adventure->noteGuardFightEnd(br->winner == battleSide, battleOwnStrength > 0 ? std::min(1.0, static_cast<double>(lostValue) / static_cast<double>(battleOwnStrength)) : 0.0);
 		if(battleEnemyHero >= 0 && adventure)
 		{
 			// the result window shows both sides' casualties: what is left of that hero's army is known
