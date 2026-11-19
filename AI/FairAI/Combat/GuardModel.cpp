@@ -14,6 +14,9 @@
 
 #include "../../../lib/battle/Unit.h"
 
+#include <bit>
+#include <bitset>
+
 namespace FAI::Combat
 {
 
