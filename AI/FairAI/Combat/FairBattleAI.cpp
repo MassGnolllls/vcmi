@@ -69,6 +69,7 @@ struct SearchSettings
 	int oracleUntilRound = envInt("FAI_ORACLE_UNTIL", 3);   ///< ... in the first rounds of a battle only (the opening decides who gets hit first)
 	int ambush = envInt("FAI_AMBUSH", 0);                  ///< battle plan: a third plan for our side besides holding and advancing - lying in wait (Stance::AMBUSH)
 	int corner = envInt("FAI_CORNER", 0);                  ///< move candidate: into the nearer corner of our side
+	int guardValues = envInt("FAI_GUARD_VALUES", 1);       ///< the stalking enemy of the play-outs chooses its targets by BattleAI's own measure (damage it is spared), not by army value
 	int spellRounds = envInt("FAI_SPELL_ROUNDS", 2);        ///< spell search: rounds after the current one
 	int manaPricePermille = envInt("FAI_MANA_PRICE", 4);   ///< spell search: price of a scarce spell point, per mille of our army
 };
@@ -407,6 +408,8 @@ void FairBattleAI::policyCheck(const BattleID & battleID, const BattleAction & a
 		{
 			SimState sim = state;
 			sim.stance[enemySide] = stance;
+			// the guards choose their targets by BattleAI's own measure
+			sim.guardValues[enemySide] = stance == Stance::STALK && searchSettings().guardValues != 0;
 			sim.playDefault(me);
 			add(sim.lastAction);
 		}

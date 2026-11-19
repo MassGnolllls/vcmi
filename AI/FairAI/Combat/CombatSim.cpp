@@ -785,7 +785,9 @@ int SimState::nextActiveUnit()
 				const auto & b = units[best];
 				if(u.initiative != b.initiative)
 				{
-					if(u.initiative > b.initiative)
+					// the fastest first - but among units that waited the slowest first (engine rule:
+					// whoever waits with the fastest unit gets the last word of the round)
+					if(waitPhase ? u.initiative < b.initiative : u.initiative > b.initiative)
 						best = i;
 				}
 				else if(u.side != b.side && u.side != lastMoved)
@@ -1390,6 +1392,70 @@ bool SimState::hasAttack(int unit) const
 	return false;
 }
 
+double SimState::damageReduce(int attacker, int victim, double dealt) const
+{
+	const auto & v = units[victim];
+	const int64_t maxHP = std::max(1, v.maxHP);
+	const int64_t damageDealt = std::min<int64_t>(static_cast<int64_t>(dealt), v.totalHP());
+	if(damageDealt <= 0)
+		return 0;
+	// the victim's damage against the attacker, per creature: by shot if it can shoot from where it stands
+	const double perCreature = canShoot(victim) ? damage->ranged(victim, attacker, shotIsFar(victim, attacker)) * units[victim].rangedAttacks
+		: damage->melee(victim, attacker);
+	auto hpFunction = [maxHP](double start, double end)
+	{
+		const double ratioStart = start / maxHP;
+		const double ratioEnd = end / maxHP;
+		return (0.666666 * (4 - ratioStart - ratioEnd)) * (ratioStart - ratioEnd) / 2;
+	};
+	const int64_t killed = damageDealt / maxHP + (damageDealt % maxHP >= v.firstHP ? 1 : 0);
+	const int64_t exceeding = damageDealt % maxHP;
+	double hpValue = static_cast<double>(damageDealt / maxHP);
+	if(v.firstHP >= exceeding)
+		hpValue += hpFunction(v.firstHP, v.firstHP - exceeding);
+	else
+	{
+		hpValue += hpFunction(v.firstHP, 0);
+		hpValue += hpFunction(maxHP, maxHP + v.firstHP - exceeding);
+	}
+	return perCreature * (killed * 0.5 + hpValue * 0.5);
+}
+
+double SimState::guardShotValue(int attacker, int target) const
+{
+	const auto & a = units[attacker];
+	const bool far = shotIsFar(attacker, target);
+	return damageReduce(attacker, target, damage->ranged(attacker, target, far) * a.count * a.rangedAttacks);
+}
+
+double SimState::guardMeleeValue(int attacker, int target, BattleHex from) const
+{
+	const auto & a = units[attacker];
+	const auto & t = units[target];
+	const double dealt = std::min<double>(t.totalHP(), damage->melee(attacker, target) * a.count * a.meleeAttacks);
+	double value = damageReduce(attacker, target, dealt);
+	const double remaining = t.totalHP() - dealt;
+	if(remaining > 0 && t.retaliationsLeft > 0 && !a.blocksRetaliation)
+	{
+		const double targetCount = std::ceil(remaining / t.maxHP);
+		value -= damageReduce(target, attacker, damage->melee(target, attacker) * targetCount);
+	}
+	// what the enemy's shooters next to that hex lose when they cannot shoot any more
+	if(from.isValid())
+	{
+		for(int i = 0; i < static_cast<int>(units.size()); ++i)
+		{
+			const auto & s = units[i];
+			if(!s.alive() || s.side == a.side || !canShoot(i) || !adjacent(attacker, from, i))
+				continue;
+			const double shot = damage->ranged(i, attacker, false) * s.count * s.rangedAttacks;
+			const double hit = damage->melee(i, attacker) * s.count;
+			value += std::max(0.0, shot - hit + 1);
+		}
+	}
+	return value;
+}
+
 int SimState::anchorOf(BattleSide side) const
 {
 	int best = -1;
@@ -1472,7 +1538,7 @@ void SimState::playDefault(int unit)
 		{
 			if(!units[i].alive() || units[i].side == u.side)
 				continue;
-			double v = shotValue(unit, i);
+			double v = guardValues[static_cast<int>(u.side)] ? guardShotValue(unit, i) : shotValue(unit, i);
 			if(v > bestValue)
 			{
 				bestValue = v;
@@ -1506,8 +1572,10 @@ void SimState::playDefault(int unit)
 		if(!e.alive() || e.side == u.side)
 			continue;
 
+		const bool asGuard = guardValues[static_cast<int>(u.side)];
 		BattleHex attackFrom;
 		int attackDist = 1000;
+		double guardBest = -1e18;
 		for(const auto & around : battle::Unit::getSurroundingHexes(e.pos, e.doubleWide, e.side))
 		{
 			// candidate head positions whose occupied hexes include `around`
@@ -1525,7 +1593,18 @@ void SimState::playDefault(int unit)
 					continue;
 				if(!adjacent(unit, head, i))
 					continue;
-				if(dist[head.toInt()] < attackDist)
+				if(asGuard)
+				{
+					// a guard picks the hex as well: the one from which the attack counts most to it
+					const double value = guardMeleeValue(unit, i, head);
+					if(value > guardBest + 1e-9 || (std::abs(value - guardBest) <= 1e-9 && dist[head.toInt()] < attackDist))
+					{
+						guardBest = value;
+						attackDist = dist[head.toInt()];
+						attackFrom = head;
+					}
+				}
+				else if(dist[head.toInt()] < attackDist)
 				{
 					attackDist = dist[head.toInt()];
 					attackFrom = head;
@@ -1535,7 +1614,7 @@ void SimState::playDefault(int unit)
 		if(!attackFrom.isValid())
 			continue;
 
-		double v = meleeTradeValue(unit, i);
+		double v = asGuard ? guardBest : meleeTradeValue(unit, i);
 		if(v > bestValue || (v == bestValue && attackDist < bestDist))
 		{
 			bestValue = v;

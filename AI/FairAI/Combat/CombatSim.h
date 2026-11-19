@@ -317,6 +317,17 @@ public:
 	/// expected value killed/lost by an attack, without applying it
 	double meleeTradeValue(int attacker, int target) const;
 	double shotValue(int attacker, int target) const;
+	/// How VCMI's BattleAI - the combat AI of the map's guards - counts damage (AttackPossibility::
+	/// calculateDamageReduce): what the victim would deal to the attacker, for the part of it that
+	/// dies - half for creatures killed, half for health taken. In damage points, not army value.
+	double damageReduce(int attacker, int victim, double dealt) const;
+	/// A shot and a melee attack in that measure (melee: minus what the retaliation takes from us,
+	/// plus what a shooter loses that the attacker blocks by standing on \p from)
+	double guardShotValue(int attacker, int target) const;
+	double guardMeleeValue(int attacker, int target, BattleHex from) const;
+	/// The units of this side choose their targets by that measure (set for map guards when the
+	/// enemy model is Stance::STALK)
+	std::array<bool, 2> guardValues = {false, false};
 
 private:
 	void place(int unit, BattleHex at);
