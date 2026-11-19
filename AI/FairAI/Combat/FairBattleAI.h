@@ -123,6 +123,7 @@ private:
 	int guardModel = 0;       ///< from the player's FairAI parameters: the play-outs of the battle plan play guards by GuardModel
 	bool ownCasters = false;  ///< from the player's FairAI parameters: our units that can cast are played by our own search
 	bool modelSearch = false; ///< from the player's FairAI parameters: the plain search plays the enemy by GuardModel too
+	bool latePlan = false;    ///< from the player's FairAI parameters: "wait, then advance" is one more plan
 	int kitePlan = 0;         ///< from the player's FairAI parameters: "shoot and stay out of reach" is a fifth plan against guards
 	static constexpr int KITE_ROUNDS = 40; ///< ... played this many rounds ahead (to the end of the battle, as a rule)
 	static constexpr int KITE_TURNS = 6;   ///< ... and turning to fight is tried after each of this many rounds

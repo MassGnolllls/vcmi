@@ -311,6 +311,7 @@ void Params::loadOverrides(int playerIndex)
 	read("modelSearch", modelSearch);
 	read("detour", detour);
 	read("kitePlan", kitePlan);
+	read("latePlan", latePlan);
 	read("wholeCreatures", wholeCreatures);
 	read("forecastPlans", forecastPlans);
 	read("fightForecast", fightForecast);

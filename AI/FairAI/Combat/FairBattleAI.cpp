@@ -819,6 +819,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	planVsPlayers = params.planVsPlayers != 0;
 	modelSearch = params.modelSearch != 0;
 	kitePlan = params.kitePlan;
+	latePlan = params.latePlan != 0;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -1708,6 +1709,9 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		ownPlans.push_back(Stance::AMBUSH);
 	if(config.ambush >= 2 || guardPlan)
 		ownPlans.push_back(Stance::GUARD);
+	// (latePlan) "wait, then advance": nothing in reach - wait, and walk when the others have moved
+	if(latePlan)
+		ownPlans.push_back(Stance::STALK);
 	// (the environment variables of the test bench win over the player's parameters)
 	const int oracleRounds = config.oracleRounds > 0 ? config.oracleRounds : guardOracle;
 	const int oracleUntil = config.oracleRounds > 0 ? config.oracleUntilRound : guardOracleUntil;
@@ -1806,6 +1810,36 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		if(modelGuards)
 			enemyStances = {Stance::STALK};
 		static const bool showCandidates = std::getenv("FAI_CANDIDATES") != nullptr;
+		// (test) FAI_PLAN_TRACE=<part of a unit's description>: for the turns of such a unit every candidate
+		// is played on step by step under every plan and written down - who does what, who is left where
+		static const char * const tracedUnit = std::getenv("FAI_PLAN_TRACE");
+		const bool tracePlans = tracedUnit && stack->getDescription().find(tracedUnit) != std::string::npos;
+		const auto tracePlayout = [&](SimState sim, int lastRound)
+		{
+			static const char * const names[] = {"move", "attack", "shoot", "wait", "defend"};
+			std::string trace;
+			for(int step = 0; step < 60; ++step)
+			{
+				const int unit = sim.nextActiveUnit();
+				if(unit < 0 || sim.round > lastRound)
+					break;
+				if(sim.heroCast(sim.units[unit].side) && (sim.battleOver() || !sim.units[unit].alive()))
+					continue;
+				sim.playDefault(unit);
+				const auto & a = sim.lastAction;
+				trace += boost::str(boost::format("\n      r%d %s%d(%s) %s") % sim.round % (sim.units[unit].side == side ? "our " : "their ") % unit
+					% (sim.units[unit].creature.hasValue() ? sim.units[unit].creature.toCreature()->getJsonKey() : std::string("?")) % names[std::clamp(static_cast<int>(a.type), 0, 4)]);
+				if(a.target >= 0)
+					trace += " ->" + std::to_string(a.target);
+				if(a.hex.isValid())
+					trace += " @" + std::to_string(a.hex.toInt());
+				trace += " |";
+				for(int i = 0; i < static_cast<int>(sim.units.size()); ++i)
+					if(sim.units[i].alive())
+						trace += boost::str(boost::format(" %d:%dx@%d") % i % sim.units[i].count % sim.units[i].pos.toInt());
+			}
+			return trace;
+		};
 		// (Tried and dropped, 19.11.: a bonus for the plan the unit before acted by, so that the units of a
 		// round follow one forecast. 579 battles: 0.3 +- 0.3 points of the army lost MORE with a bonus of
 		// one per cent of the army; with the fifth plan, 213 battles, no difference at one or three.)
@@ -1829,6 +1863,8 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 						sim.applyOutcome(me, *c.outcome);
 					else
 						sim.apply(me, c.sim);
+					if(tracePlans)
+						logAi->info("FairAI plantrace %s, plan %d:%s", c.description, static_cast<int>(ownStance), tracePlayout(sim, planEnd));
 					sim.playout(planEnd);
 					worst = std::min(worst, sim.evaluate(side));
 					if(showCandidates)
@@ -1977,15 +2013,15 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 					if(real && kiteValue > rival + margin)
 					{
 						if(showCandidates)
-							logAi->info("FairAI candidates for %s (plans hold, advance%s%s; guards by model):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "",
-								ownPlans.size() > 3 ? ", close ranks" : "", shown);
+							logAi->info("FairAI candidates for %s (plans hold, advance%s%s%s; guards by model):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "",
+								ownPlans.size() > 3 ? ", close ranks" : "", latePlan ? ", wait then advance" : "", shown);
 						return {*real, kiteValue, what + " [out of reach]"};
 					}
 				}
 			}
 		}
 		if(showCandidates)
-			logAi->info("FairAI candidates for %s (plans hold, advance%s%s; guards by %s):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "", ownPlans.size() > 3 ? ", close ranks" : "",
+			logAi->info("FairAI candidates for %s (plans hold, advance%s%s%s; guards by %s):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "", ownPlans.size() > 3 ? ", close ranks" : "", latePlan ? ", wait then advance" : "",
 				modelGuards ? "model" : "stance", shown);
 		return {best->real, best->score, best->description};
 	}
