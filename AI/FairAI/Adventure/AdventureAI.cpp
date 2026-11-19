@@ -309,6 +309,7 @@ void Params::loadOverrides(int playerIndex)
 	read("ownCasters", ownCasters);
 	read("planVsPlayers", planVsPlayers);
 	read("modelSearch", modelSearch);
+	read("detour", detour);
 	read("kitePlan", kitePlan);
 	read("wholeCreatures", wholeCreatures);
 	read("forecastPlans", forecastPlans);
@@ -1479,7 +1480,48 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			return;
 
 		std::sort(targets.begin(), targets.end(), [](const Target & a, const Target & b) { return a.score > b.score; });
-		const Target & best = targets.front();
+		// (detour) What lies on the way is taken on the way. Judged by itself, a small target beside the
+		// road loses against a big one days away at every step - and when the hero comes back from the
+		// big one, the small one is days away and loses again. (In a logged game four packs of 20 to 49
+		// pixies with mines and resource piles behind them stood untouched on day 26 beside the road a
+		// main hero of 5,000 to 50,000 had walked three times between its town and its work.) Going
+		// there first costs only the detour: it pays when it brings more per day of detour than the
+		// big target brings per day of its way.
+		const Target * pick = &targets.front();
+		if(params.detour && targets.size() > 1 && targets.front().travel >= 0.5 && targets.front().score > 0)
+		{
+			const Target & far = targets.front();
+			const int3 here = hero->visitablePos();
+			const auto tiles = [](const int3 & a, const int3 & b) { return static_cast<double>(std::max(std::abs(a.x - b.x), std::abs(a.y - b.y))); };
+			const double direct = tiles(here, far.tile);
+			const auto known = perception.knownObjects();
+			double bestRate = far.score;
+			for(size_t i = 1; i < targets.size() && direct > 0 && here.z == far.tile.z; ++i)
+			{
+				const Target & near = targets[i];
+				if(near.travel >= far.travel || near.value <= near.loss || near.tile.z != here.z || !near.object.hasValue())
+					continue;
+				// (things to pick up or beat only: a town, a hero, a way to flee is a plan of its own)
+				const auto it = known.find(near.object);
+				if(it == known.end() || it->second.type == Obj::TOWN || it->second.type == Obj::HERO)
+					continue;
+				if(near.description.rfind("monster", 0) != 0 && near.description.rfind("object", 0) != 0 && near.description.rfind("bank", 0) != 0)
+					continue;
+				// the way on from there, taken at the pace of the way to the big target
+				const double onward = far.travel * tiles(near.tile, far.tile) / direct;
+				const double extra = std::max(0.1, near.travel + onward - far.travel);
+				const double rate = (near.value - near.loss) / (extra + params.travelOffset);
+				if(rate > bestRate)
+				{
+					bestRate = rate;
+					pick = &near;
+				}
+			}
+			if(pick != &targets.front() && step == 0)
+				logAi->debug("FairAI %s: %s takes %s %s on the way to %s %s (%.0f a day of detour against %.0f a day of the way)", me.toString(), hero->getNameTranslated(),
+					pick->description, pick->tile.toString(), far.description, far.tile.toString(), bestRate, far.score);
+		}
+		const Target & best = *pick;
 		if(targets.size() > 1 && step == 0)
 			logAi->debug("FairAI %s: %s alternatives: %s %.0f, %s %.0f", me.toString(), hero->getNameTranslated(),
 				targets[1].description, targets[1].score, targets.size() > 2 ? targets[2].description : "-", targets.size() > 2 ? targets[2].score : 0.0);

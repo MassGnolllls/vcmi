@@ -1,0 +1,59 @@
+{
+ "pool": "fresh1",
+ "mods": "",
+ "note": "the fresh medium maps of matrix_fresh300.json (four templates, twelve maps each, never used for tuning) with a day limit of 42: tests of the opening, read with arena/dev_effects.py - what a side has on day 28 and 42 (guards beaten, mines, towns, land seen, hero level, army) shows a switch's effect in a few hundred games, where the win rate needs thousands",
+ "categories": [
+  {
+   "name": "m-skirmish",
+   "template": "Skirmish M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 12,
+   "seed": 44000,
+   "days": 42,
+   "timeout": 900,
+   "stall": 180
+  },
+  {
+   "name": "m-balance",
+   "template": "Balance M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 12,
+   "seed": 44100,
+   "days": 42,
+   "timeout": 900,
+   "stall": 180
+  },
+  {
+   "name": "m-blockbuster",
+   "template": "Blockbuster M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 12,
+   "seed": 44200,
+   "days": 42,
+   "timeout": 900,
+   "stall": 180
+  },
+  {
+   "name": "m-longrun",
+   "template": "Long Run M",
+   "size": "m",
+   "levels": 1,
+   "water": "none",
+   "players": 2,
+   "count": 12,
+   "seed": 44300,
+   "days": 42,
+   "timeout": 900,
+   "stall": 180
+  }
+ ]
+}
