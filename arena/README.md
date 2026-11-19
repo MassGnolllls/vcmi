@@ -77,12 +77,26 @@ python3 arena/guard_bench.py play --client build/bin/vcmiclient --ai FairAI --fi
 # neue Sätze aus eigenen Logs (Partien mit ARENA_AI_LOG=debug)
 python3 arena/game_fights.py collect --logs 'probes/*/VCMI_Client_log.txt' --out arena/gamefights/neu.json \
     --sample 300 --suffix __s1 --client build/bin/vcmiclient
+
+# Kämpfe mit dem Helden, wie er in den Kampf ging (Stufe, Werte, Zauber, Zauberpunkte, Kriegsmaschinen):
+# wie in der Partie, mit vollem Vorrat an Zauberpunkten und ganz ohne
+python3 arena/game_fights.py gen --set arena/gamefights/heroes239.json --client build/bin/vcmiclient
+python3 arena/game_fights.py gen --set arena/gamefights/heroes239.json --mana full --suffix __f0 --client build/bin/vcmiclient
+python3 arena/game_fights.py gen --set arena/gamefights/heroes239.json --mana none --suffix __n0 --client build/bin/vcmiclient
+
+# dieselben Kämpfe, die Wachen von einer anderen Kampf-KI gespielt (Voreinstellung des Spiels: BattleAI)
+ARENA_NEUTRAL_AI=StupidAI python3 arena/guard_bench.py play --client build/bin/vcmiclient --ai FairAI --filter __s0 --out games-stupid
 ```
 
 - `sample300` (Endung `__s0`): 300 zufällige von 2.685 Wachenkämpfen aus 91 Partien – so sehen die Kämpfe einer Partie aus
   (die Hälfte kostet nichts; Wachen, die schießen, sind ein Viertel der Kämpfe und fast die Hälfte der Verluste).
 - `dearest69` (Endung `__g0`): die 69 teuersten (ab 20 % Verlust oder 10 Punkte über der Prognose der Kampf-KI).
 - Stand 19.11.2026 auf `sample300`: ohne Kampf-Paket 7,1 % der Armee verloren, mit 4,5 % (160 statt 75 Kämpfe ohne Verlust).
+  Mit Wachen, die StupidAI spielt: 5,7 % und 3,6 %; mit MMAI: 7,3 % und 5,2 % (20.11.).
+- `heroes239` (Endung `__h0`): alle 239 Wachenkämpfe aus 13 Partien vom 20.11., jeder mit dem Helden, wie er war. Die Helden
+  haben in 215 der Kämpfe Zauber, aber im Mittel nur 9 von 26 Zauberpunkten. Mit dem Kampf-Paket: ohne Zauberpunkte 5,9 %
+  Verlust, mit denen der Partie 5,4 % (3,8 Punkte je Kampf ausgegeben), mit vollem Vorrat 4,9 % (11,6 Punkte).
+  Das Ergebnis eines Kampfes nennt die Zauberpunkte, die der Held übrig hat (`heroMana`).
 - Die Endung eines Satzes darf in keinem anderen Kartennamen vorkommen (`--filter` sucht im Namen; `__r0` träfe auch `__r030__0`).
 
 ## Auswertung ganzer Partien

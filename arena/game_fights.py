@@ -16,10 +16,15 @@ benchmark's stage and without spells - as with --plain-hero).
   game_fights.py gen     --set arena/gamefights/NAME.json --client CLIENT      (the maps, into Maps/guardbench)
   then: guard_bench.py play --client CLIENT --ai FairAI --filter __s0 --out DIR [--ai-params JSON]
 
+  game_fights.py gen     --set SET.json --mana full --suffix __f0 --client CLIENT   (the same fights, the hero with a full
+                         store of spell points; --mana none: without any - what its spells are worth)
+
 Sets in the fork (from 91 probe games of 19.11.2026, 13 seats, to day 42):
   arena/gamefights/sample300.json  (suffix __s0) 300 fights drawn at random from 2,685 - a picture of a game's fights
   arena/gamefights/dearest69.json  (suffix __g0) the 69 different fights that cost 20 % of the army or more,
                                    or 10 points more than the combat AI's own forecast at the first move
+  arena/gamefights/heroes239.json  (suffix __h0) all 239 fights of 13 probe games of 20.11.2026, each with the hero as it
+                                   went into it (level, skills, spells, spell points, war machines)
 A suffix must not be part of another set's names (the benchmark's own maps end in __r030__0 and the like).
 """
 import argparse
@@ -182,6 +187,17 @@ def cmd_collect(args):
 
 def cmd_gen(args):
     scenarios = json.loads(Path(args.set).read_text())
+    if args.mana != "logged":
+        # the same fights with a full store of spell points, or with none: under names of their own
+        if not args.suffix:
+            print("--mana full/none needs --suffix: the maps get names of their own", file=sys.stderr)
+            return 1
+        for scenario in scenarios:
+            side = scenario["sides"][0]
+            if "mana" not in side:
+                continue  # a set from older logs: the hero has no spells there anyway
+            side["mana"] = scenario.get("inGame", {}).get("manaLimit", side["mana"]) if args.mana == "full" else 0
+            scenario["name"] = scenario["name"].rsplit("__", 1)[0] + args.suffix
     library(args)
     return 0 if stage(scenarios, args) else 1
 
@@ -204,6 +220,8 @@ def main():
     c.set_defaults(func=cmd_collect)
     g = sub.add_parser("gen")
     g.add_argument("--set", required=True)
+    g.add_argument("--mana", choices=["logged", "full", "none"], default="logged", help="stage the set's fights with the hero's full store of spell points or with none (needs --suffix)")
+    g.add_argument("--suffix", default="", help="with --mana full/none: end of the new map names, e.g. __f0")
     g.add_argument("--client", required=True)
     g.add_argument("--work", default="guardbench-work")
     g.set_defaults(func=cmd_gen)
