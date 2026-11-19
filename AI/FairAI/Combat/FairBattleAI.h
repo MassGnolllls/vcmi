@@ -102,6 +102,7 @@ private:
 	bool cornerMove = false;  ///< battlePlan 4: a move into the nearer corner of our side is among the candidates
 	int guardOracleUntil = 3; ///< ... in the first rounds of a battle only
 	int guardModel = 0;       ///< from the player's FairAI parameters: the play-outs of the battle plan play guards by GuardModel
+	bool ownCasters = false;  ///< from the player's FairAI parameters: our units that can cast are played by our own search
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);
@@ -130,6 +131,8 @@ private:
 	bool trySpellByOutcome(const BattleID & battleID, const CStack * stack);
 	double outcomeScore(const std::shared_ptr<HypotheticBattle> & battle) const;
 	bool spellSearchEnabled() const;
+	/// A unit of ours that can cast: the cast it makes instead of what the search chose, if any
+	std::optional<BattleAction> creatureSpell(const BattleID & battleID, const CStack * stack, const BattleAction & chosen);
 };
 
 }

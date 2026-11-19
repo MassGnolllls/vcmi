@@ -20,6 +20,7 @@
 #include "../../BattleAI/BattleExchangeVariant.h"
 #include "../../../lib/battle/BattleUnitTurnReason.h"
 #include "../../../lib/CConfigHandler.h"
+#include "../../../lib/CRandomGenerator.h"
 #include "../../BattleAI/PotentialTargets.h"
 #include "../../BattleAI/StackWithBonuses.h"
 #include "../../BattleAI/SpellTargetsEvaluator.h"
@@ -736,6 +737,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	cornerMove = params.battlePlan >= 4;
 	guardOracleUntil = params.guardOracleUntil;
 	guardModel = params.guardModel;
+	ownCasters = params.ownCasters != 0;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -765,8 +767,79 @@ bool FairBattleAI::needsFallback(const CStack * stack) const
 	return stack->creatureId() == CreatureID::CATAPULT
 		|| stack->hasBonusOfType(BonusType::HEALER)
 		|| stack->hasBonusOfType(BonusType::ATTACKS_NEAREST_CREATURE) // berserk: forced action
-		|| stack->canCast()
+		|| (stack->canCast() && !ownCasters)
 		|| !stack->getPosition().isValid();
+}
+
+std::optional<BattleAction> FairBattleAI::creatureSpell(const BattleID & battleID, const CStack * stack, const BattleAction & chosen)
+{
+	if(chosen.actionType == EActionType::WAIT)
+		return std::nullopt; // its turn comes again in this round
+	const bool attacking = chosen.actionType == EActionType::WALK_AND_ATTACK || chosen.actionType == EActionType::SHOOT;
+	auto battle = cb->getBattle(battleID);
+
+	// Spells that harm the enemy, heal, raise or summon: BattleAI counts the health they are worth.
+	// Instead of a blow only if that AI itself would rather cast.
+	BattleEvaluator evaluator(env, cb, stack, playerID, battleID, side, strengthRatio(battle, side), 10);
+	if(auto cast = evaluator.findBestCreatureSpell(stack))
+	{
+		if(!attacking || evaluator.selectStackAction(stack).actionType == EActionType::MONSTER_SPELL)
+			return BattleAction::makeCreatureSpellcast(stack, cast->dest, cast->spell->id);
+		return std::nullopt;
+	}
+	if(attacking)
+		return std::nullopt;
+
+	// Blessings and curses, which BattleAI does not count: a blessing on the most valuable unit of
+	// ours that can take it, a curse on the most valuable of theirs
+	auto worth = [](const battle::Unit * unit)
+	{
+		const auto * type = unit->creatureId().toCreature();
+		return type && !unit->hasBonusOfType(BonusType::SIEGE_WEAPON) ? static_cast<double>(unit->getCount()) * type->getAIValue() : 0.0;
+	};
+	double bestWorth = 0;
+	std::optional<BattleAction> best;
+	if(stack->hasBonusOfType(BonusType::RANDOM_SPELLCASTER))
+	{
+		// (master genies: the game draws the blessing once the target is named)
+		for(const auto * unit : battle->battleGetUnitsIf([this](const battle::Unit * u) { return u->alive() && !u->isGhost() && u->getPosition().isValid() && u->unitSide() == side; }))
+		{
+			const SpellID drawn = battle->getRandomBeneficialSpell(CRandomGenerator::getDefault(), stack, unit);
+			if(drawn == SpellID::NONE || worth(unit) <= bestWorth)
+				continue;
+			bestWorth = worth(unit);
+			best = BattleAction::makeCreatureSpellcast(stack, battle::Target{battle::Destination(unit)}, drawn);
+		}
+		return best;
+	}
+	for(const auto & bonus : *stack->getBonusesOfType(BonusType::SPELLCASTER))
+	{
+		const SpellID id = bonus->subtype.as<SpellID>();
+		if(!id.hasValue())
+			continue;
+		const CSpell * spell = id.toSpell();
+		// (only the spells of the mage guilds: what a creature's own ability does is not ours to guess -
+		// the automaton's "ignition" is a blessing by its flag, and blows the stack up after its next blow)
+		if(!spell || spell->isCreatureAbility() || spell->isSpecial() || !spell->canBeCast(battle.get(), spells::Mode::CREATURE_ACTIVE, stack))
+			continue;
+		spells::BattleCast temp(battle.get(), stack, spells::Mode::CREATURE_ACTIVE, spell);
+		for(const auto & target : SpellTargetEvaluator::getViableTargets(spell->battleMechanics(&temp).get()))
+		{
+			if(target.empty())
+				continue;
+			const battle::Unit * unit = target[0].unitValue ? target[0].unitValue : battle->battleGetUnitByPos(target[0].hexValue, true);
+			if(!unit || (unit->unitSide() == side) != spell->isPositive())
+				continue;
+			// (not twice on the same unit)
+			if(unit->hasBonus(Selector::source(BonusSource::SPELL_EFFECT, BonusSourceID(id))))
+				continue;
+			if(worth(unit) <= bestWorth)
+				continue;
+			bestWorth = worth(unit);
+			best = BattleAction::makeCreatureSpellcast(stack, target, id);
+		}
+	}
+	return best;
 }
 
 bool FairBattleAI::spellSearchEnabled() const
@@ -1166,7 +1239,16 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			ownUnits += unit->alive() && unit->unitSide() == side ? 1 : 0;
 		const bool pressure = side == BattleSide::ATTACKER && quietDecisions > 4 * ownUnits + 1; // (wait + act) x 2 rounds
 		++quietDecisions;
-		cb->battleMakeUnitAction(battleID, searchUnitAction(battleID, stack, pressure));
+		BattleAction chosen = searchUnitAction(battleID, stack, pressure);
+		if(stack->canCast())
+		{
+			if(auto cast = creatureSpell(battleID, stack, chosen))
+			{
+				logAi->debug("FairBattleAI: %s casts instead (spell %d)", stack->getDescription(), cast->spell.getNum());
+				chosen = *cast;
+			}
+		}
+		cb->battleMakeUnitAction(battleID, chosen);
 	}
 	catch(const std::exception & e)
 	{
@@ -1569,9 +1651,13 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		const auto guardTurns = static_cast<uint8_t>(env->game()->getStartInfo()->difficulty < 4 ? 2 : 10); // as BattleAI sets itself up
 		if(modelGuards)
 			enemyStances = {Stance::STALK};
+		static const bool showCandidates = std::getenv("FAI_CANDIDATES") != nullptr;
+		std::string shown;
 		for(auto & c : candidates)
 		{
 			double bestPlan = -std::numeric_limits<double>::max();
+			if(showCandidates)
+				shown += "\n  " + c.description + ":";
 			for(Stance ownStance : ownPlans)
 			{
 				double worst = std::numeric_limits<double>::max();
@@ -1588,6 +1674,8 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 						sim.apply(me, c.sim);
 					sim.playout(planEnd);
 					worst = std::min(worst, sim.evaluate(side));
+					if(showCandidates)
+						shown += boost::str(boost::format(" %.0f (own %.0f, round %d%s)") % sim.evaluate(side) % sim.sideValue(side) % sim.round % (sim.battleOver() ? ", over" : ""));
 				}
 				bestPlan = std::max(bestPlan, worst);
 			}
@@ -1595,6 +1683,9 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 			if(!best || c.score > best->score + 1e-6)
 				best = &c;
 		}
+		if(showCandidates)
+			logAi->info("FairAI candidates for %s (plans hold, advance%s%s; guards by %s):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "", ownPlans.size() > 3 ? ", close ranks" : "",
+				modelGuards ? "model" : "stance", shown);
 		return {best->real, best->score, best->description};
 	}
 	for(auto & c : candidates)
