@@ -67,6 +67,9 @@ def make_config_home(mods="", ai_log=None) -> Path:
     settings = json.loads(json.dumps(ARENA_SETTINGS))
     if ai_log:
         settings["logging"]["loggers"].append({"domain": "ai", "level": ai_log})
+    # ARENA_NEUTRAL_AI=StupidAI (or MMAI, FairAI ...): the combat AI of neutral troops for this run (the game's default is BattleAI)
+    if os.environ.get("ARENA_NEUTRAL_AI"):
+        settings["ai"] = {"combatNeutralAI": os.environ["ARENA_NEUTRAL_AI"]}
     mod_settings = json.loads(json.dumps(ARENA_MOD_SETTINGS))
     for mod in filter(None, (mods or "").split(",")):
         if mod not in mod_settings["presets"]["default"]["mods"]:
