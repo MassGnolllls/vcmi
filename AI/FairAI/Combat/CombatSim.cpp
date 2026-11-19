@@ -40,7 +40,7 @@ double average(const DamageRange & range)
 	return (range.min + range.max) / 2.0;
 }
 
-constexpr int MAX_SIM_STEPS = 600;
+constexpr int MAX_SIM_STEPS = 3000; // (a battle of shooting and stepping aside takes dozens of rounds)
 
 /// Death stare, the game's rule: every creature of the stack kills one creature of the target with
 /// that chance, but never more than the stack's size times the chance, rounded up. The expected
@@ -960,6 +960,11 @@ bool SimState::canStand(int unit, BattleHex at) const
 
 void SimState::reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const
 {
+	reachableWithin(unit, units[unit].speed, dist);
+}
+
+void SimState::reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZE> & dist) const
+{
 	dist.fill(-1);
 	const auto & u = units[unit];
 	dist[u.pos.toInt()] = 0;
@@ -972,7 +977,7 @@ void SimState::reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const
 		{
 			BattleHex hex(h);
 			int d = BattleHex::getDistance(u.pos, hex);
-			if(d <= u.speed && canStand(unit, hex))
+			if(d <= range && canStand(unit, hex))
 				dist[h] = static_cast<int8_t>(d);
 		}
 		return;
@@ -986,7 +991,7 @@ void SimState::reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const
 	{
 		int cur = queue[head++];
 		int d = dist[cur];
-		if(d >= u.speed)
+		if(d >= range)
 			continue;
 		for(const auto & next : BattleHex(cur).getNeighbouringTiles())
 		{
@@ -998,6 +1003,211 @@ void SimState::reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const
 			queue[tail++] = next.toInt();
 		}
 	}
+}
+
+SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
+{
+	const auto & u = units[unit];
+	// (only while shots are left: running alone wins nothing)
+	bool shots = false;
+	for(const auto & own : units)
+		shots = shots || (own.alive() && own.side == u.side && own.shooter && own.shots > 0);
+	if(!shots)
+		return KiteStep::OVER;
+
+	// Who can strike this unit before it acts again, and where: an enemy that has its turn of this
+	// round still before it, or that moves before us in the next round. (An enemy that shoots is no
+	// reason to run: there is no getting out of its reach.)
+	std::bitset<FIELD_SIZE> danger;
+	std::vector<std::pair<int, int>> chasers; // unit, hexes it covers until then
+	std::array<int8_t, FIELD_SIZE> dist;
+	for(int e = 0; e < static_cast<int>(units.size()); ++e)
+	{
+		const auto & enemy = units[e];
+		if(!enemy.alive() || enemy.side == u.side || canShoot(e))
+			continue;
+		const int moves = (enemy.active && !enemy.acted ? 1 : 0) + (enemy.activeNext && enemy.initiativeNext >= u.initiativeNext ? 1 : 0);
+		if(moves == 0)
+			continue;
+		const int range = enemy.canMove ? std::min(100, moves * enemy.speed) : 0;
+		chasers.emplace_back(e, range);
+		reachableWithin(e, range, dist);
+		for(int h = 0; h < FIELD_SIZE; ++h)
+		{
+			if(dist[h] < 0)
+				continue;
+			for(const auto & part : battle::Unit::getHexes(BattleHex(h), enemy.doubleWide, enemy.side))
+			{
+				for(const auto & next : part.getNeighbouringTiles())
+					if(next.isValid())
+						danger.set(next.toInt());
+			}
+		}
+	}
+	const auto threatened = [&](const BattleHex & at)
+	{
+		for(const auto & part : battle::Unit::getHexes(at, u.doubleWide, u.side))
+			if(part.isValid() && danger.test(part.toInt()))
+				return true;
+		return false;
+	};
+
+	if(!threatened(u.pos))
+	{
+		if(canShoot(unit))
+		{
+			// every target still too far for a full shot, and the enemy yet to come closer: shoot after it has
+			if(!u.waited && !u.noDistancePenalty)
+			{
+				bool near = false;
+				bool coming = false;
+				for(int e = 0; e < static_cast<int>(units.size()); ++e)
+				{
+					const auto & enemy = units[e];
+					if(!enemy.alive() || enemy.side == u.side)
+						continue;
+					near = near || !shotIsFar(unit, e);
+					coming = coming || (enemy.active && !enemy.acted && enemy.canMove && !canShoot(e));
+				}
+				if(!near && coming)
+				{
+					out = {SimActionType::WAIT, -1, BattleHex()};
+					return KiteStep::ACT;
+				}
+			}
+			return KiteStep::SHOOT;
+		}
+		// let the enemy move first: what has moved cannot strike back at once
+		if(!u.waited)
+		{
+			for(const auto & enemy : units)
+			{
+				if(enemy.alive() && enemy.side != u.side && enemy.active && !enemy.acted)
+				{
+					out = {SimActionType::WAIT, -1, BattleHex()};
+					return KiteStep::ACT;
+				}
+			}
+		}
+		// A blow that costs nothing, from a hex nothing reaches before our next turn: nothing answers
+		// it, or the answer kills nobody (a wounded creature is whole again after the battle)
+		int bestTarget = -1;
+		BattleHex bestFrom;
+		double bestValue = 0;
+		if(u.canMove)
+		{
+			reachable(unit, dist);
+			for(int e = 0; e < static_cast<int>(units.size()); ++e)
+			{
+				const auto & enemy = units[e];
+				if(!enemy.alive() || enemy.side == u.side)
+					continue;
+				if(enemy.active && enemy.retaliationsLeft > 0 && !u.blocksRetaliation)
+				{
+					const double dealt = damage->melee(unit, e) * u.count * u.meleeAttacks;
+					const double left = enemy.totalHP() - dealt;
+					if(left > 0 && damage->meleeHigh(e, unit) * std::ceil(left / enemy.maxHP) >= u.firstHP)
+						continue;
+				}
+				const double value = meleeTradeValue(unit, e);
+				if(value <= bestValue)
+					continue;
+				for(const auto & around : battle::Unit::getSurroundingHexes(enemy.pos, enemy.doubleWide, enemy.side))
+				{
+					std::array<BattleHex, 3> heads = {around, BattleHex(), BattleHex()};
+					if(u.doubleWide)
+					{
+						if(around.getX() > 0)
+							heads[1] = BattleHex(around.getX() - 1, around.getY());
+						if(around.getX() < GameConstants::BFIELD_WIDTH - 1)
+							heads[2] = BattleHex(around.getX() + 1, around.getY());
+					}
+					for(const auto & head : heads)
+					{
+						if(!head.isValid() || dist[head.toInt()] < 0 || !adjacent(unit, head, e))
+							continue;
+						if(threatened(u.returnsAfterStrike ? u.pos : head))
+							continue;
+						bestValue = value;
+						bestTarget = e;
+						bestFrom = head;
+					}
+				}
+			}
+		}
+		if(bestTarget >= 0)
+		{
+			out = {SimActionType::ATTACK, bestTarget, bestFrom};
+			return KiteStep::ACT;
+		}
+		// Nothing to strike: the turn is free for getting away from where the enemy comes next. (Late
+		// in a round and early in the next we move twice while it moves once - that is how troops
+		// little faster than their pursuers get around them.)
+		const auto roomNext = [&](const BattleHex & at)
+		{
+			int room = 1000;
+			for(const auto & enemy : units)
+			{
+				if(!enemy.alive() || enemy.side == u.side || (enemy.shooter && enemy.shots > 0))
+					continue;
+				room = std::min<int>(room, static_cast<int>(BattleHex::getDistance(enemy.pos, at)) - (enemy.canMove ? enemy.speed : 0));
+			}
+			return room;
+		};
+		BattleHex away;
+		int awayRoom = roomNext(u.pos);
+		int awayWay = 0;
+		if(u.canMove)
+		{
+			for(int h = 0; h < FIELD_SIZE; ++h)
+			{
+				if(dist[h] <= 0 || threatened(BattleHex(h)))
+					continue;
+				const int room = roomNext(BattleHex(h));
+				if(room > awayRoom || (away.isValid() && room == awayRoom && dist[h] < awayWay))
+				{
+					awayRoom = room;
+					awayWay = dist[h];
+					away = BattleHex(h);
+				}
+			}
+		}
+		if(away.isValid())
+			out = {SimActionType::MOVE, -1, away};
+		else
+			out = {SimActionType::DEFEND, -1, BattleHex()};
+		return KiteStep::ACT;
+	}
+
+	// out of reach: the hex with the most room to spare
+	BattleHex best;
+	int bestRoom = std::numeric_limits<int>::min();
+	int bestWay = 0;
+	if(u.canMove)
+	{
+		reachable(unit, dist);
+		for(int h = 0; h < FIELD_SIZE; ++h)
+		{
+			const BattleHex hex(h);
+			if(dist[h] <= 0 || threatened(hex))
+				continue;
+			int room = 1000;
+			for(const auto & [e, range] : chasers)
+				room = std::min<int>(room, static_cast<int>(BattleHex::getDistance(units[e].pos, hex)) - range);
+			if(room > bestRoom || (room == bestRoom && dist[h] < bestWay))
+			{
+				bestRoom = room;
+				bestWay = dist[h];
+				best = hex;
+			}
+		}
+	}
+	if(best.isValid())
+	{
+		out = {SimActionType::MOVE, -1, best};
+		return KiteStep::ACT;
+	}
+	return KiteStep::OVER; // cornered
 }
 
 bool SimState::adjacent(int a, BattleHex aPos, int b) const
@@ -1661,6 +1871,28 @@ void SimState::playDefault(int unit)
 		}
 	}
 
+	// the stance this unit follows: staying out of reach lasts while it works for everybody
+	Stance own = stance[static_cast<int>(u.side)];
+	if(own == Stance::KITE)
+	{
+		auto & over = kiteOver[static_cast<int>(u.side)];
+		if(!over)
+		{
+			SimAction chosen;
+			const KiteStep step = kiteAction(unit, chosen);
+			if(step == KiteStep::ACT)
+			{
+				apply(unit, chosen);
+				return;
+			}
+			over = step == KiteStep::OVER;
+			if(over && stopAtKiteEnd)
+				return; // (the unit has not acted: the caller tries what comes after)
+		}
+		if(over)
+			own = stanceAfterKite[static_cast<int>(u.side)];
+	}
+
 	if(canShoot(unit))
 	{
 		int best = -1;
@@ -1755,7 +1987,6 @@ void SimState::playDefault(int unit)
 		}
 	}
 
-	const Stance own = stance[static_cast<int>(u.side)];
 	if(bestTarget >= 0 && ((own != Stance::HOLD && own != Stance::AMBUSH && own != Stance::GUARD) || bestValue > 0))
 	{
 		apply(unit, {SimActionType::ATTACK, bestTarget, bestHex});
@@ -1866,6 +2097,8 @@ void SimState::playout(int lastRound)
 			}
 		}
 		playDefault(unit);
+		if(stopAtKiteEnd && (kiteOver[0] || kiteOver[1]))
+			return;
 	}
 }
 
@@ -2074,6 +2307,65 @@ double Forecast::lossShare(int plan) const
 	return std::clamp(1.0 - ownAfter[plan] / ownBefore, 0.0, 1.0);
 }
 
+SimState playKite(const SimState & start, BattleSide ownSide, const std::vector<Stance> & plans, int turns, int lastRound, int * turnedAfter, int * lasted, std::string * report, SimState * turnedFrom)
+{
+	const int own = ownSide == BattleSide::ATTACKER ? 0 : 1;
+	SimState sim = start;
+	sim.stance[own] = Stance::KITE;
+	sim.stopAtKiteEnd = true;
+	SimState best = sim;
+	double bestValue = -std::numeric_limits<double>::max();
+	int bestTurn = -1;
+	const auto foughtOut = [&](const SimState & from, int after)
+	{
+		for(Stance plan : plans)
+		{
+			SimState fought = from;
+			fought.stopAtKiteEnd = false;
+			fought.kiteOver[own] = true;
+			fought.stanceAfterKite[own] = plan;
+			fought.playout(lastRound);
+			const double value = fought.evaluate(ownSide);
+			if(report)
+				*report += boost::str(boost::format(" [after round %d, plan %d: %.0f, own %.0f, round %d%s]") % after % static_cast<int>(plan) % value % fought.sideValue(ownSide) % fought.round % (fought.battleOver() ? ", over" : ""));
+			if(value > bestValue)
+			{
+				bestValue = value;
+				bestTurn = after;
+				best = std::move(fought);
+				if(turnedFrom)
+				{
+					*turnedFrom = from;
+					turnedFrom->stopAtKiteEnd = false;
+					turnedFrom->kiteOver[own] = true;
+					turnedFrom->stanceAfterKite[own] = plan;
+				}
+			}
+		}
+	};
+	for(int until = start.round; until < start.round + turns && !sim.kiteOver[own] && !sim.battleOver(); ++until)
+	{
+		sim.playout(until);
+		if(sim.kiteOver[own] || sim.battleOver())
+			break;
+		foughtOut(sim, until);
+	}
+	if(!sim.kiteOver[own] && !sim.battleOver())
+		sim.playout(lastRound);
+	if(sim.kiteOver[own] && !sim.battleOver())
+		foughtOut(sim, sim.round);
+	else if(sim.evaluate(ownSide) > bestValue)
+	{
+		bestTurn = sim.round;
+		best = sim;
+	}
+	if(turnedAfter)
+		*turnedAfter = bestTurn;
+	if(lasted)
+		*lasted = sim.round;
+	return best;
+}
+
 Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds, Stance enemyStance,
 	const HeroSpec * ownHero, const HeroSpec * enemyHero, const ForecastOptions & options)
 {
@@ -2122,6 +2414,21 @@ Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSid
 		result.enemyAfter[plan] = sim.sideValue(other);
 		result.rounds[plan] = sim.round;
 		result.manaSpent[plan] = sim.heroes[ownIndex].spent;
+	}
+	if(options.kiteTurns > 0 && options.guardTurns > 0 && !enemyHero && result.plans < static_cast<int>(result.ownAfter.size()))
+	{
+		// (without our hero's spells; the guards by the model throughout - their pursuit is the point)
+		SimState sim = base;
+		sim.stance[1 - ownIndex] = Stance::STALK;
+		sim.guardModel[1 - ownIndex] = static_cast<uint8_t>(std::min(options.guardTurns, 10));
+		const std::vector<Stance> after(ownPlans.begin(), ownPlans.begin() + stances);
+		const SimState end = playKite(sim, ownSide, after, options.kiteTurns, base.round + std::max(maxRounds, 40));
+		const int plan = result.plans++;
+		result.kitePlan = plan;
+		result.ownAfter[plan] = end.sideValue(ownSide);
+		result.enemyAfter[plan] = end.sideValue(other);
+		result.rounds[plan] = end.round;
+		result.manaSpent[plan] = 0;
 	}
 	return result;
 }

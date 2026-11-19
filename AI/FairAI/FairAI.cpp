@@ -356,6 +356,31 @@ void FairAIGateway::showMapObjectSelectDialog(QueryID askID, const Component & i
 
 std::optional<BattleAction> FairAIGateway::makeSurrenderRetreatDecision(const BattleID & battleID, const BattleStateInfoForRetreat & battleState)
 {
+	// A battle that stands still for good (the battle AI has tried attacking with everything): it
+	// must end, or the whole game stands still with it. Buying the army free if that is worth its
+	// price, else fleeing, else buying it free at any price we can pay.
+	const BattleVerdict standing = battleVerdict(playerID);
+	if(standing.deadlock && battleState.ourHero)
+	{
+		auto battle = cb->getBattle(battleID);
+		const int cost = battleState.canSurrender && battle ? battle->battleGetSurrenderCost() : -1;
+		const bool worth = cost >= 0 && adventure && adventure->surrenderWorth(cost, standing.ownValue, 0);
+		if(worth || (!battleState.canFlee && cost >= 0 && cost <= cb->getResourceAmount(GameResID::GOLD)))
+		{
+			logAi->info("FairAI %s: %s buys its army free for %d gold - the battle stands still and our attacks change nothing", playerID.toString(),
+				battleState.ourHero->getNameTranslated(), cost);
+			if(adventure)
+				adventure->noteSurrender(battleState.ourHero->getHeroTypeID());
+			return BattleAction::makeSurrender(battleState.ourSide);
+		}
+		if(battleState.canFlee)
+		{
+			logAi->info("FairAI %s: %s leaves a battle that stands still - our attacks change nothing", playerID.toString(),
+				battleState.ourHero->getNameTranslated());
+			return BattleAction::makeRetreat(battleState.ourSide);
+		}
+		return std::nullopt;
+	}
 	// A lost battle costs the army either way; fleeing keeps the hero (level, skills, artifacts),
 	// who can be hired again. Without a town there is nothing to flee to.
 	if(!battleState.canFlee || !battleState.ourHero || cb->getTownsInfo().empty())

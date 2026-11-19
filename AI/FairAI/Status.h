@@ -35,6 +35,7 @@ struct BattleVerdict
 	bool lost = false;      ///< played on by the simulator - holding or advancing - we lose all, the enemy keeps a good part
 	double ownValue = 0;    ///< AI value of what we still have on the field
 	double enemyLoss = 0;   ///< AI value the enemy is expected to lose if we fight on
+	bool deadlock = false;  ///< the battle stands still for good and our attacks change nothing: it has to be ended, at any price
 };
 /// Battle AI and gateway of one player are separate objects created by the engine: they meet here
 void setBattleVerdict(PlayerColor player, const BattleVerdict & verdict);

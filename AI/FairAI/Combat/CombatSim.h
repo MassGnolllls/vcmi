@@ -234,7 +234,8 @@ enum class Stance : uint8_t
 	HOLD,   ///< melee units only attack what is already in reach, otherwise stay
 	STALK,  ///< like VCMI's BattleAI: with nothing in reach wait for the others to move, then close in on the most rewarding target
 	AMBUSH, ///< let them come: with nothing worth hitting in reach wait; after waiting hit what has come into reach, otherwise stay. Faster units strike an enemy that closed in at the end of the round - and again before it at the start of the next
-	GUARD   ///< close ranks: like AMBUSH, but a unit that does not stand next to our most valuable shooter first walks there - the enemy meets our troops together, and the shooter cannot be reached
+	GUARD,  ///< close ranks: like AMBUSH, but a unit that does not stand next to our most valuable shooter first walks there - the enemy meets our troops together, and the shooter cannot be reached
+	KITE    ///< shoot and stay out of reach: a unit an enemy could strike before its next turn steps out of that enemy's reach; shooters shoot while they are safe; the others wait for the enemy to move and then strike only where nothing strikes back. While our side has a shot left - then it advances
 };
 
 /// Engine-evaluated result of one attack (including special abilities and retaliation)
@@ -310,6 +311,8 @@ public:
 	std::vector<BattleHex> unitHexes(int unit, BattleHex at) const;
 	bool canStand(int unit, BattleHex at) const;
 	void reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const;
+	/// ... within \p range hexes instead of its speed (several moves in a row, taken as one)
+	void reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZE> & dist) const;
 	bool adjacent(int a, BattleHex aPos, int b) const;
 	bool isBlocked(int unit) const; ///< an enemy stands next to it
 	bool canShoot(int unit) const;
@@ -328,6 +331,14 @@ public:
 	void playDefault(int unit);
 	/// Can the unit shoot, or reach an enemy for a melee attack, in this turn?
 	bool hasAttack(int unit) const;
+	/// Stance::KITE: what \p unit does to stay out of reach. ACT: \p out; SHOOT: it is safe and can
+	/// shoot (the default policy picks the target); OVER: the side has no shot left or the unit is
+	/// cornered - staying out of reach is over for the side, it goes on with stanceAfterKite.
+	enum class KiteStep { ACT, SHOOT, OVER };
+	KiteStep kiteAction(int unit, SimAction & out) const;
+	std::array<Stance, 2> stanceAfterKite = {Stance::CHARGE, Stance::CHARGE};
+	std::array<bool, 2> kiteOver = {false, false};
+	bool stopAtKiteEnd = false; ///< playout() returns when staying out of reach is over for a side (to try what comes after)
 	/// The unit our side closes ranks around: its most valuable stack that can shoot (-1: none)
 	int anchorOf(BattleSide side) const;
 	/// Where \p unit would stand to close ranks: the hex next to the anchor it reaches in this turn,
@@ -385,6 +396,15 @@ private:
 	bool shotIsFar(int attacker, int target) const;
 };
 
+/// The plan "shoot and stay out of reach" (Stance::KITE) played on from \p start for \p ownSide. How
+/// long to keep it up? Until somebody is cornered or the last shot is gone, at the latest; from
+/// there the battle is fought out by whichever of \p plans does it best. Often it pays to turn and
+/// fight earlier - the pursuers arrive one by one -, so the same is tried after each of the next
+/// \p turns rounds. Returns the end that is best for us (evaluate()); \p turnedAfter: the round after
+/// which we turned in it, \p lasted: the round up to which staying out of reach could be kept up.
+SimState playKite(const SimState & start, BattleSide ownSide, const std::vector<Stance> & plans, int turns, int lastRound, int * turnedAfter = nullptr, int * lasted = nullptr,
+	std::string * report = nullptr, SimState * turnedFrom = nullptr);
+
 /// How a battle between two armies is expected to end, both sides played by the default policy:
 /// plan 0 = our side holds its ground, 1 = it advances. The enemy always advances. With a hero of ours
 /// that has spells worth casting there are four plans: 2 and 3 are the same two with the hero casting.
@@ -394,10 +414,11 @@ struct Forecast
 	double ownBefore = 0;
 	double enemyBefore = 0;
 	int plans = 2;
-	std::array<double, 8> ownAfter{};
-	std::array<double, 8> enemyAfter{};
-	std::array<int, 8> rounds{};
-	std::array<int, 8> manaSpent{}; ///< spell points our hero uses in the plan
+	std::array<double, 10> ownAfter{};
+	std::array<double, 10> enemyAfter{};
+	std::array<int, 10> rounds{};
+	std::array<int, 10> manaSpent{}; ///< spell points our hero uses in the plan
+	int kitePlan = -1; ///< the plan "shoot and stay out of reach", if it was played (ForecastOptions::kiteTurns)
 
 	/// The plan we would pick. manaPrice: what a spell point is worth, in the value of our army - a
 	/// plan with spells must save more army than its spell points are worth.
@@ -413,6 +434,7 @@ struct ForecastOptions
 	int ownStances = 2;   ///< plans for our side: 2 = hold, advance; 3 = and lie in wait; 4 = and close ranks (the plans of the combat AI's battle plan). With spells every plan is played twice, the second time with the hero casting.
 	int guardTurns = 0;   ///< > 0: the enemy is played by GuardModel - the copy of VCMI's BattleAI, which plays map guards -, looking this many turns of an exchange ahead (as that AI: 10 on the highest difficulty, 2 below)
 	int guardRounds = 6;  ///< ... for this many rounds, by its stance afterwards (the opening decides; the model costs time)
+	int kiteTurns = 0;    ///< > 0 (with guardTurns): one more plan, "shoot and stay out of reach" (playKite), turning to fight tried after each of this many rounds; the guards by the model to the end
 };
 
 Forecast forecastBattle(const std::vector<StackSpec> & stacks, BattleSide ownSide, const JsonNode & layout, int maxRounds = 30, Stance enemyStance = Stance::CHARGE,

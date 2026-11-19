@@ -309,6 +309,7 @@ void Params::loadOverrides(int playerIndex)
 	read("ownCasters", ownCasters);
 	read("planVsPlayers", planVsPlayers);
 	read("modelSearch", modelSearch);
+	read("kitePlan", kitePlan);
 	read("wholeCreatures", wholeCreatures);
 	read("forecastPlans", forecastPlans);
 	read("fightForecast", fightForecast);
@@ -2254,7 +2255,10 @@ Combat::ForecastOptions AdventureAI::guardForecastOptions() const
 	options.ownStances = 4;
 	// guards are played by the game's neutral battle AI - VCMI's BattleAI unless the game is set up otherwise
 	if(settings["ai"]["combatNeutralAI"].String() == "BattleAI")
+	{
 		options.guardTurns = cb->getStartInfo()->difficulty < 4 ? 2 : 10;
+		options.kiteTurns = params.kitePlan ? 6 : 0; // (as the combat AI: FairBattleAI::KITE_TURNS)
+	}
 	return options;
 }
 

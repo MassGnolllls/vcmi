@@ -42,6 +42,7 @@
 #include "../../../lib/callback/IGameInfoCallback.h"
 #include "../../../lib/GameLibrary.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
+#include "../../../lib/networkPacks/PacksForClientBattle.h"
 #include "../../../lib/spells/CSpellHandler.h"
 #include "../../../lib/spells/ISpellMechanics.h"
 
@@ -174,6 +175,81 @@ void FairBattleAI::battleStacksAttacked(const BattleID & battleID, const std::ve
 {
 	if(!bsa.empty())
 		quietDecisions = 0;
+}
+
+void FairBattleAI::battleSpellCast(const BattleID & battleID, const BattleSpellCast * sc)
+{
+	// a hero's spell points run out: a battle in which heroes still cast is not standing still
+	if(!sc || !sc->castByHero || seenRound < 0 || !cb)
+		return;
+	if(auto battle = cb->getBattle(battleID))
+	{
+		lastChangeRound = std::max(lastChangeRound, battle->battleGetRound());
+		lastGainRound = std::max(lastGainRound, battle->battleGetRound());
+	}
+}
+
+void FairBattleAI::watchDeadlock(const BattleID & battleID)
+{
+	auto battle = cb->getBattle(battleID);
+	const int round = battle->battleGetRound();
+	if(round == seenRound)
+		return;
+	const bool first = seenRound < 0;
+	seenRound = round;
+	int64_t own = 0;
+	int64_t enemy = 0;
+	for(const auto * unit : battle->battleGetAllStacks(false))
+	{
+		if(unit->alive())
+			(unit->unitSide() == side ? own : enemy) += unit->getAvailableHealth();
+	}
+	if(battle->battleGetDefendedTown())
+	{
+		// (a siege moves while walls come down, even when nobody is hurt)
+		int64_t walls = 0;
+		for(int part = static_cast<int>(EWallPart::KEEP); part < static_cast<int>(EWallPart::PARTS_COUNT); ++part)
+			walls += std::max(0, static_cast<int>(battle->battleGetWallState(static_cast<EWallPart>(part))));
+		(side == BattleSide::DEFENDER ? own : enemy) += walls;
+	}
+	if(first || own < leastOwnHealth)
+	{
+		leastOwnHealth = own;
+		lastChangeRound = round;
+	}
+	if(first || enemy < leastEnemyHealth)
+	{
+		leastEnemyHealth = enemy;
+		lastChangeRound = round;
+		lastGainRound = round;
+	}
+	// (test) FAI_TEST_DEADLOCK=<round>: from that round on the battle counts as standing still for good -
+	// a real one cannot be staged (luck and morale end them), and the way out has to be seen working
+	static const int staged = envInt("FAI_TEST_DEADLOCK", 0);
+	if(staged > 0 && round >= staged)
+	{
+		deadlockStaged = true;
+		return;
+	}
+	if(deadlockSince >= 0 || round - lastChangeRound < DEADLOCK_ROUNDS)
+		return;
+	// (a human who attacks us and then waits is not to be rewarded with our troops leaving their place)
+	const PlayerColor enemyOwner = battle->sideToPlayer(side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER);
+	if(enemyOwner.isValidPlayer())
+	{
+		const auto & players = env->game()->getStartInfo()->playerInfos;
+		const auto owner = players.find(enemyOwner);
+		if(owner == players.end() || owner->second.isControlledByHuman())
+			return;
+	}
+	deadlockSince = round;
+	logAi->info("FairAI %s battle stands still: round %d, nobody weaker than before since round %d (we %lld, they %lld) - our units must strike now",
+		playerID.toString(), round, lastChangeRound, static_cast<long long>(own), static_cast<long long>(enemy));
+}
+
+bool FairBattleAI::deadlockLost(const BattleID & battleID) const
+{
+	return deadlockStaged || (deadlockSince >= 0 && seenRound - deadlockSince >= DEADLOCK_PATIENCE && seenRound - lastGainRound >= DEADLOCK_PATIENCE);
 }
 
 bool FairBattleAI::oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out, std::string * trace)
@@ -742,6 +818,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	ownCasters = params.ownCasters != 0;
 	planVsPlayers = params.planVsPlayers != 0;
 	modelSearch = params.modelSearch != 0;
+	kitePlan = params.kitePlan;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -754,6 +831,12 @@ void FairBattleAI::battleStart(const BattleID & battleID, const CCreatureSet * a
 {
 	side = Side;
 	quietDecisions = 0;
+	seenRound = -1;
+	deadlockStaged = false;
+	lastChangeRound = 0;
+	lastGainRound = 0;
+	deadlockSince = -1;
+	setBattleVerdict(playerID, BattleVerdict()); // (BattleAI asks the adventure AI too: never with the verdict of an earlier battle)
 	forecastLogged = false;
 	spellCheckDone = false;
 	lastHealth.clear();
@@ -1205,6 +1288,16 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 	}
 	try
 	{
+		watchDeadlock(battleID);
+		const bool standsStill = deadlockLost(battleID);
+		if(standsStill)
+		{
+			if(auto end = considerRetreat(battleID))
+			{
+				cb->battleMakeUnitAction(battleID, *end);
+				return;
+			}
+		}
 		// sieges: our simulator knows no walls, moat or towers - VCMI's BattleAI handles them until FairAI
 		// models sieges itself, except that our walkers do not wade into the moat while there is no way in
 		if(!needsFallback(stack) && cb->getBattle(battleID)->battleGetDefendedTown())
@@ -1227,10 +1320,13 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			logForecast(battleID);
 		}
 
-		if(auto retreat = considerRetreat(battleID))
+		if(!standsStill) // (asked above already)
 		{
-			cb->battleMakeUnitAction(battleID, *retreat);
-			return;
+			if(auto retreat = considerRetreat(battleID))
+			{
+				cb->battleMakeUnitAction(battleID, *retreat);
+				return;
+			}
 		}
 
 		if(tryHeroSpell(battleID, stack))
@@ -1243,7 +1339,7 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			ownUnits += unit->alive() && unit->unitSide() == side ? 1 : 0;
 		const bool pressure = side == BattleSide::ATTACKER && quietDecisions > 4 * ownUnits + 1; // (wait + act) x 2 rounds
 		++quietDecisions;
-		BattleAction chosen = searchUnitAction(battleID, stack, pressure);
+		BattleAction chosen = searchUnitAction(battleID, stack, deadlockSince >= 0 ? 2 : pressure ? 1 : 0);
 		if(stack->canCast())
 		{
 			if(auto cast = creatureSpell(battleID, stack, chosen))
@@ -1322,9 +1418,17 @@ std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battl
 		logAi->debug("FairBattleAI: no verdict on the battle (%s)", e.what());
 		verdict = BattleVerdict();
 	}
+	verdict.deadlock = deadlockLost(battleID);
 	setBattleVerdict(playerID, verdict);
 	// the adventure AI decides: it knows what the hero, the army and our gold are worth
-	return cb->makeSurrenderRetreatDecision(battleID, bs);
+	auto decision = cb->makeSurrenderRetreatDecision(battleID, bs);
+	if(!decision && verdict.deadlock && bs.canFlee)
+	{
+		// (an adventure AI other than ours knows nothing of battles that stand still)
+		logAi->info("FairAI %s: battle stands still since round %d and our attacks change nothing - we leave it", playerID.toString(), deadlockSince);
+		decision = BattleAction::makeRetreat(bs.ourSide);
+	}
+	return decision;
 }
 
 void FairBattleAI::logForecast(const BattleID & battleID)
@@ -1389,6 +1493,7 @@ void FairBattleAI::logForecast(const BattleID & battleID)
 			ForecastOptions options;
 			options.ownStances = 4;
 			options.guardTurns = env->game()->getStartInfo()->difficulty < 4 ? 2 : 10;
+			options.kiteTurns = kitePlan > 0 ? KITE_TURNS : 0;
 			const auto started = std::chrono::steady_clock::now();
 			const Forecast planned = forecastBattle(stacks, side, layout, 30, Stance::STALK, nullptr, nullptr, options);
 			const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
@@ -1430,18 +1535,20 @@ void FairBattleAI::logForecast(const BattleID & battleID)
 	}
 }
 
-BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack, bool forbidPassive)
+BattleAction FairBattleAI::searchUnitAction(const BattleID & battleID, const CStack * stack, int urgency)
 {
 	const auto started = std::chrono::steady_clock::now();
 	auto state = std::make_shared<HypotheticBattle>(env.get(), cb->getBattle(battleID));
-	auto choice = bestUnitAction(state, stack, -1, forbidPassive);
+	auto choice = bestUnitAction(state, stack, -1, urgency);
 	const double ms = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - started).count();
-	logAi->debug("FairBattleAI: %s -> %s (score %.0f, %.1f ms)%s", stack->getDescription(), choice.description, choice.score, ms, forbidPassive ? " [must act]" : "");
+	logAi->debug("FairBattleAI: %s -> %s (score %.0f, %.1f ms)%s", stack->getDescription(), choice.description, choice.score, ms,
+		urgency >= 2 ? " [must strike]" : urgency == 1 ? " [must act]" : "");
 	return choice.action;
 }
 
-FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<HypotheticBattle> & battle, const CStack * realStack, int roundsAhead, bool forbidPassive)
+FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<HypotheticBattle> & battle, const CStack * realStack, int roundsAhead, int urgency)
 {
+	const bool forbidPassive = urgency >= 1;
 	// the unit as it is in this (possibly hypothetical) state: spells change its speed and position
 	const battle::Unit * stack = battle->battleGetUnitByID(realStack->unitId());
 	if(!stack || !stack->alive())
@@ -1563,6 +1670,16 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		}
 		if(base.units[me].shooter)
 			addMove(pick([&](const BattleHex & h) { return -closestEnemyDistance(h, false, true); }), "keep distance");
+	}
+
+	if(urgency >= 2)
+	{
+		// The battle stands still: only blows count now, and with none in reach the way to the enemy
+		const bool blow = std::any_of(candidates.begin(), candidates.end(), [](const Candidate & c) { return c.sim.type != SimActionType::MOVE; });
+		std::erase_if(candidates, [blow](const Candidate & c)
+		{
+			return c.sim.type == SimActionType::MOVE && (blow || c.description.rfind("advance", 0) != 0);
+		});
 	}
 
 	if(!forbidPassive || candidates.empty())
@@ -1689,6 +1806,9 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		if(modelGuards)
 			enemyStances = {Stance::STALK};
 		static const bool showCandidates = std::getenv("FAI_CANDIDATES") != nullptr;
+		// (Tried and dropped, 19.11.: a bonus for the plan the unit before acted by, so that the units of a
+		// round follow one forecast. 579 battles: 0.3 +- 0.3 points of the army lost MORE with a bonus of
+		// one per cent of the army; with the fifth plan, 213 battles, no difference at one or three.)
 		std::string shown;
 		for(auto & c : candidates)
 		{
@@ -1719,6 +1839,150 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 			c.score = bestPlan;
 			if(!best || c.score > best->score + 1e-6)
 				best = &c;
+		}
+		// The fifth plan, "shoot and stay out of reach" (kitePlan). It pays over many rounds only - a
+		// walker that never reaches us is shot down without a scratch -, so it is played to the end of
+		// the battle, and judged by what the plan itself does with this unit. It is taken when the
+		// battle ends better with it than with the best action of the other plans, played as far.
+		if(kitePlan > 0 && modelGuards && best && urgency == 0)
+		{
+			bool shots = false;
+			for(const auto & own : base.units)
+				shots = shots || (own.alive() && own.side == base.units[me].side && own.shooter && own.shots > 0);
+			if(shots)
+			{
+				const int kiteEnd = base.round + KITE_ROUNDS;
+				SimState sim = base;
+				sim.stance[ownSide] = Stance::KITE;
+				sim.stance[enemySide] = Stance::STALK;
+				sim.guardModel[enemySide] = guardTurns;
+				sim.stopAtKiteEnd = true;
+				sim.playDefault(me);
+				const SimAction first = sim.lastAction;
+				// (cornered at once, or no shot left: there is no such plan now)
+				const bool noKite = sim.kiteOver[ownSide];
+				static const bool traced = std::getenv("FAI_KITE_TRACE") != nullptr;
+				if(traced && !noKite)
+				{
+					// (test) the plan step by step: who does what, and where everybody stands afterwards
+					std::string trace;
+					const auto note = [&](int unit)
+					{
+						static const char * const names[] = {"move", "attack", "shoot", "wait", "defend"};
+						const auto & a = sim.lastAction;
+						trace += boost::str(boost::format("\n  r%d %s%d %s") % sim.round % (sim.units[unit].side == side ? "our " : "their ") % unit % names[std::clamp(static_cast<int>(a.type), 0, 4)]);
+						if(a.target >= 0)
+							trace += " ->" + std::to_string(a.target);
+						if(a.hex.isValid())
+							trace += " @" + std::to_string(a.hex.toInt());
+						trace += " |";
+						for(int i = 0; i < static_cast<int>(sim.units.size()); ++i)
+							if(sim.units[i].alive())
+								trace += boost::str(boost::format(" %d:%dx@%d") % i % sim.units[i].count % sim.units[i].pos.toInt());
+					};
+					note(me);
+					SimState copy = sim;
+					copy.stopAtKiteEnd = false;
+					for(int step = 0; step < 400; ++step)
+					{
+						const int unit = copy.nextActiveUnit();
+						if(unit < 0 || copy.round > kiteEnd)
+							break;
+						copy.playDefault(unit);
+						std::swap(copy, sim);
+						note(unit);
+						std::swap(copy, sim);
+					}
+					logAi->info("FairAI kitetrace for %s:%s", stack->getDescription(), trace);
+				}
+				// (how long to keep it up - see playKite)
+				double kiteValue = -std::numeric_limits<double>::max();
+				int bestTurn = -1;
+				int lasted = -1;
+				if(!noKite)
+				{
+					std::string report;
+					SimState turned = sim;
+					const SimState end = playKite(sim, side, ownPlans, KITE_TURNS, kiteEnd, &bestTurn, &lasted, traced ? &report : nullptr, traced ? &turned : nullptr);
+					kiteValue = end.evaluate(side);
+					if(traced)
+					{
+						// ... and the best way on from where we turn, step by step
+						static const char * const names[] = {"move", "attack", "shoot", "wait", "defend"};
+						for(int step = 0; step < 300; ++step)
+						{
+							const int unit = turned.nextActiveUnit();
+							if(unit < 0 || turned.round > kiteEnd)
+								break;
+							turned.playDefault(unit);
+							const auto & a = turned.lastAction;
+							report += boost::str(boost::format("\n  r%d %s%d %s") % turned.round % (turned.units[unit].side == side ? "our " : "their ") % unit % names[std::clamp(static_cast<int>(a.type), 0, 4)]);
+							if(a.target >= 0)
+								report += " ->" + std::to_string(a.target);
+							if(a.hex.isValid())
+								report += " @" + std::to_string(a.hex.toInt());
+							report += " |";
+							for(int i = 0; i < static_cast<int>(turned.units.size()); ++i)
+								if(turned.units[i].alive())
+									report += boost::str(boost::format(" %d:%dx@%d") % i % turned.units[i].count % turned.units[i].pos.toInt());
+						}
+						logAi->info("FairAI kitevalues for %s:%s", stack->getDescription(), report);
+					}
+				}
+				if(showCandidates && !noKite)
+					shown += boost::str(boost::format("\n  shoot and stay out of reach (type %d, target %d, hex %d): %.0f (best kept up to round %d; it lasts to round %d)") % static_cast<int>(first.type) % first.target
+						% first.hex.toInt() % kiteValue % bestTurn % lasted);
+				// The plan must be better by one per cent of our army (FAI_KITE_MARGIN, for tests): 213
+				// battles against walking guards with shooters of our own lost 1.5 +- 0.9 points of the
+				// army less with it than without the plan - as with no margin (1.8 +- 1.0) -, but against
+				// weak guards, the usual case, only with the margin fewer battles got worse (3 of 68
+				// instead of 6; 0.5 +- 0.3 points less instead of none). Three per cent: 0.9 +- 0.8.
+				static const double marginShare = envInt("FAI_KITE_MARGIN", 1) / 100.0;
+				const double margin = marginShare * base.sideValue(side) + 1e-6;
+				if(!noKite && kiteValue > best->score + margin)
+				{
+					// (the same horizon for the best of the others)
+					double rival = -std::numeric_limits<double>::max();
+					for(Stance ownStance : ownPlans)
+					{
+						SimState other = base;
+						other.stance[ownSide] = ownStance;
+						other.stance[enemySide] = Stance::STALK;
+						other.guardModel[enemySide] = guardTurns;
+						if(best->outcome && config.engineOutcome)
+							other.applyOutcome(me, *best->outcome);
+						else
+							other.apply(me, best->sim);
+						other.playout(kiteEnd);
+						rival = std::max(rival, other.evaluate(side));
+					}
+					if(showCandidates)
+						shown += boost::str(boost::format(" against %.0f for %s played as far") % rival % best->description);
+					std::optional<BattleAction> real;
+					std::string what;
+					for(const auto & c : candidates)
+					{
+						if(c.sim.type == first.type && c.sim.target == first.target && (c.sim.hex == first.hex || first.type == SimActionType::SHOOT
+							|| first.type == SimActionType::WAIT || first.type == SimActionType::DEFEND))
+						{
+							real = c.real;
+							what = c.description;
+						}
+					}
+					if(!real && first.type == SimActionType::MOVE && moveHexes.contains(first.hex))
+					{
+						real = BattleAction::makeMove(stack, first.hex);
+						what = "step aside to " + std::to_string(first.hex.toInt());
+					}
+					if(real && kiteValue > rival + margin)
+					{
+						if(showCandidates)
+							logAi->info("FairAI candidates for %s (plans hold, advance%s%s; guards by model):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "",
+								ownPlans.size() > 3 ? ", close ranks" : "", shown);
+						return {*real, kiteValue, what + " [out of reach]"};
+					}
+				}
+			}
 		}
 		if(showCandidates)
 			logAi->info("FairAI candidates for %s (plans hold, advance%s%s; guards by %s):%s", stack->getDescription(), ownPlans.size() > 2 ? ", lie in wait" : "", ownPlans.size() > 3 ? ", close ranks" : "",

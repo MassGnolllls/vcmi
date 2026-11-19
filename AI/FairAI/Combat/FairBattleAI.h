@@ -61,6 +61,7 @@ public:
 	void actionStarted(const BattleID & battleID, const BattleAction & action) override;
 	void actionFinished(const BattleID & battleID, const BattleAction & action) override;
 	void battleStacksAttacked(const BattleID & battleID, const std::vector<BattleStackAttacked> & bsa, bool ranged) override;
+	void battleSpellCast(const BattleID & battleID, const BattleSpellCast * sc) override;
 
 private:
 	struct SimCheck;
@@ -79,6 +80,24 @@ private:
 	std::map<uint32_t, int64_t> lastHealth; ///< unit -> health after the previous action (changes in between: regeneration, poison...)
 	bool lastActionWasSpell = false;
 	int quietDecisions = 0; ///< our decisions since anybody was hurt (the attacker must not let a battle stand still)
+	/// A battle that stands still. Troops that regenerate or drain life can trade blows for ever
+	/// without anybody getting weaker, and the game knows no draw: the battle - and with it the whole
+	/// game - would never end. So we watch for it: no round has begun with either side weaker than
+	/// ever before, and no hero has cast, for DEADLOCK_ROUNDS rounds. From then on our units must
+	/// attack (the search may no longer wait, defend or step aside). If that does not wear the enemy
+	/// down within DEADLOCK_PATIENCE rounds either, the battle is given up: see considerRetreat().
+	/// Not against a human: whoever attacks us and then waits must not be rewarded for it.
+	static constexpr int DEADLOCK_ROUNDS = 10;
+	static constexpr int DEADLOCK_PATIENCE = 10;
+	int seenRound = -1;           ///< the round in which our units were last asked for an action
+	int64_t leastOwnHealth = 0;   ///< the lowest total health of our troops at the start of our part of a round
+	int64_t leastEnemyHealth = 0; ///< ... and of the enemy's
+	int lastChangeRound = 0;      ///< the last round in which one of the two was lower than ever before, or a hero cast
+	int lastGainRound = 0;        ///< ... in which the enemy's was, or a hero cast
+	int deadlockSince = -1;       ///< the round in which the battle was found to stand still (-1: it moves)
+	bool deadlockStaged = false;  ///< (test, FAI_TEST_DEADLOCK) the battle counts as standing still for good
+	void watchDeadlock(const BattleID & battleID);
+	bool deadlockLost(const BattleID & battleID) const; ///< standing still, and attacking has not helped: give the battle up
 	bool forecastLogged = false;
 	bool spellCheckDone = false; ///< FAI_SPELLCHECK: the spell rules were compared with the game's in this battle
 	/// (test) FairAI's own rules of what a spell does to a unit - used by forecasts outside a battle - against the game's
@@ -104,6 +123,9 @@ private:
 	int guardModel = 0;       ///< from the player's FairAI parameters: the play-outs of the battle plan play guards by GuardModel
 	bool ownCasters = false;  ///< from the player's FairAI parameters: our units that can cast are played by our own search
 	bool modelSearch = false; ///< from the player's FairAI parameters: the plain search plays the enemy by GuardModel too
+	int kitePlan = 0;         ///< from the player's FairAI parameters: "shoot and stay out of reach" is a fifth plan against guards
+	static constexpr int KITE_ROUNDS = 40; ///< ... played this many rounds ahead (to the end of the battle, as a rule)
+	static constexpr int KITE_TURNS = 6;   ///< ... and turning to fight is tried after each of this many rounds
 	bool planVsPlayers = false; ///< from the player's FairAI parameters: the battle plan is also used against the army of a player
 
 	bool needsFallback(const CStack * stack) const;
@@ -114,7 +136,8 @@ private:
 	std::optional<BattleAction> siegeWalkerAction(const BattleID & battleID, const CStack * stack) const;
 	std::optional<BattleAction> considerRetreat(const BattleID & battleID);
 	void logForecast(const BattleID & battleID);
-	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack, bool forbidPassive = false);
+	/// urgency: 0 = free choice, 1 = waiting and defending are no option, 2 = the unit must strike (or, with nobody in reach, advance)
+	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack, int urgency = 0);
 
 	struct UnitChoice
 	{
@@ -124,8 +147,9 @@ private:
 	};
 	/// Best action of `stack` in a (possibly hypothetical) battle state, with its look-ahead score
 	/// roundsAhead < 0: the search setting; spells look further ahead (their effect lasts for rounds)
-	/// forbidPassive: waiting and defending are not an option (we attack and nothing has happened for rounds)
-	UnitChoice bestUnitAction(const std::shared_ptr<HypotheticBattle> & state, const CStack * stack, int roundsAhead = -1, bool forbidPassive = false);
+	/// urgency 1: waiting and defending are not an option (we attack and nothing has happened for rounds);
+	/// 2: the battle stands still - only blows are, and where none is in reach the way to the enemy
+	UnitChoice bestUnitAction(const std::shared_ptr<HypotheticBattle> & state, const CStack * stack, int roundsAhead = -1, int urgency = 0);
 	/// Hero spells judged by the same look-ahead: every castable spell and target is applied to a
 	/// hypothetical copy of the battle (the game's own spell mechanics) and the active unit's best
 	/// continuation is compared with not casting; mana is priced by how scarce it is

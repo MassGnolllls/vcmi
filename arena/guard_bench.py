@@ -153,8 +153,15 @@ def cmd_play(args) -> int:
             shutil.rmtree(out / f"logs_{index:04d}", ignore_errors=True)
         return rec
 
+    # --subset FILE: only the battles named there (one map name per line) - with the place, and so the
+    # seed, each has in the whole set: a part of the benchmark stays comparable with a run of all of it
+    jobs = list(enumerate(maps))
+    if args.subset:
+        wanted = {line.strip().lower() for line in Path(args.subset).read_text().splitlines() if line.strip()}
+        jobs = [(i, p) for i, p in jobs if p.stem.lower() in wanted]
+    maps = [p for _, p in jobs]
     with ThreadPoolExecutor(max_workers=args.jobs) as pool, open(out / "results.jsonl", "a") as sink:
-        futures = [pool.submit(one, i, p) for i, p in enumerate(maps)]
+        futures = [pool.submit(one, i, p) for i, p in jobs]
         for fut in as_completed(futures):
             rec = fut.result()
             done += 1
@@ -348,6 +355,7 @@ def main() -> int:
     p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the hero's side")
     p.add_argument("--difficulty", type=int, default=4, help="game difficulty 0-4 (VCMI's BattleAI, which plays the guards, looks 10 turns of an exchange ahead on 4 and 2 below)")
     p.add_argument("--keep-logs", action="store_true")
+    p.add_argument("--subset", default="", help="file with map names, one per line: play only these, each with the seed it has in the whole set")
     r = sub.add_parser("report")
     r.add_argument("--out", required=True)
     r.add_argument("--against", default="", help="results of another run on the same battles: paired comparison")
