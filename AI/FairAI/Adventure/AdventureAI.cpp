@@ -312,6 +312,7 @@ void Params::loadOverrides(int playerIndex)
 	read("detour", detour);
 	read("kitePlan", kitePlan);
 	read("latePlan", latePlan);
+	read("tour", tour);
 	read("wholeCreatures", wholeCreatures);
 	read("forecastPlans", forecastPlans);
 	read("fightForecast", fightForecast);
@@ -1527,6 +1528,67 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			if(pick != &targets.front() && step == 0)
 				logAi->debug("FairAI %s: %s takes %s %s on the way to %s %s (%.0f a day of detour against %.0f a day of the way)", me.toString(), hero->getNameTranslated(),
 					pick->description, pick->tile.toString(), far.description, far.tile.toString(), bestRate, far.score);
+		}
+		// (tour) A way is judged with its next stop: the first target together with the best thing to go
+		// on to from there, by what both bring a day. One target at a time, the small things never win -
+		// each loses against something bigger or nearer on every single day.
+		if(params.tour && targets.size() > 1 && pick->score > 0 && pick->score < 100000 && (params.tour >= 2 || leads(hero)))
+		{
+			const int3 here = hero->visitablePos();
+			const auto tiles = [](const int3 & a, const int3 & b) { return static_cast<double>(std::max(std::abs(a.x - b.x), std::abs(a.y - b.y))); };
+			const auto known = perception.knownObjects();
+			// things to pick up or to beat (a town, a hero, a way to flee is a plan of its own)
+			const auto plain = [&](const Target & t)
+			{
+				if(t.value <= t.loss || !t.object.hasValue() || t.tile.z != here.z || t.score >= 100000)
+					return false;
+				const auto it = known.find(t.object);
+				if(it == known.end() || it->second.type == Obj::TOWN || it->second.type == Obj::HERO)
+					return false;
+				return t.description.rfind("monster", 0) == 0 || t.description.rfind("object", 0) == 0 || t.description.rfind("bank", 0) == 0;
+			};
+			// the pace of today's ways: days a tile, over everything in reach
+			double days = 0;
+			double way = 0;
+			for(const Target & t : targets)
+			{
+				if(t.travel > 0 && t.tile.z == here.z)
+				{
+					days += t.travel;
+					way += tiles(here, t.tile);
+				}
+			}
+			const double pace = way > 0 ? days / way : 0;
+			double bestRate = pick->score;
+			const Target * first = pick;
+			const Target * next = nullptr;
+			const size_t firsts = std::min<size_t>(targets.size(), 24);
+			for(size_t i = 0; i < firsts && pace > 0; ++i)
+			{
+				const Target & a = targets[i];
+				if(!plain(a))
+					continue;
+				for(const Target & b : targets)
+				{
+					if(&b == &a || b.object == a.object || !plain(b))
+						continue;
+					const double onward = pace * tiles(a.tile, b.tile);
+					const double rate = ((a.value - a.loss) + (b.value - b.loss)) / (a.travel + onward + 2 * params.travelOffset);
+					if(rate > bestRate)
+					{
+						bestRate = rate;
+						first = &a;
+						next = &b;
+					}
+				}
+			}
+			if(first != pick && next)
+			{
+				if(step == 0)
+					logAi->debug("FairAI %s: %s goes by %s %s and on to %s %s (%.0f a day for both against %.0f)", me.toString(), hero->getNameTranslated(),
+						first->description, first->tile.toString(), next->description, next->tile.toString(), bestRate, pick->score);
+				pick = first;
+			}
 		}
 		const Target & best = *pick;
 		if(targets.size() > 1 && step == 0)
