@@ -307,6 +307,8 @@ void Params::loadOverrides(int playerIndex)
 	read("guardOracleUntil", guardOracleUntil);
 	read("guardModel", guardModel);
 	read("ownCasters", ownCasters);
+	read("planVsPlayers", planVsPlayers);
+	read("modelSearch", modelSearch);
 	read("wholeCreatures", wholeCreatures);
 	read("forecastPlans", forecastPlans);
 	read("fightForecast", fightForecast);

@@ -103,6 +103,8 @@ private:
 	int guardOracleUntil = 3; ///< ... in the first rounds of a battle only
 	int guardModel = 0;       ///< from the player's FairAI parameters: the play-outs of the battle plan play guards by GuardModel
 	bool ownCasters = false;  ///< from the player's FairAI parameters: our units that can cast are played by our own search
+	bool modelSearch = false; ///< from the player's FairAI parameters: the plain search plays the enemy by GuardModel too
+	bool planVsPlayers = false; ///< from the player's FairAI parameters: the battle plan is also used against the army of a player
 
 	bool needsFallback(const CStack * stack) const;
 	bool tryHeroSpell(const BattleID & battleID, const CStack * stack);

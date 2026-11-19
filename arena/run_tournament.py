@@ -685,6 +685,7 @@ def main() -> int:
     b.add_argument("--seed", type=int, default=42)
     b.add_argument("--keep-logs", action="store_true")
     b.add_argument("--verbose", action="store_true")
+    b.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the combat AI under test")
     b.add_argument("--out", required=True)
 
     args = ap.parse_args()

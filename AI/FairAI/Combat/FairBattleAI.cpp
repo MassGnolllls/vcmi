@@ -21,6 +21,7 @@
 #include "../../../lib/battle/BattleUnitTurnReason.h"
 #include "../../../lib/CConfigHandler.h"
 #include "../../../lib/CRandomGenerator.h"
+#include "../../../lib/CPlayerState.h"
 #include "../../BattleAI/PotentialTargets.h"
 #include "../../BattleAI/StackWithBonuses.h"
 #include "../../BattleAI/SpellTargetsEvaluator.h"
@@ -739,6 +740,8 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	guardOracleUntil = params.guardOracleUntil;
 	guardModel = params.guardModel;
 	ownCasters = params.ownCasters != 0;
+	planVsPlayers = params.planVsPlayers != 0;
+	modelSearch = params.modelSearch != 0;
 }
 
 void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::shared_ptr<CBattleCallback> CB, AutocombatPreferences prefs)
@@ -1650,7 +1653,32 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 				static_cast<int>(oracleProfile[0]), oracleProfile[1], oracleProfile[2], oracleProfile[3], oracleProfile[4], oracleProfile[5]);
 		return {best->real, best->score, best->description + " [oracle]"};
 	}
-	if(battlePlan && roundsAhead < 0)
+	// Whom GuardModel can play for us: neutral troops - VCMI's BattleAI plays them unless the game is
+	// set up otherwise - and, from level 2 on, the troops of a computer player, which the game's battle
+	// AI for computer players plays (taken to be BattleAI; its hero's spells are not foreseen). A human
+	// plays as he likes. No guessing between "they advance" and "they lie in wait" then.
+	const int modelLevel = config.guardModel >= 0 ? config.guardModel : guardModel;
+	const PlayerColor enemyOwner = battle->sideToPlayer(otherSide);
+	bool modelGuards = false;
+	if(modelLevel > 0 && !battle->battleGetDefendedTown())
+	{
+		if(enemyOwner == PlayerColor::NEUTRAL)
+		{
+			modelGuards = settings["ai"]["combatNeutralAI"].String() == "BattleAI";
+		}
+		else if(modelLevel >= 2 && enemyOwner.isValidPlayer())
+		{
+			// (who is human is part of the game's set-up, known to everybody)
+			const auto & players = env->game()->getStartInfo()->playerInfos;
+			const auto owner = players.find(enemyOwner);
+			modelGuards = owner != players.end() && !owner->second.isControlledByHuman();
+		}
+	}
+	const auto guardTurns = static_cast<uint8_t>(env->game()->getStartInfo()->difficulty < 4 ? 2 : 10); // as BattleAI sets itself up
+	// (the plan is made against neutral troops; against the army of a hero it lost badly as long as
+	// the enemy was guessed - 498 battles against BattleAI with heroes: 60 % won instead of 74 % -,
+	// so there only on demand: planVsPlayers)
+	if(battlePlan && roundsAhead < 0 && (planVsPlayers || enemyOwner == PlayerColor::NEUTRAL))
 	{
 		// Battle plan: every candidate is played on for several rounds, once with our troops advancing
 		// and once with them holding their ground (shooting, hitting only what comes into reach). The
@@ -1658,12 +1686,6 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		// while our shooters work" from "close in before their shooters wear us down".
 		const int ownSide = side == BattleSide::ATTACKER ? 0 : 1;
 		const int planEnd = base.round + std::max(1, config.planRounds);
-		// Guards are played by VCMI's BattleAI (unless the game is set up otherwise), and GuardModel
-		// knows what that AI does: no guessing between "they advance" and "they lie in wait"
-		// (neutral troops; an enemy player's troops are played by whatever plays that player)
-		const bool modelGuards = (config.guardModel >= 0 ? config.guardModel : guardModel) > 0 && battle->sideToPlayer(otherSide) == PlayerColor::NEUTRAL
-			&& !battle->battleGetDefendedTown() && settings["ai"]["combatNeutralAI"].String() == "BattleAI";
-		const auto guardTurns = static_cast<uint8_t>(env->game()->getStartInfo()->difficulty < 4 ? 2 : 10); // as BattleAI sets itself up
 		if(modelGuards)
 			enemyStances = {Stance::STALK};
 		static const bool showCandidates = std::getenv("FAI_CANDIDATES") != nullptr;
@@ -1703,6 +1725,11 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 				modelGuards ? "model" : "stance", shown);
 		return {best->real, best->score, best->description};
 	}
+	// the plain search: the rest of this round. With modelSearch the enemy's part of it is played by
+	// GuardModel as well, where that applies.
+	const bool modelRest = modelGuards && modelSearch && roundsAhead < 0;
+	if(modelRest)
+		enemyStances = {Stance::STALK};
 	for(auto & c : candidates)
 	{
 		double worst = std::numeric_limits<double>::max();
@@ -1710,6 +1737,8 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		{
 			SimState sim = base;
 			sim.stance[enemySide] = enemyStance;
+			if(modelRest)
+				sim.guardModel[enemySide] = guardTurns;
 			if(c.outcome && config.engineOutcome)
 				sim.applyOutcome(me, *c.outcome);
 			else
