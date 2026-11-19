@@ -73,6 +73,7 @@ def main() -> int:
     ap.add_argument("--within", default="{}", help="JSON: parameters every configuration of the design contains")
     ap.add_argument("--days", default="14,28,42")
     ap.add_argument("--opponent", action="store_true", help="the opponent's figures instead of ours")
+    ap.add_argument("--job", default="", help="job file of the test (arena/jobs/NAME.json): its --configs name the configurations while the test is still running and has no ab_summary.md")
     args = ap.parse_args()
     factors = json.loads(args.factors)
     within = json.loads(args.within)
@@ -83,9 +84,12 @@ def main() -> int:
     for name in args.folders:
         folder = Path(name)
         configs = read_configs(folder)
+        if not configs and args.job:
+            job_args = json.loads(Path(args.job).read_text()).get("args", [])
+            if "--configs" in job_args:
+                configs = json.loads(job_args[job_args.index("--configs") + 1])
         if not configs:
-            # (a test that is still running has no summary yet: the sub-folders name the configurations)
-            print(f"no ab_summary.md with configurations in {folder}", file=sys.stderr)
+            print(f"no ab_summary.md with configurations in {folder} (a test still running: --job)", file=sys.stderr)
             continue
         for config, params in configs.items():
             if any(params.get(k) != v for k, v in within.items()):
