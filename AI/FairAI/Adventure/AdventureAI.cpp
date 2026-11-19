@@ -306,6 +306,7 @@ void Params::loadOverrides(int playerIndex)
 	read("guardOracleUntil", guardOracleUntil);
 	read("guardModel", guardModel);
 	read("ownCasters", ownCasters);
+	read("wholeCreatures", wholeCreatures);
 	read("fightForecast", fightForecast);
 	read("maxLossShare", maxLossShare);
 	read("maxLossShareIdle", maxLossShareIdle);
@@ -410,6 +411,7 @@ AdventureAI::AdventureAI(FairAIGateway & gateway, std::shared_ptr<CCallback> cb,
 		statsFile = nullptr;
 	Combat::setMultiHex(params.simMultiHex != 0); // the forecasts of the adventure AI use the same simulator
 	Combat::setAfterHit(params.simAfterHit != 0);
+	Combat::setWholeCreatures(params.wholeCreatures != 0);
 }
 
 AdventureAI::~AdventureAI() = default;

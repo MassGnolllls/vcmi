@@ -82,6 +82,7 @@ constexpr double SKILL_POINT = 0.035;
 namespace
 {
 std::atomic<bool> multiHexEnabled{false};
+std::atomic<bool> wholeCreaturesEnabled{false};
 std::atomic<bool> abilitiesBeyondDamage{false};
 
 /// a kind of bonus that the game's files define (not one of the built-in ones), by its name
@@ -794,6 +795,15 @@ bool SimState::battleOver() const
 double SimState::sideValue(BattleSide side) const
 {
 	double total = 0;
+	if(wholeCreaturesEnabled && battleOver())
+	{
+		// the battle is over: what counts is who is still standing (a wound heals, but tells how near a loss was)
+		const double WOUND_WEIGHT = 0.1;
+		for(const auto & u : units)
+			if(u.side == side && u.alive())
+				total += u.value * (u.count - WOUND_WEIGHT * (1.0 - static_cast<double>(u.firstHP) / u.maxHP));
+		return total;
+	}
 	for(const auto & u : units)
 		if(u.side == side)
 			total += u.remainingValue();
@@ -2130,6 +2140,11 @@ double manaUrgency(int hero)
 void setAfterHit(bool enabled)
 {
 	abilitiesBeyondDamage = enabled;
+}
+
+void setWholeCreatures(bool enabled)
+{
+	wholeCreaturesEnabled = enabled;
 }
 
 void setMultiHex(bool enabled)

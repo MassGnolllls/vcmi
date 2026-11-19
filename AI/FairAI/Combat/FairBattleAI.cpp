@@ -730,6 +730,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	simAbilities = params.simAbilities != 0;
 	setMultiHex(params.simMultiHex != 0);
 	setAfterHit(params.simAfterHit != 0);
+	setWholeCreatures(params.wholeCreatures != 0);
 	battlePlan = params.battlePlan != 0;
 	guardOracle = params.guardOracle;
 	ambushPlan = params.battlePlan >= 2;

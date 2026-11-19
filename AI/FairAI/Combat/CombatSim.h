@@ -421,6 +421,11 @@ double manaUrgency(int hero);
 /// What attacks do beyond their damage (death stare, petrifying and the like, ageing, poison, curse,
 /// weakness, acid, thunderbolt) - off until the unit lab has confirmed it against the game
 void setAfterHit(bool enabled);
+/// How a won battle is counted: by the creatures that are left - a wounded creature is whole again
+/// after the battle -, not by the health left. Wounds then cost only a tenth of their share: a blow
+/// that kills nobody is almost free, as it is in the game (damage spread over tough stacks instead of
+/// taken by one). Battles that are not over at the horizon are counted by health as before.
+void setWholeCreatures(bool enabled);
 bool multiHex();
 
 }
