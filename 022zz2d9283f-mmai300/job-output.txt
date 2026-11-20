@@ -1,0 +1,7 @@
+== m-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/9b717c263e/vcmiclient --ai FairAI+FairAI --opponent Nullkiller2+MMAI --jobs 6 --seed 65 --out /home/alex/fairai/runs/022zz2d9283f-mmai300/m-land-2p --variants {"base": {"magicWorth": 2, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0}, "nG": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1}} --pool long1-m-land-2p --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7000
+playing 48 matches (2 variants x 24 on 12 maps) with 6 parallel job(s)
+base: match    1 FairAI+FairAI as blue of 2: victory winner=blue day=88 score=1.00 [295.3s]
+nG: match    0 FairAI+FairAI as red of 2: victory winner=red day=97 score=1.00 [352.8s]
+nG: match    1 FairAI+FairAI as blue of 2: victory winner=blue day=128 score=1.00 [459.3s]
+base: match    2 FairAI+FairAI as red of 2: victory winner=red day=148 score=1.00 [525.9s]
