@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d9284-kinds-gen",
+ "state": "running",
+ "commit": "9b717c263ed1b2597e29d181c3003a3ebdf05af3",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-20T08:49:10",
+ "note": "Maps for the other kinds of map (pool long1 of matrix_long.json: small land, medium islands, free-for-all and teams with four players, large land) - made only where they are missing; job d9285 plays them to the end."
+}
