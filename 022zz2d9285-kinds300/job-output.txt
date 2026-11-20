@@ -264,3 +264,7 @@ new: match   10 FairAI as red of 2: victory winner=blue day=196 score=0.00 [979.
 nR: match    8 FairAI as red of 2: victory winner=blue day=316 score=0.00 [1547.4s]
 old: match   11 FairAI as blue of 2: victory winner=red day=85 score=0.00 [350.9s]
 nR: match   11 FairAI as blue of 2: victory winner=red day=79 score=0.00 [278.3s]
+old: match   10 FairAI as red of 2: victory winner=blue day=207 score=0.00 [1254.2s]
+nR: match   10 FairAI as red of 2: victory winner=blue day=196 score=0.00 [1331.1s]
+nR: match    6 FairAI as red of 2: victory winner=red day=301 score=1.00 [2572.3s]
+new: match    9 FairAI as blue of 2: victory winner=red day=347 score=0.00 [2327.6s]
