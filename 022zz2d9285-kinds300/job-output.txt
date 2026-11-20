@@ -219,3 +219,17 @@ new: match   11 FairAI as blue,green of 4: victory winner=blue day=60 score=1.00
 nR: match    8 FairAI as red,tan of 4: victory winner=blue day=111 score=0.00 [319.4s]
 old: match   11 FairAI as blue,green of 4: victory winner=red day=63 score=0.00 [144.3s]
 old: match    9 FairAI as blue,green of 4: victory winner=blue day=90 score=1.00 [230.1s]
+nR: match   11 FairAI as blue,green of 4: victory winner=blue day=90 score=1.00 [276.0s]
+# A/B test (3 configs, seeds 90)
+
+Paired against `new`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| new | `{}` | 12 | 10 | 2 | 0.833 ± 0.220 | - | 0.833 ± 0.220 | - | 12 |
+| old | `{"magicWorth": 0, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0, "passOwn": 0, "towerGuard": 0, "saveFor": 0, "lastStand": 0}` | 12 | 7 | 5 | 0.583 ± 0.291 | -0.250 ± 0.352 | 0.583 ± 0.291 | -0.250 ± 0.352 | 12 |
+| nR | `{"secondArmy": 1, "secondArmyEdge": 0.6}` | 12 | 10 | 2 | 0.833 ± 0.220 | +0.000 ± 0.341 | 0.833 ± 0.220 | +0.000 ± 0.341 | 12 |
+
+== l-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/9b717c263e/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 90 --out /home/alex/fairai/runs/022zz2d9285-kinds300/l-land-2p --variants {"new": {}, "old": {"magicWorth": 0, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0, "passOwn": 0, "towerGuard": 0, "saveFor": 0, "lastStand": 0}, "nR": {"secondArmy": 1, "secondArmyEdge": 0.6}} --pool long1-l-land-2p --max-days 400 --timeout 9000 --stall-seconds 300 --base-port 7400
+playing 36 matches (3 variants x 12 on 6 maps) with 9 parallel job(s)
