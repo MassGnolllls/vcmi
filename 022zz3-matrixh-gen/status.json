@@ -1,0 +1,9 @@
+{
+ "job": "022zz3-matrixh-gen",
+ "state": "running",
+ "commit": "9b717c263ed1b2597e29d181c3003a3ebdf05af3",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-20T11:44:50",
+ "note": "map matrix with the HotA mod: starting towns are drawn from all twelve factions (Cove, Factory, Bulwark included)"
+}
