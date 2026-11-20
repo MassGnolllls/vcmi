@@ -1,9 +1,12 @@
 {
  "job": "022zz2d9283f-mmai300",
- "state": "running",
+ "state": "done",
  "commit": "9b717c263ed1b2597e29d181c3003a3ebdf05af3",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-20T02:18:27",
- "note": "Where FairAI stands against Nullkiller2 with the MMAI battle AI, played to the end: the twelve medium land maps, both seats, day limit 300. Two configurations: the base of the current tests {\"magicWorth\": 2}, and the base with the combat package of 19.11. (battlePlan 3, guardModel 1, ownCasters 1, wholeCreatures 1). So far there is one small local series against this opponent with the standard of 18.11. (24 games: 15 won, 9 lost). First job that needs MMAI on the worker: the mod archive (mods.json) and the ONNX Runtime (tools.json) - since 19.11. from Microsoft's official NuGet package (the owner's word of that day; the release file on GitHub answers 404), every file pinned by its content as before. If either cannot be had as pinned the job fails and the next one runs. 20.11.: the combat package is the default now, so 'base' names it off explicitly (battlePlan, guardModel, ownCasters, wholeCreatures 0) - the two settings stay what they were: without and with the package."
+ "note": "Where FairAI stands against Nullkiller2 with the MMAI battle AI, played to the end: the twelve medium land maps, both seats, day limit 300. Two configurations: the base of the current tests {\"magicWorth\": 2}, and the base with the combat package of 19.11. (battlePlan 3, guardModel 1, ownCasters 1, wholeCreatures 1). So far there is one small local series against this opponent with the standard of 18.11. (24 games: 15 won, 9 lost). First job that needs MMAI on the worker: the mod archive (mods.json) and the ONNX Runtime (tools.json) - since 19.11. from Microsoft's official NuGet package (the owner's word of that day; the release file on GitHub answers 404), every file pinned by its content as before. If either cannot be had as pinned the job fails and the next one runs. 20.11.: the combat package is the default now, so 'base' names it off explicitly (battlePlan, guardModel, ownCasters, wholeCreatures 0) - the two settings stay what they were: without and with the package.",
+ "returncode": 0,
+ "finished": "2026-11-20T03:25:11",
+ "minutes": 66.7
 }

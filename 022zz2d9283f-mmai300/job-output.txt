@@ -45,3 +45,25 @@ nG: match   20 FairAI+FairAI as red of 2: victory winner=blue day=250 score=0.00
 base: match   22 FairAI+FairAI as red of 2: victory winner=blue day=117 score=0.00 [401.3s]
 nG: match   21 FairAI+FairAI as blue of 2: victory winner=red day=145 score=0.00 [459.3s]
 base: match   21 FairAI+FairAI as blue of 2: victory winner=red day=215 score=0.00 [621.3s]
+nG: match   19 FairAI+FairAI as blue of 2: victory winner=blue day=271 score=1.00 [996.5s]
+base: match   23 FairAI+FairAI as blue of 2: victory winner=red day=164 score=0.00 [456.0s]
+nG: match   23 FairAI+FairAI as blue of 2: victory winner=blue day=164 score=1.00 [545.2s]
+nG: match   22 FairAI+FairAI as red of 2: stalled winner= day=175 score=- [858.7s]
+# A/B test (2 configs, seeds 65)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{"magicWorth": 2, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0}` | 23 | 17 | 5 | 0.766 ± 0.172 | - | 0.752 ± 0.176 | - | 23 |
+| nG | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1}` | 23 | 18 | 4 | 0.824 ± 0.158 | +0.015 ± 0.133 | 0.807 ± 0.159 | +0.013 ± 0.150 | 22 |
+
+# Matrix test: 1 map categories, configs base, nG, seeds 65
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | base (games, score, decided) | nG (games, score, decided) | nG − base |
+|---|---|---|---|
+| m-land-2p | 23, 0.766 ± 0.172, 17 won 5 lost | 23, 0.824 ± 0.158, 18 won 4 lost | +0.015 ± 0.133 (22) |
+| **mean of categories** | 0.766 | 0.824 | +0.015 (all games: +0.015 ± 0.133) |
+
