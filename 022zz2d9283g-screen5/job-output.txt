@@ -1,0 +1,17 @@
+== m-blockbuster
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/9b717c263e/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 66 --out /home/alex/fairai/runs/022zz2d9283g-screen5/m-blockbuster --variants {"base": {}, "nDKBQ": {"tour": 1, "kitePlan": 1, "latePlan": 1, "breakout": 3, "skillChoice": 1, "primaryByArmy": 1}, "nSKBA": {"threatSpend": 2, "kitePlan": 1, "latePlan": 1, "breakout": 3, "artifactCare": 1}, "nSDAQ": {"threatSpend": 2, "tour": 1, "artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1}, "nRKAQ": {"secondArmy": 1, "secondArmyEdge": 0.6, "kitePlan": 1, "latePlan": 1, "artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1}, "nRDBA": {"secondArmy": 1, "secondArmyEdge": 0.6, "tour": 1, "breakout": 3, "artifactCare": 1}, "nRSBQ": {"secondArmy": 1, "secondArmyEdge": 0.6, "threatSpend": 2, "breakout": 3, "skillChoice": 1, "primaryByArmy": 1}, "nRSDK": {"secondArmy": 1, "secondArmyEdge": 0.6, "threatSpend": 2, "tour": 1, "kitePlan": 1, "latePlan": 1}, "nFBAQ": {"fightForecast": 2, "forecastPlans": 1, "breakout": 3, "artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1}, "nFDKA": {"fightForecast": 2, "forecastPlans": 1, "tour": 1, "kitePlan": 1, "latePlan": 1, "artifactCare": 1}, "nFSKQ": {"fightForecast": 2, "forecastPlans": 1, "threatSpend": 2, "kitePlan": 1, "latePlan": 1, "skillChoice": 1, "primaryByArmy": 1}, "nFSDB": {"fightForecast": 2, "forecastPlans": 1, "threatSpend": 2, "tour": 1, "breakout": 3}, "nFRKB": {"fightForecast": 2, "forecastPlans": 1, "secondArmy": 1, "secondArmyEdge": 0.6, "kitePlan": 1, "latePlan": 1, "breakout": 3}, "nFRDQ": {"fightForecast": 2, "forecastPlans": 1, "secondArmy": 1, "secondArmyEdge": 0.6, "tour": 1, "skillChoice": 1, "primaryByArmy": 1}, "nFRSA": {"fightForecast": 2, "forecastPlans": 1, "secondArmy": 1, "secondArmyEdge": 0.6, "threatSpend": 2, "artifactCare": 1}, "nFRSDKBAQ": {"fightForecast": 2, "forecastPlans": 1, "secondArmy": 1, "secondArmyEdge": 0.6, "threatSpend": 2, "tour": 1, "kitePlan": 1, "latePlan": 1, "breakout": 3, "artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1}} --pool fresh1-m-blockbuster --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7000 --max-maps 6
+playing 192 matches (16 variants x 12 on 6 maps) with 9 parallel job(s)
+nDKBQ: match    0 FairAI as red of 2: victory winner=red day=128 score=1.00 [181.5s]
+nRKAQ: match    0 FairAI as red of 2: victory winner=blue day=144 score=0.00 [213.6s]
+nRDBA: match    0 FairAI as red of 2: victory winner=blue day=161 score=0.00 [216.8s]
+nSDAQ: match    0 FairAI as red of 2: victory winner=blue day=165 score=0.00 [239.5s]
+nRSDK: match    0 FairAI as red of 2: victory winner=red day=169 score=1.00 [272.0s]
+nFBAQ: match    0 FairAI as red of 2: victory winner=red day=157 score=1.00 [286.3s]
+nFSDB: match    0 FairAI as red of 2: victory winner=blue day=117 score=0.00 [174.5s]
+nSKBA: match    0 FairAI as red of 2: stalled winner= day=96 score=- [441.6s]
+nFDKA: match    0 FairAI as red of 2: victory winner=blue day=152 score=0.00 [287.3s]
+nRSBQ: match    0 FairAI as red of 2: timeout winner= day=301 score=0.14 [524.5s]
+nFRSA: match    0 FairAI as red of 2: victory winner=blue day=168 score=0.00 [253.6s]
+base: match    0 FairAI as red of 2: timeout winner= day=301 score=0.47 [573.8s]
+nSKBA: match    1 FairAI as blue of 2: victory winner=blue day=62 score=1.00 [73.4s]
+nFSKQ: match    0 FairAI as red of 2: victory winner=blue day=178 score=0.00 [392.9s]
