@@ -384,3 +384,103 @@ nBYFL: match   23 FairAI as blue of 2: timeout winner= day=43 score=0.80 [46.6s]
 nYFEX: match   23 FairAI as blue of 2: timeout winner= day=43 score=0.71 [103.4s]
 nBDFE: match   23 FairAI as blue of 2: timeout winner= day=43 score=0.85 [67.1s]
 nBHFX: match   23 FairAI as blue of 2: timeout winner= day=43 score=0.78 [100.8s]
+nBYHDFLEX: match   23 FairAI as blue of 2: timeout winner= day=43 score=0.70 [130.1s]
+# A/B test (16 configs, seeds 64)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1}` | 24 | 0 | 0 | 0.641 ± 0.036 | - | 0.447 ± 0.032 | - | 24 |
+| nDFLX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "tour": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6, "scouts": 2}` | 24 | 0 | 0 | 0.653 ± 0.033 | +0.012 ± 0.032 | 0.456 ± 0.039 | +0.009 ± 0.049 | 24 |
+| nHFLE | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2}` | 24 | 0 | 0 | 0.631 ± 0.043 | -0.009 ± 0.032 | 0.471 ± 0.043 | +0.024 ± 0.042 | 24 |
+| nHDEX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}` | 24 | 0 | 0 | 0.635 ± 0.034 | -0.005 ± 0.038 | 0.484 ± 0.037 | +0.037 ± 0.045 | 24 |
+| nYFEX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "fightForecast": 2, "forecastPlans": 1, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}` | 24 | 0 | 0 | 0.653 ± 0.040 | +0.013 ± 0.043 | 0.497 ± 0.045 | +0.050 ± 0.048 | 24 |
+| nYDLE | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "tour": 1, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2}` | 24 | 0 | 0 | 0.608 ± 0.033 | -0.033 ± 0.030 | 0.448 ± 0.028 | +0.001 ± 0.035 | 24 |
+| nYHLX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "lossAversion": 0.6, "scouts": 2}` | 24 | 0 | 0 | 0.629 ± 0.040 | -0.011 ± 0.028 | 0.473 ± 0.032 | +0.026 ± 0.040 | 24 |
+| nYHDF | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "fightForecast": 2, "forecastPlans": 1}` | 24 | 0 | 0 | 0.653 ± 0.052 | +0.013 ± 0.041 | 0.489 ± 0.050 | +0.042 ± 0.047 | 24 |
+| nBLEX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}` | 24 | 0 | 0 | 0.631 ± 0.043 | -0.010 ± 0.036 | 0.472 ± 0.045 | +0.025 ± 0.049 | 24 |
+| nBDFE | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "tour": 1, "fightForecast": 2, "forecastPlans": 1, "expValueMain": 1.2, "guardKillValue": 0.2}` | 24 | 0 | 0 | 0.632 ± 0.042 | -0.009 ± 0.033 | 0.459 ± 0.037 | +0.013 ± 0.037 | 24 |
+| nBHFX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "fetchByShare": 1, "fetchRoundTrip": 1, "fightForecast": 2, "forecastPlans": 1, "scouts": 2}` | 24 | 0 | 0 | 0.631 ± 0.037 | -0.009 ± 0.029 | 0.485 ± 0.045 | +0.038 ± 0.045 | 24 |
+| nBHDL | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "lossAversion": 0.6}` | 24 | 0 | 0 | 0.614 ± 0.038 | -0.027 ± 0.038 | 0.436 ± 0.039 | -0.011 ± 0.042 | 24 |
+| nBYFL | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6}` | 24 | 0 | 0 | 0.639 ± 0.038 | -0.001 ± 0.035 | 0.500 ± 0.052 | +0.053 ± 0.060 | 24 |
+| nBYDX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "tour": 1, "scouts": 2}` | 24 | 0 | 0 | 0.618 ± 0.032 | -0.023 ± 0.039 | 0.493 ± 0.042 | +0.047 ± 0.057 | 24 |
+| nBYHE | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "expValueMain": 1.2, "guardKillValue": 0.2}` | 24 | 0 | 0 | 0.606 ± 0.039 | -0.035 ± 0.032 | 0.486 ± 0.041 | +0.039 ± 0.045 | 24 |
+| nBYHDFLEX | `{"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}` | 24 | 0 | 0 | 0.625 ± 0.037 | -0.016 ± 0.044 | 0.488 ± 0.039 | +0.041 ± 0.052 | 24 |
+
+== m-balance
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/474f8f29ad/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 64 --out /home/alex/fairai/runs/022zz2d9283e-opening/m-balance --variants {"base": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1}, "nDFLX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "tour": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6, "scouts": 2}, "nHFLE": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2}, "nHDEX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}, "nYFEX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "fightForecast": 2, "forecastPlans": 1, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}, "nYDLE": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "tour": 1, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2}, "nYHLX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "lossAversion": 0.6, "scouts": 2}, "nYHDF": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "fightForecast": 2, "forecastPlans": 1}, "nBLEX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}, "nBDFE": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "tour": 1, "fightForecast": 2, "forecastPlans": 1, "expValueMain": 1.2, "guardKillValue": 0.2}, "nBHFX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "fetchByShare": 1, "fetchRoundTrip": 1, "fightForecast": 2, "forecastPlans": 1, "scouts": 2}, "nBHDL": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "lossAversion": 0.6}, "nBYFL": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6}, "nBYDX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "tour": 1, "scouts": 2}, "nBYHE": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "expValueMain": 1.2, "guardKillValue": 0.2}, "nBYHDFLEX": {"magicWorth": 2, "battlePlan": 3, "guardModel": 1, "ownCasters": 1, "wholeCreatures": 1, "breakout": 3, "supplyRuns": 1, "fetchByShare": 1, "fetchRoundTrip": 1, "tour": 1, "fightForecast": 2, "forecastPlans": 1, "lossAversion": 0.6, "expValueMain": 1.2, "guardKillValue": 0.2, "scouts": 2}} --pool fresh1-m-balance --max-days 42 --timeout 900 --stall-seconds 180 --base-port 7100
+playing 384 matches (16 variants x 24 on 12 maps) with 9 parallel job(s)
+nYDLE: match    0 FairAI as red of 2: timeout winner= day=43 score=0.53 [45.2s]
+base: match    0 FairAI as red of 2: timeout winner= day=43 score=0.58 [46.3s]
+nYHLX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.51 [50.5s]
+nBLEX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.60 [55.4s]
+nHFLE: match    0 FairAI as red of 2: timeout winner= day=43 score=0.55 [56.7s]
+nYHDF: match    0 FairAI as red of 2: timeout winner= day=43 score=0.64 [59.1s]
+nHDEX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.50 [60.3s]
+nYFEX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.60 [72.9s]
+nDFLX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.61 [74.1s]
+nBHDL: match    0 FairAI as red of 2: timeout winner= day=43 score=0.52 [35.2s]
+nBDFE: match    0 FairAI as red of 2: timeout winner= day=43 score=0.50 [59.5s]
+nBYFL: match    0 FairAI as red of 2: timeout winner= day=43 score=0.55 [52.8s]
+nBYHE: match    0 FairAI as red of 2: timeout winner= day=43 score=0.61 [51.3s]
+nBYDX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.57 [55.9s]
+nBHFX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.43 [70.8s]
+nBYHDFLEX: match    0 FairAI as red of 2: timeout winner= day=43 score=0.67 [59.5s]
+base: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.73 [56.3s]
+nYDLE: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.61 [50.3s]
+nHDEX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.85 [64.0s]
+nBLEX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.57 [52.8s]
+nYHLX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.49 [61.5s]
+nHFLE: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.55 [97.6s]
+nDFLX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.55 [110.0s]
+nBDFE: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.64 [75.2s]
+nYFEX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.63 [101.8s]
+nYHDF: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.59 [94.7s]
+nBHDL: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.58 [44.5s]
+nBYHE: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.50 [49.0s]
+nBYDX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.47 [58.8s]
+base: match    2 FairAI as red of 2: timeout winner= day=43 score=0.60 [33.2s]
+nBYFL: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.71 [84.8s]
+nHDEX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.51 [52.7s]
+nBHFX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.59 [108.4s]
+nHFLE: match    2 FairAI as red of 2: timeout winner= day=43 score=0.43 [61.4s]
+nYDLE: match    2 FairAI as red of 2: timeout winner= day=43 score=0.51 [42.2s]
+nDFLX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.63 [70.6s]
+nYHLX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.51 [45.2s]
+nYFEX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.53 [76.0s]
+nYHDF: match    2 FairAI as red of 2: timeout winner= day=43 score=0.55 [53.2s]
+nBLEX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.55 [50.9s]
+nBHDL: match    2 FairAI as red of 2: timeout winner= day=43 score=0.55 [42.3s]
+nBDFE: match    2 FairAI as red of 2: timeout winner= day=43 score=0.53 [50.9s]
+nBYHDFLEX: match    1 FairAI as blue of 2: timeout winner= day=43 score=0.62 [139.7s]
+nBYFL: match    2 FairAI as red of 2: timeout winner= day=43 score=0.62 [50.8s]
+nBYDX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.50 [60.2s]
+nBYHE: match    2 FairAI as red of 2: timeout winner= day=43 score=0.47 [39.6s]
+nBHFX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.57 [80.4s]
+base: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.54 [47.2s]
+nBYHDFLEX: match    2 FairAI as red of 2: timeout winner= day=43 score=0.60 [64.0s]
+nHDEX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.59 [55.9s]
+nYDLE: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.56 [46.8s]
+nYHLX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.57 [64.0s]
+nHFLE: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.63 [91.9s]
+nDFLX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.56 [100.9s]
+nBLEX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.42 [55.3s]
+nBHDL: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.50 [53.4s]
+nYHDF: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.62 [95.9s]
+nYFEX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.61 [122.9s]
+nBDFE: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.45 [82.2s]
+nBYDX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.57 [48.9s]
+nBYHE: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.50 [44.4s]
+base: match    4 FairAI as red of 2: timeout winner= day=43 score=0.61 [35.0s]
+nBHFX: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.82 [106.7s]
+nBYFL: match    3 FairAI as blue of 2: timeout winner= day=43 score=0.54 [88.8s]
+nHDEX: match    4 FairAI as red of 2: timeout winner= day=43 score=0.68 [46.0s]
+nYDLE: match    4 FairAI as red of 2: timeout winner= day=43 score=0.56 [45.7s]
+nYHLX: match    4 FairAI as red of 2: timeout winner= day=43 score=0.59 [44.0s]
+nHFLE: match    4 FairAI as red of 2: timeout winner= day=43 score=0.60 [76.3s]
+nDFLX: match    4 FairAI as red of 2: timeout winner= day=43 score=0.61 [85.0s]
+nYFEX: match    4 FairAI as red of 2: timeout winner= day=43 score=0.65 [80.1s]
+nBLEX: match    4 FairAI as red of 2: timeout winner= day=43 score=0.58 [56.2s]
+nYHDF: match    4 FairAI as red of 2: timeout winner= day=43 score=0.55 [71.4s]
+nBHDL: match    4 FairAI as red of 2: timeout winner= day=43 score=0.60 [40.3s]
