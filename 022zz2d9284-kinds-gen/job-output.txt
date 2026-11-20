@@ -1,0 +1,5 @@
+s-land-2p: 12/12 maps ready in /home/alex/.local/share/vcmi/Maps/long1-s-land-2p
+m-islands-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/long1-m-islands-2p
+m-ffa-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/long1-m-ffa-4p
+m-teams-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/long1-m-teams-4p
+l-land-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/long1-l-land-2p
