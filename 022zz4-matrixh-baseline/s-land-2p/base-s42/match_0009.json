@@ -1,0 +1,150 @@
+{
+	"battles" : {
+		"blue" : {
+			"guardFights" : 0,
+			"guardFightsLost" : 0,
+			"guardKills" : 0,
+			"guardLosses" : 0,
+			"playerFights" : 1,
+			"playerFightsWon" : 0,
+			"playerKills" : 1153,
+			"playerLosses" : 1980
+		},
+		"red" : {
+			"guardFights" : 1,
+			"guardFightsLost" : 0,
+			"guardKills" : 1500,
+			"guardLosses" : 402,
+			"playerFights" : 1,
+			"playerFightsWon" : 1,
+			"playerKills" : 1980,
+			"playerLosses" : 1153
+		}
+	},
+	"cheatsAllowed" : false,
+	"day" : 1,
+	"difficulty" : "king",
+	"endEvents" : [
+		{
+			"day" : 1,
+			"player" : "blue",
+			"victory" : false
+		}
+	],
+	"lastTurnOf" : "red",
+	"lastTurnOfAI" : "Nullkiller2",
+	"map" : "MAPS/MIXH1-S-LAND-2P/2SM4D_S_L1_NONE_31005",
+	"outcome" : "victory",
+	"playerBattles" : [
+		[
+			1,
+			0,
+			1,
+			6632,
+			1980,
+			1153,
+			1980,
+			0,
+			1,
+			1,
+			1,
+			1,
+			0,
+			0
+		]
+	],
+	"players" : {
+		"blue" : {
+			"ai" : "FairAI",
+			"armyStrength" : 0,
+			"cheated" : false,
+			"faction" : "core:fortress",
+			"gold" : 10000,
+			"heroes" : 0,
+			"income" : 0,
+			"mapExploredRatio" : 0.052521,
+			"maxHeroLevel" : 0,
+			"mines" : 0,
+			"numberArtifacts" : 0,
+			"numberDwellings" : 0,
+			"score" : 396,
+			"status" : "loser",
+			"team" : 1,
+			"totalExperience" : 0,
+			"townBuiltRatio" : 0,
+			"towns" : 0
+		},
+		"red" : {
+			"ai" : "Nullkiller2",
+			"armyStrength" : 9229,
+			"cheated" : false,
+			"faction" : "core:tower",
+			"gold" : 5100,
+			"heroes" : 3,
+			"income" : 1000,
+			"mapExploredRatio" : 0.121849,
+			"maxHeroLevel" : 2,
+			"mines" : 0,
+			"numberArtifacts" : 6,
+			"numberDwellings" : 0,
+			"score" : 448,
+			"status" : "ingame",
+			"team" : 0,
+			"totalExperience" : 1460,
+			"townBuiltRatio" : 0.0684932,
+			"towns" : 2
+		}
+	},
+	"seed" : 590620972,
+	"timeline" : [
+		{
+			"day" : 1,
+			"players" : {
+				"blue" : [
+					1980,
+					1,
+					1,
+					500,
+					0,
+					5,
+					1,
+					10000,
+					0,
+					0,
+					0,
+					1980,
+					0,
+					0,
+					1,
+					2,
+					2,
+					1,
+					102
+				],
+				"red" : [
+					3527,
+					1,
+					1,
+					500,
+					0,
+					7,
+					1,
+					10600,
+					0,
+					0,
+					0,
+					3527,
+					0,
+					0,
+					0,
+					2,
+					3,
+					0,
+					100
+				]
+			}
+		}
+	],
+	"wallTimeSec" : 1.75795,
+	"winner" : "red"
+}
