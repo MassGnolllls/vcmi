@@ -1,0 +1,33 @@
+s-land-2p: 5/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p
+generated: /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p/2SM4d_s_l1_none_31000.vmap
+generated: /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p/2SM4d_s_l1_none_31001.vmap
+generated: /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p/2SM4d_s_l1_none_31002.vmap
+FAILED seed 31003: rc=-11
+Starting... 
+[1;32mStarting client of 'VCMI 1.7.5.9b717c263ed1b2597e29d181c3003a3ebdf05af3'
+[0m[1;32mCreating console and configuring logger: 2 ms
+[0m[1;32mThe log file will be saved to "/tmp/vcmi-arena-cfg-pmhg_x6r/cache/vcmi/VCMI_Client_log.txt"
+[0m[1;32m	Initialization: 132 ms
+[0m[1;32m	Data loading: 101 ms
+[0m[1;32m	Mod handler: 34 ms
+[0m[1;32m	Mod filesystems: 143 ms
+[0m[1;31m[0m[1;31m[0m[1;31m[0m[1;31m[0m[1;31m[0m[1;31m[0m[1;31m[0m
+Failed to connect nearby object Gems at (35 13 0)
+Failed to fill zone 2 due to lack of space
+Failed to fill zone 6 due to lack of space
+Failed to fill zone 7 due to lack of space
+Failed to fill zone 1 due to lack of space
+Failed to fill zone 8 due to lack of space
+Failed to fill zone 4 due to lack of space
+munmap_chunk(): invalid pointer
+
+generated: /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p/2SM4d_s_l1_none_31004.vmap
+generated: /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p/2SM4d_s_l1_none_31005.vmap
+5/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-s-land-2p
+ 
+m-land-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-m-land-2p
+m-islands-2p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-m-islands-2p
+m-ffa-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-m-ffa-4p
+m-teams-4p: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-m-teams-4p
+l-ffa-6p-u: 6/6 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-l-ffa-6p-u
+xl-ffa-8p-u: 4/4 maps ready in /home/alex/.local/share/vcmi/Maps/mixh1-xl-ffa-8p-u
