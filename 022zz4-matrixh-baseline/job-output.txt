@@ -198,3 +198,36 @@ match    0 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.57
 match    1 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.52 [1107.4s]
 match    2 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.60 [1257.3s]
 match    6 FairAI as red,tan,orange,teal of 8: timeout winner= day=91 score=0.56 [1136.4s]
+match    7 FairAI as blue,green,purple,pink of 8: timeout winner= day=91 score=0.61 [1154.1s]
+
+# Arena: FairAI vs Nullkiller2
+
+- matches: 8 (runner errors: 0)
+- decided: 0 -> FairAI won 0, lost 0
+- day limit reached: 8 (material lead for FairAI in 3)
+- stalled games (AI stopped responding), by AI on turn: none
+- no decided games
+- cheat flags raised: 0
+# A/B test (1 configs, seeds 42)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 8 | 0 | 0 | 0.537 ± 0.042 | - | 0.375 ± 0.047 | - | 8 |
+
+# Matrix test: 7 map categories, configs base, seeds 42
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | base (games, score, decided) | 
+|---|---|
+| s-land-2p | 10, 0.588 ± 0.259, 4 won 2 lost |
+| m-land-2p | 12, 0.668 ± 0.050, 0 won 0 lost |
+| m-islands-2p | 12, 0.682 ± 0.162, 3 won 1 lost |
+| m-ffa-4p | 12, 0.694 ± 0.131, 2 won 0 lost |
+| m-teams-4p | 12, 0.676 ± 0.176, 0 won 0 lost |
+| l-ffa-6p-u | 11, 0.587 ± 0.084, 0 won 0 lost |
+| xl-ffa-8p-u | 8, 0.537 ± 0.042, 0 won 0 lost |
+| **mean of categories** | 0.633 |
+
