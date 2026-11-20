@@ -351,7 +351,8 @@ void onNewTurn(CClient & client)
 	if(!gs.getMap().battleOnly)
 	{
 		// key figures per day, compact: [army, towns, heroes, income, mines, explored %, best hero level, gold, dwellings, guard fights, guard losses,
-		// army of the strongest hero, army standing in town garrisons (without a hero)]
+		// army of the strongest hero, army standing in town garrisons (without a hero),
+		// that hero's attack, defence, spell power, knowledge, artifacts worn, fighting strength factor in per cent]
 		JsonNode day;
 		day["day"].Integer() = gs.getDate(Date::DAY);
 		for(const auto & player : gs.players)
@@ -366,8 +367,26 @@ void onNewTurn(CClient & client)
 			// how the army is spread: the strongest single hero, and what stands in towns without a hero
 			int64_t mainArmy = 0;
 			int64_t garrisons = 0;
+			const CGHeroInstance * mainHero = nullptr;
 			for(const auto * hero : player.second.getHeroes())
+			{
+				if(!mainHero || static_cast<int64_t>(hero->getArmyStrength()) > mainArmy)
+					mainHero = hero;
 				mainArmy = std::max<int64_t>(mainArmy, static_cast<int64_t>(hero->getArmyStrength()));
+			}
+			// what the hero itself adds to that army: its four skills (artifacts and visited places counted
+			// in), the artifacts it wears, and the game's own measure of a hero's worth in a fight, in per cent
+			int64_t mainSkills[4] = {0, 0, 0, 0};
+			int64_t mainWorn = 0;
+			int64_t mainFactor = 0;
+			if(mainHero)
+			{
+				for(int i = 0; i < 4; ++i)
+					mainSkills[i] = mainHero->getPrimSkillLevel(PrimarySkill(i));
+				for(const auto & worn : mainHero->artifactsWorn)
+					mainWorn += worn.first < ArtifactPosition::MACH1 || worn.first > ArtifactPosition::MACH4 ? (worn.first == ArtifactPosition::SPELLBOOK ? 0 : 1) : 0;
+				mainFactor = std::lround(mainHero->getFightingStrength() * 100);
+			}
 			for(const auto * town : player.second.getTowns())
 				if(!town->getGarrisonHero())
 					garrisons += static_cast<int64_t>(town->getArmyStrength());
@@ -375,7 +394,8 @@ void onNewTurn(CClient & client)
 			for(int64_t value : {static_cast<int64_t>(e.armyStrength), static_cast<int64_t>(e.numberTowns), static_cast<int64_t>(e.numberHeroes), static_cast<int64_t>(e.income),
 				static_cast<int64_t>(mines), static_cast<int64_t>(std::lround(e.mapExploredRatio * 100)), static_cast<int64_t>(e.maxHeroLevel),
 				static_cast<int64_t>(player.second.resources[EGameResID::GOLD]), static_cast<int64_t>(e.numberDwellings),
-				static_cast<int64_t>(tally.guardFights), tally.guardLosses, mainArmy, garrisons})
+				static_cast<int64_t>(tally.guardFights), tally.guardLosses, mainArmy, garrisons,
+				mainSkills[0], mainSkills[1], mainSkills[2], mainSkills[3], mainWorn, mainFactor})
 			{
 				row.Vector().emplace_back(value);
 			}
