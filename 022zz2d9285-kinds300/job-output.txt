@@ -121,3 +121,19 @@ old: match    8 FairAI as red of 2: victory winner=red day=251 score=1.00 [773.9
 new: match   10 FairAI as red of 2: victory winner=blue day=148 score=0.00 [471.9s]
 old: match   11 FairAI as blue of 2: victory winner=red day=140 score=0.00 [375.2s]
 new: match    8 FairAI as red of 2: timeout winner= day=301 score=0.41 [985.7s]
+nR: match   11 FairAI as blue of 2: timeout winner= day=301 score=0.71 [1156.6s]
+# A/B test (3 configs, seeds 90)
+
+Paired against `new`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| new | `{}` | 12 | 5 | 5 | 0.524 ± 0.278 | - | 0.500 ± 0.281 | - | 12 |
+| old | `{"magicWorth": 0, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0, "passOwn": 0, "towerGuard": 0, "saveFor": 0, "lastStand": 0}` | 12 | 3 | 9 | 0.250 ± 0.256 | -0.274 ± 0.390 | 0.250 ± 0.256 | -0.250 ± 0.405 | 12 |
+| nR | `{"secondArmy": 1, "secondArmyEdge": 0.6}` | 12 | 9 | 1 | 0.881 ± 0.165 | +0.356 ± 0.357 | 0.861 ± 0.175 | +0.361 ± 0.359 | 12 |
+
+== m-ffa-4p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/9b717c263e/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 90 --out /home/alex/fairai/runs/022zz2d9285-kinds300/m-ffa-4p --variants {"new": {}, "old": {"magicWorth": 0, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0, "passOwn": 0, "towerGuard": 0, "saveFor": 0, "lastStand": 0}, "nR": {"secondArmy": 1, "secondArmyEdge": 0.6}} --pool long1-m-ffa-4p --max-days 300 --timeout 9000 --stall-seconds 300 --base-port 7200
+playing 36 matches (3 variants x 12 on 6 maps) with 9 parallel job(s)
+new: match    0 FairAI as red,tan of 4: victory winner=red day=113 score=1.00 [274.7s]
+old: match    0 FairAI as red,tan of 4: victory winner=blue day=115 score=0.00 [280.5s]
