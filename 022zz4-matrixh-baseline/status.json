@@ -1,0 +1,9 @@
+{
+ "job": "022zz4-matrixh-baseline",
+ "state": "running",
+ "commit": "9b717c263ed1b2597e29d181c3003a3ebdf05af3",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-20T11:46:56",
+ "note": "baseline with HotA factions over seven map categories"
+}
