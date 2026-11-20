@@ -170,3 +170,30 @@ nR: match    8 FairAI as red,tan of 4: victory winner=red day=192 score=1.00 [42
 old: match   11 FairAI as blue,green of 4: victory winner=green day=108 score=1.00 [156.9s]
 new: match    8 FairAI as red,tan of 4: victory winner=red day=228 score=1.00 [507.8s]
 nR: match   11 FairAI as blue,green of 4: victory winner=tan day=87 score=0.00 [201.5s]
+old: match   10 FairAI as red,tan of 4: timeout winner= day=301 score=1.00 [730.6s]
+# A/B test (3 configs, seeds 90)
+
+Paired against `new`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| new | `{}` | 12 | 10 | 2 | 0.833 ± 0.220 | - | 0.833 ± 0.220 | - | 12 |
+| old | `{"magicWorth": 0, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0, "passOwn": 0, "towerGuard": 0, "saveFor": 0, "lastStand": 0}` | 12 | 7 | 4 | 0.667 ± 0.279 | -0.167 ± 0.326 | 0.639 ± 0.272 | -0.194 ± 0.295 | 12 |
+| nR | `{"secondArmy": 1, "secondArmyEdge": 0.6}` | 11 | 8 | 3 | 0.727 ± 0.276 | -0.091 ± 0.414 | 0.727 ± 0.276 | -0.091 ± 0.414 | 11 |
+
+== m-teams-4p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/9b717c263e/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 90 --out /home/alex/fairai/runs/022zz2d9285-kinds300/m-teams-4p --variants {"new": {}, "old": {"magicWorth": 0, "battlePlan": 0, "guardModel": 0, "ownCasters": 0, "wholeCreatures": 0, "passOwn": 0, "towerGuard": 0, "saveFor": 0, "lastStand": 0}, "nR": {"secondArmy": 1, "secondArmyEdge": 0.6}} --pool long1-m-teams-4p --max-days 300 --timeout 9000 --stall-seconds 300 --base-port 7300
+playing 36 matches (3 variants x 12 on 6 maps) with 9 parallel job(s)
+nR: match    2 FairAI as red,tan of 4: victory winner=red day=54 score=1.00 [108.0s]
+new: match    1 FairAI as blue,green of 4: victory winner=blue day=62 score=1.00 [130.4s]
+old: match    0 FairAI as red,tan of 4: victory winner=red day=60 score=1.00 [144.9s]
+old: match    1 FairAI as blue,green of 4: victory winner=blue day=82 score=1.00 [186.1s]
+nR: match    0 FairAI as red,tan of 4: victory winner=red day=60 score=1.00 [197.0s]
+nR: match    1 FairAI as blue,green of 4: victory winner=blue day=79 score=1.00 [212.5s]
+old: match    3 FairAI as blue,green of 4: victory winner=red day=40 score=0.00 [95.0s]
+new: match    0 FairAI as red,tan of 4: victory winner=green day=91 score=0.00 [243.4s]
+new: match    3 FairAI as blue,green of 4: victory winner=red day=50 score=0.00 [147.4s]
+new: match    4 FairAI as red,tan of 4: victory winner=red day=42 score=1.00 [80.5s]
+old: match    2 FairAI as red,tan of 4: victory winner=blue day=92 score=0.00 [274.8s]
+new: match    2 FairAI as red,tan of 4: victory winner=red day=116 score=1.00 [293.7s]
+new: match    5 FairAI as blue,green of 4: victory winner=blue day=55 score=1.00 [110.2s]
