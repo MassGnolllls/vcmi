@@ -1,0 +1,9 @@
+{
+ "job": "022zz2d9285-kinds300",
+ "state": "running",
+ "commit": "9b717c263ed1b2597e29d181c3003a3ebdf05af3",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-20T08:49:48",
+ "note": "The other kinds of map, played to the end (day limit 300, large maps 400): small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per config. Configurations as of 20.11.: new = the standard of 20.11. (measured worth of magic, combat package against guards, saving for the capitol, tower guard, own heroes give way, the last town is not left); old = the standard before (those switches off): what the changes of 18. to 20.11. are worth away from medium land maps, where they were measured; nR = the new standard with a second army from 0.6 (secondArmy 1, secondArmyEdge 0.6: +0.03 +- 0.07 and +0.02 +- 0.07 on medium land maps, wins four weeks earlier, garrisons emptied) - on large maps and with several opponents a second army should count for more. Evaluate per kind of map with arena/effects.py --factors '{\"N\": {\"magicWorth\": 0}, \"R\": {\"secondArmy\": 1, \"secondArmyEdge\": 0.6}}' or by the plain tables of matrix.py."
+}
