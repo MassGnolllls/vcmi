@@ -131,6 +131,13 @@ Letzte Änderung: 18.11.2026
 | S15 | **Die 7-Tage-Regel berücksichtigen:** Ohne Stadt ist das Spiel nach sieben Tagen verloren. | 18.11. | teilweise (ohne Stadt zählt jede Stadt „alles“; in der Partie pendelte der letzte Held trotzdem fünf Tage durch ein Tor, statt eine der beiden Städte anzugreifen – Ursache offen) |
 | S16 | **Skelettfarm:** viele verlustarme Kämpfe für die Nekromantie, Skelettwandler nutzen. | 18.11. | offen (Nekromantie zählt als Fähigkeit, Skelette fallen nebenbei an) |
 | S17 | **Dämonenfarm:** bewusst schwache Stufe-1-Einheiten im Kampf opfern, um sie mit den Grubenlords als Dämonen wiederzubeleben. Dazu: Futter nach Trefferpunkten pro Gold einkaufen, passende schwache Wachen als Farmkämpfe aussuchen, den letzten Gegner stehen lassen, bis alle Grubenlords gezaubert haben. | 18.11. | offen |
+| S18 | **Freie Schätze einsammeln:** Rohstoffe und Schätze, die schon frei zugänglich liegen, nicht liegen lassen. | 22.11. (zweite Partie des Nutzers) | offen (noch nicht am Protokoll untersucht) |
+| S19 | **In der letzten Burg bleiben, bis der Gegner wirklich schwächer ist** – und nicht jeden Tag die Bewegungspunkte mit Hinaus- und Hineinreiten verbrauchen. | 22.11. | teilweise (`lastStand` hielt den Haupthelden von Tag 33 bis 42 in der Stadt. An Tag 43 ließ die Regel los: Nach einem Truppenkauf lag der Gegner nur noch beim 1,07-Fachen statt über dem 1,2-Fachen, der Held – Stufe 1 mit 111.786 – ritt zu einem Ziel und blieb im Freien stehen, weil er sich dort für stärker hielt („Verteidigung 150.874 gegen Bedrohung 137.747“). Die Armee des Nutzers war mit 99.020 geschätzt und hatte 143.133. Zu beheben: die Stadt erst verlassen, wenn wir im Feld klar gewinnen; die Schätzung fremder Armeen; die eigene Stärke im Freien) |
+| S20 | **Kapitulieren vor Fliehen:** Flucht wirft die ganze Armee weg. Erster Gedanke: freikaufen („surrender“) – Gold zahlen, Held und Armee behalten. Reicht das Gold nicht: kämpfen, bis es reicht, oder erst fliehen, wenn der größtmögliche Schaden angerichtet ist und der Held noch sicher entkommt. | 22.11. | offen im Standard (FairAI flieht: in der Partie auf „Back for Revenge“ mit 510.447 gegen 1,25 Mio. nach einer Runde, in der Zufallskarte Coronius mit 10.209. Der Schalter `surrender` 2 – freikaufen ab 20.000 Armee, wenn Gold übrig ist – ist gebaut und wartet auf einen Test; „kämpfen, bis es reicht“ und „erst Schaden anrichten“ fehlen) |
+| S21 | **Geflohene Helden sofort zurückkaufen** – zumindest den Haupthelden und wichtige Nebenhelden. | 22.11. | offen (Coronius, Hauptheld bis Tag 17, wurde nach seiner Flucht nie zurückgeholt; angeheuert wurden nur neue Helden der Stufe 1. `veterans` 2 holt einen Helden nur zurück, wenn er „klar der bessere Anführer“ ist – warum das hier nicht griff, ist zu klären) |
+| S22 | **Garnisonen angreifen** (gewöhnliche und magische), wenn die Armee dafür reicht. | 22.11. | offen (FairAI greift Garnisonen auf der Karte nie an) |
+| S23 | **Werften und Schiffe nutzen.** An Land gehen und an Bord gehen verbraucht jeweils den Rest der Bewegungspunkte – das ist einzurechnen. | 22.11. | offen (ob FairAI Schiffe kauft, ist zu prüfen; im Test auf mittleren Inselkarten gewinnt der Standard 5 von 12) |
+| S24 | **Fehlermeldung des Servers:** „Player PURPLE has to answer queries before attempting any further actions … CBlockingDialogQuery“ (erste Runde, Karte „Back for Revenge“). | 22.11. | offen (FairAI handelt, bevor es eine Rückfrage beantwortet hat; Ursache zu suchen) |
 
 ---
 
@@ -217,3 +224,36 @@ des Projekts). Fehlt etwas oder ist etwas falsch wiedergegeben, wird es hier nac
 Die Partie (Zufallskarte, 1 gegen 1, 36 Tage, FairAI mit Conflux) ist ausgewertet in der Roadmap des
 Projekts, Abschnitt „Erste Partie des Nutzers“.
 
+## Wörtliche Anmerkungen des Nutzers vom 22.11.2026 (nach zwei Partien gegen die Fassung vom 20.11.)
+
+> „es ist eine merkliche verbesserung zur letzten, hat aber noch klare schwächen. sie hat viele schätze, die
+> bereits frei und sammelbar waren, einfach liegen gelassen."
+
+> „als mein deutlich stärkerer held um ihre letzte burg geritten ist, hat sie sich lange korrekt eingebunkert,
+> dabei aber jeden tag ihre bewegungspunkte durch ständiges raus- und reinreiten verbraucht. kein fehler, aber
+> könnte irgendwann mal schieflaufen. komischerweise hat sie sich irgendwann dann aber doch hinreißen lassen und
+> ist mit beiden helden rausgeritten, obwohl mein held noch nah an ihrer burg war."
+
+> „ich vermute auch, dass sie ihren stärksten helden, coronius, nicht wiedergekauft hat, nachdem sie mit ihm
+> geflohen ist."
+
+> „die KI sah sich in einem riesigen kampf im nachteil und ist nach 1 runde geflohen. das problem ist, dass sie
+> dabei ihre gesamte armee verloren hat. fliehen ist nicht sinnvoll, wenn man dabei eine große armee einfach
+> wegwirft. der erste gedanke, wenn man armee und held retten will, sollte sein, dass man ‚surrender' verwendet"
+
+> „hat man das gold nicht, kann man entweder kämpfen bis es leistbar ist oder fliehen, sobald man die
+> größtmögliche menge an schaden angerichtet hat und der held noch sicher entkommen kann. wichtig ist auch, dass
+> die KI nicht vergisst, sofort ihren geflohenen helden in der taverne zurückzukaufen - zumindest wenn es ihr
+> hauptheld oder ein wichtiger nebenheld ist."
+
+> „die KI hat auch nie eine garrison angegriffen (weder normale noch magische), selbst als sie die armee dazu
+> hatte. shipyards scheint sie auch zu ignorieren"
+
+> „sobald sie boote kauft, ist es wichtig, dass sie berücksichtigt, dass an landgehen und anboard gehen jeweils
+> den rest der bewegungspunkte verbraucht."
+
+> „all das sind nur infos für dich zum auswerten … es soll nicht die aktuellen prioritäten ändern, sondern nur
+> impulse für die weiterentwicklung der adventure map KI geben, wenn du wieder an ihr arbeitest."
+
+Die Partien: Zufallskarte, 1 gegen 1, 45 Tage (die erste endete an Tag 36), und „Back for Revenge" mit sieben
+FairAI-Spielern. Protokolle ausgewertet am 22.11.
