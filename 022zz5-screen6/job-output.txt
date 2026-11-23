@@ -410,3 +410,37 @@ nAQYU: match   11 FairAI as blue of 2: victory winner=blue day=203 score=1.00 [3
 nAQKD: match   11 FairAI as blue of 2: victory winner=red day=170 score=0.00 [279.1s]
 nAKXU: match   11 FairAI as blue of 2: victory winner=blue day=188 score=1.00 [387.9s]
 nQKUF: match   11 FairAI as blue of 2: victory winner=blue day=290 score=1.00 [710.7s]
+nAQKXYUDF: match   11 FairAI as blue of 2: timeout winner= day=301 score=0.21 [700.8s]
+# A/B test (16 configs, seeds 67)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 12 | 4 | 7 | 0.366 ± 0.272 | - | 0.345 ± 0.275 | - | 12 |
+| nXYUF | `{"scouts": 2, "supplyRuns": 1, "surrender": 2, "fightForecast": 1, "forecastPlans": 1}` | 11 | 5 | 4 | 0.490 ± 0.292 | +0.181 ± 0.453 | 0.481 ± 0.296 | +0.195 ± 0.444 | 11 |
+| nKYUD | `{"kitePlan": 1, "latePlan": 1, "supplyRuns": 1, "surrender": 2, "tour": 1}` | 12 | 5 | 5 | 0.513 ± 0.283 | +0.147 ± 0.339 | 0.500 ± 0.283 | +0.155 ± 0.331 | 12 |
+| nKXDF | `{"kitePlan": 1, "latePlan": 1, "scouts": 2, "tour": 1, "fightForecast": 1, "forecastPlans": 1}` | 11 | 9 | 1 | 0.907 ± 0.178 | +0.544 ± 0.310 | 0.896 ± 0.177 | +0.532 ± 0.318 | 11 |
+| nQYDF | `{"skillChoice": 1, "primaryByArmy": 1, "supplyRuns": 1, "tour": 1, "fightForecast": 1, "forecastPlans": 1}` | 12 | 6 | 5 | 0.516 ± 0.288 | +0.150 ± 0.387 | 0.512 ± 0.289 | +0.167 ± 0.397 | 12 |
+| nQXUD | `{"skillChoice": 1, "primaryByArmy": 1, "scouts": 2, "surrender": 2, "tour": 1}` | 11 | 8 | 2 | 0.772 ± 0.243 | +0.372 ± 0.378 | 0.740 ± 0.264 | +0.364 ± 0.388 | 11 |
+| nQKUF | `{"skillChoice": 1, "primaryByArmy": 1, "kitePlan": 1, "latePlan": 1, "surrender": 2, "fightForecast": 1, "forecastPlans": 1}` | 9 | 6 | 3 | 0.667 ± 0.327 | +0.222 ± 0.436 | 0.667 ± 0.327 | +0.222 ± 0.436 | 9 |
+| nQKXY | `{"skillChoice": 1, "primaryByArmy": 1, "kitePlan": 1, "latePlan": 1, "scouts": 2, "supplyRuns": 1}` | 12 | 7 | 4 | 0.602 ± 0.281 | +0.235 ± 0.409 | 0.595 ± 0.284 | +0.250 ± 0.418 | 12 |
+| nAUDF | `{"artifactCare": 1, "surrender": 2, "tour": 1, "fightForecast": 1, "forecastPlans": 1}` | 10 | 3 | 6 | 0.347 ± 0.293 | -0.092 ± 0.317 | 0.314 ± 0.295 | -0.100 ± 0.337 | 10 |
+| nAXYD | `{"artifactCare": 1, "scouts": 2, "supplyRuns": 1, "tour": 1}` | 12 | 8 | 3 | 0.750 ± 0.256 | +0.384 ± 0.275 | 0.738 ± 0.253 | +0.393 ± 0.291 | 12 |
+| nAKYF | `{"artifactCare": 1, "kitePlan": 1, "latePlan": 1, "supplyRuns": 1, "fightForecast": 1, "forecastPlans": 1}` | 12 | 8 | 4 | 0.667 ± 0.279 | +0.300 ± 0.299 | 0.667 ± 0.279 | +0.321 ± 0.284 | 12 |
+| nAKXU | `{"artifactCare": 1, "kitePlan": 1, "latePlan": 1, "scouts": 2, "surrender": 2}` | 12 | 11 | 1 | 0.917 ± 0.163 | +0.550 ± 0.371 | 0.917 ± 0.163 | +0.571 ± 0.374 | 12 |
+| nAQYU | `{"artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1, "supplyRuns": 1, "surrender": 2}` | 10 | 6 | 4 | 0.600 ± 0.320 | +0.260 ± 0.325 | 0.600 ± 0.320 | +0.286 ± 0.307 | 10 |
+| nAQXF | `{"artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1, "scouts": 2, "fightForecast": 1, "forecastPlans": 1}` | 12 | 9 | 2 | 0.787 ± 0.227 | +0.420 ± 0.266 | 0.774 ± 0.235 | +0.429 ± 0.276 | 12 |
+| nAQKD | `{"artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1, "kitePlan": 1, "latePlan": 1, "tour": 1}` | 12 | 7 | 5 | 0.583 ± 0.291 | +0.217 ± 0.411 | 0.583 ± 0.291 | +0.238 ± 0.420 | 12 |
+| nAQKXYUDF | `{"artifactCare": 1, "skillChoice": 1, "primaryByArmy": 1, "kitePlan": 1, "latePlan": 1, "scouts": 2, "supplyRuns": 1, "surrender": 2, "tour": 1, "fightForecast": 1, "forecastPlans": 1}` | 12 | 7 | 4 | 0.601 ± 0.281 | +0.235 ± 0.330 | 0.595 ± 0.284 | +0.250 ± 0.341 | 12 |
+
+# Matrix test: 4 map categories, configs base, nXYUF, nKYUD, nKXDF, nQYDF, nQXUD, nQKUF, nQKXY, nAUDF, nAXYD, nAKYF, nAKXU, nAQYU, nAQXF, nAQKD, nAQKXYUDF, seeds 67
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | base (games, score, decided) | nXYUF (games, score, decided) | nKYUD (games, score, decided) | nKXDF (games, score, decided) | nQYDF (games, score, decided) | nQXUD (games, score, decided) | nQKUF (games, score, decided) | nQKXY (games, score, decided) | nAUDF (games, score, decided) | nAXYD (games, score, decided) | nAKYF (games, score, decided) | nAKXU (games, score, decided) | nAQYU (games, score, decided) | nAQXF (games, score, decided) | nAQKD (games, score, decided) | nAQKXYUDF (games, score, decided) | nXYUF − base | nKYUD − base | nKXDF − base | nQYDF − base | nQXUD − base | nQKUF − base | nQKXY − base | nAUDF − base | nAXYD − base | nAKYF − base | nAKXU − base | nAQYU − base | nAQXF − base | nAQKD − base | nAQKXYUDF − base |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| m-skirmish | 12, 0.904 ± 0.163, 10 won 1 lost | 12, 0.917 ± 0.163, 11 won 1 lost | 12, 0.833 ± 0.220, 10 won 2 lost | 12, 0.917 ± 0.163, 11 won 1 lost | 11, 0.983 ± 0.034, 10 won 0 lost | 12, 0.667 ± 0.279, 8 won 4 lost | 12, 0.917 ± 0.163, 11 won 1 lost | 11, 1.000 ± 0.000, 11 won 0 lost | 12, 0.815 ± 0.218, 9 won 2 lost | 12, 0.833 ± 0.220, 10 won 2 lost | 12, 0.833 ± 0.220, 10 won 2 lost | 12, 0.917 ± 0.163, 11 won 1 lost | 12, 0.833 ± 0.220, 10 won 2 lost | 12, 0.917 ± 0.163, 11 won 1 lost | 12, 0.667 ± 0.279, 8 won 4 lost | 12, 0.917 ± 0.163, 11 won 1 lost | +0.012 ± 0.024 (12) | -0.071 ± 0.167 (12) | +0.012 ± 0.242 (12) | +0.087 ± 0.179 (11) | -0.238 ± 0.261 (12) | +0.012 ± 0.024 (12) | +0.091 ± 0.178 (11) | -0.089 ± 0.163 (12) | -0.071 ± 0.294 (12) | -0.071 ± 0.167 (12) | +0.012 ± 0.024 (12) | -0.071 ± 0.294 (12) | +0.012 ± 0.024 (12) | -0.238 ± 0.356 (12) | +0.012 ± 0.242 (12) |
+| m-balance | 12, 0.366 ± 0.272, 4 won 7 lost | 11, 0.490 ± 0.292, 5 won 4 lost | 12, 0.513 ± 0.283, 5 won 5 lost | 11, 0.907 ± 0.178, 9 won 1 lost | 12, 0.516 ± 0.288, 6 won 5 lost | 11, 0.772 ± 0.243, 8 won 2 lost | 9, 0.667 ± 0.327, 6 won 3 lost | 12, 0.602 ± 0.281, 7 won 4 lost | 10, 0.347 ± 0.293, 3 won 6 lost | 12, 0.750 ± 0.256, 8 won 3 lost | 12, 0.667 ± 0.279, 8 won 4 lost | 12, 0.917 ± 0.163, 11 won 1 lost | 10, 0.600 ± 0.320, 6 won 4 lost | 12, 0.787 ± 0.227, 9 won 2 lost | 12, 0.583 ± 0.291, 7 won 5 lost | 12, 0.601 ± 0.281, 7 won 4 lost | +0.181 ± 0.453 (11) | +0.147 ± 0.339 (12) | +0.544 ± 0.310 (11) | +0.150 ± 0.387 (12) | +0.372 ± 0.378 (11) | +0.222 ± 0.436 (9) | +0.235 ± 0.409 (12) | -0.092 ± 0.317 (10) | +0.384 ± 0.275 (12) | +0.300 ± 0.299 (12) | +0.550 ± 0.371 (12) | +0.260 ± 0.325 (10) | +0.420 ± 0.266 (12) | +0.217 ± 0.411 (12) | +0.235 ± 0.330 (12) |
+| **mean of categories** | 0.635 | 0.703 | 0.673 | 0.912 | 0.749 | 0.719 | 0.792 | 0.801 | 0.581 | 0.792 | 0.750 | 0.917 | 0.717 | 0.852 | 0.625 | 0.759 | +0.097 (all games: +0.093 ± 0.214) | +0.038 (all games: +0.038 ± 0.190) | +0.278 (all games: +0.266 ± 0.220) | +0.118 (all games: +0.120 ± 0.215) | +0.067 (all games: +0.054 ± 0.255) | +0.117 (all games: +0.102 ± 0.186) | +0.163 (all games: +0.166 ± 0.227) | -0.091 (all games: -0.091 ± 0.165) | +0.156 (all games: +0.156 ± 0.218) | +0.115 (all games: +0.115 ± 0.184) | +0.281 (all games: +0.281 ± 0.212) | +0.095 (all games: +0.080 ± 0.224) | +0.216 (all games: +0.216 ± 0.155) | -0.010 (all games: -0.010 ± 0.281) | +0.124 (all games: +0.124 ± 0.205) |
+
