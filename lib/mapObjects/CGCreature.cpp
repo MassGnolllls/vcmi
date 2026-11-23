@@ -758,6 +758,19 @@ void CGCreature::serializeJsonOptions(JsonSerializeFormat & handler)
 	handler.serializeBool("noGrowing", notGrowingTeam);
 	handler.serializeBool("neverFlees", neverFlees);
 	handler.serializeStruct("rewardMessage", message);
+
+	// the split into stacks as a HotA 1.7 map sets it: kept when such a monster is saved in the game's own map format
+	{
+		si32 split = static_cast<si32>(stacksCount);
+		si32 upgraded = static_cast<si32>(upgradedStackPresence);
+		handler.serializeInt("stacksCount", split, -1);
+		handler.serializeInt("upgradedStack", upgraded, static_cast<si32>(UpgradedStackPresence::RANDOM));
+		if(!handler.saving)
+		{
+			stacksCount = split;
+			upgradedStackPresence = static_cast<UpgradedStackPresence>(upgraded);
+		}
+	}
 }
 
 VCMI_LIB_NAMESPACE_END

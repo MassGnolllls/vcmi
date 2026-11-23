@@ -7,6 +7,7 @@
  */
 #include "../StdInc.h"
 #include "FairBattleAI.h"
+#include "Puppet.h"
 #include "../../../lib/battle/BattleStateInfoForRetreat.h"
 #include "CombatSim.h"
 #include "GuardModel.h"
@@ -602,6 +603,13 @@ void FairBattleAI::policyCheck(const BattleID & battleID, const BattleAction & a
 
 void FairBattleAI::actionStarted(const BattleID & battleID, const BattleAction & action)
 {
+	// test bench: every action of the battle is told to whoever plays it from outside (Puppet.h)
+	if(Puppet::listening())
+	{
+		if(auto battle = cb->getBattle(battleID))
+			Puppet::report(*battle, action, actionsSeen);
+	}
+	++actionsSeen;
 	pendingCheck.reset();
 	if(policyCheckEnabled())
 		policyCheck(battleID, action);
@@ -831,6 +839,8 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 void FairBattleAI::battleStart(const BattleID & battleID, const CCreatureSet * army1, const CCreatureSet * army2, int3 tile, const CGHeroInstance * hero1, const CGHeroInstance * hero2, BattleSide Side, bool replayAllowed)
 {
 	side = Side;
+	actionsSeen = 0;
+	Puppet::battleBegins();
 	quietDecisions = 0;
 	seenRound = -1;
 	deadlockStaged = false;
@@ -1287,6 +1297,18 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			}
 		}
 	}
+	// test bench: this side is played from outside the game (Puppet.h); "auto" as an answer falls through
+	if(Puppet::controls(side))
+	{
+		if(auto battle = cb->getBattle(battleID))
+		{
+			if(auto action = Puppet::ask(*battle, stack, side))
+			{
+				cb->battleMakeUnitAction(battleID, *action);
+				return;
+			}
+		}
+	}
 	try
 	{
 		watchDeadlock(battleID);
@@ -1340,7 +1362,14 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 			ownUnits += unit->alive() && unit->unitSide() == side ? 1 : 0;
 		const bool pressure = side == BattleSide::ATTACKER && quietDecisions > 4 * ownUnits + 1; // (wait + act) x 2 rounds
 		++quietDecisions;
-		BattleAction chosen = searchUnitAction(battleID, stack, deadlockSince >= 0 ? 2 : pressure ? 1 : 0);
+		int urgency = deadlockSince >= 0 ? 2 : pressure ? 1 : 0;
+		// Troops that cannot answer an enemy that shoots must close in: the look-ahead of the plain search
+		// ends with the round, and within a round standing back always costs least - so they stood and
+		// waited until the last of them was shot (seen with map guards played by FairAI: 150 gnoll
+		// marauders against grand elves, user's test map, 23.11.2026)
+		if(urgency < 2 && outranged(battleID))
+			urgency = 2;
+		BattleAction chosen = searchUnitAction(battleID, stack, urgency);
 		if(stack->canCast())
 		{
 			if(auto cast = creatureSpell(battleID, stack, chosen))
@@ -1356,6 +1385,35 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 		logAi->error("FairBattleAI: search failed (%s), falling back to BattleAI", e.what());
 		fallback->activeStack(battleID, stack);
 	}
+}
+
+bool FairBattleAI::outranged(const BattleID & battleID) const
+{
+	auto battle = cb->getBattle(battleID);
+	if(!battle)
+		return false;
+	// where the battle plan decides between holding and advancing by playing both to the end, it knows better
+	const PlayerColor enemyOwner = battle->sideToPlayer(battle->otherSide(side));
+	if(battlePlan && (planVsPlayers || enemyOwner == PlayerColor::NEUTRAL))
+		return false;
+	// a hero of ours that still casts may be the answer
+	if(const auto * hero = battle->battleGetMyHero(); hero && hero->hasSpellbook() && hero->mana > 0)
+		return false;
+	int enemyShots = 0;
+	for(const auto * unit : battle->battleGetAllStacks(false))
+	{
+		if(!unit->alive() || unit->isGhost())
+			continue;
+		const int shots = unit->isShooter() ? unit->acquireState()->shots.available() : 0;
+		if(unit->unitSide() == side)
+		{
+			if(shots > 0 || unit->canCast())
+				return false; // we can answer from afar
+		}
+		else if(!unit->hasBonusOfType(BonusType::SIEGE_WEAPON))
+			enemyShots += shots;
+	}
+	return enemyShots >= 2;
 }
 
 std::optional<BattleAction> FairBattleAI::considerRetreat(const BattleID & battleID)
@@ -1793,7 +1851,10 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 	{
 		if(enemyOwner == PlayerColor::NEUTRAL)
 		{
-			modelGuards = settings["ai"]["combatNeutralAI"].String() == "BattleAI";
+			{
+				const char * arenaNeutral = std::getenv("ARENA_NEUTRAL_AI"); // (the test bench names the guards' combat AI per process)
+				modelGuards = (arenaNeutral && *arenaNeutral ? std::string(arenaNeutral) : settings["ai"]["combatNeutralAI"].String()) == "BattleAI";
+			}
 		}
 		else if(modelLevel >= 2 && enemyOwner.isValidPlayer())
 		{

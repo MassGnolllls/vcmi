@@ -295,7 +295,12 @@ void CClient::initPlayerInterfaces()
 	}
 
 	if(GAME->server().getAllClientPlayers(GAME->server().logicConnection->connectionID).count(PlayerColor::NEUTRAL))
-		installNewBattleInterface(CDynLibHandler::getNewBattleAI(settings["ai"]["combatNeutralAI"].String()), PlayerColor::NEUTRAL);
+	{
+		// arena: the combat AI of the map's guards can be named per process (ARENA_NEUTRAL_AI) - parallel
+		// test games share one settings file where the test bench cannot give each its own
+		const char * arenaNeutral = std::getenv("ARENA_NEUTRAL_AI");
+		installNewBattleInterface(CDynLibHandler::getNewBattleAI(arenaNeutral && *arenaNeutral ? std::string(arenaNeutral) : settings["ai"]["combatNeutralAI"].String()), PlayerColor::NEUTRAL);
+	}
 
 	logNetwork->trace("Initialized player interfaces %d ms", GAME->server().th->getDiff());
 }

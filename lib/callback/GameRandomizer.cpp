@@ -65,6 +65,10 @@ GameRandomizer::~GameRandomizer() = default;
 bool GameRandomizer::rollMoraleLuck(std::map<ObjectInstanceID, RandomGeneratorWithBias> & seeds, ObjectInstanceID actor, int moraleLuckValue, EGameSettings biasValueSetting, EGameSettings diceSizeSetting, EGameSettings chanceVectorSetting)
 {
 	assert(moraleLuckValue > 0);
+	// arena: battles without the dice of morale and luck (one of the test bench's ways to play a battle)
+	static const bool arenaNoDice = std::getenv("ARENA_NO_MORALE_LUCK") != nullptr;
+	if(arenaNoDice)
+		return false;
 	auto chanceVector = gameInfo.getSettings().getVector(chanceVectorSetting);
 	int diceSize = gameInfo.getSettings().getInteger(diceSizeSetting);
 	int biasValue = gameInfo.getSettings().getInteger(biasValueSetting);

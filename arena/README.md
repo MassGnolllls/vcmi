@@ -144,3 +144,35 @@ Ergebnis: `ab1/ab_summary.md` (Punkte je Konfiguration und mittlere Differenz zu
 4. Wieder verdeckte Gebiete (Schleier der Dunkelheit) behalten den letzten Stand mit Zeitstempel, werden aber als veraltet markiert.
 5. Was ein Gebäude gibt und wer es bewacht: FairAI kennt nur die öffentliche Tabelle der Gebäudeart – was ein solches Gebäude enthalten kann und wie oft (das Regelwissen jedes erfahrenen Spielers) –, nie den ausgewürfelten Inhalt des einzelnen Gebäudes auf der Karte. Die Wachen einer Kreaturenbank kennt sie erst, wenn das Spiel sie anzeigt: in der Frage vor dem Kampf und danach per Rechtsklick.
 6. Startressourcen: In KI-gegen-KI-Partien bekommen beide Seiten dieselben. Für Partien Mensch gegen FairAI ist der Schwierigkeitsgrad „Turm“ (rook) der faire: In diesem Fork starten Mensch und KI dort mit exakt denselben Ressourcen (im Original bekommt die KI 5000 Gold weniger). Auf „König“ startet der Mensch dagegen ohne Ressourcen.
+
+## Battles played from outside the game (both sides)
+
+`arena/puppet.py` plays a battle with both sides steered by strategies written in Python
+(`arena/puppet_plays.py`), with the game itself as the referee: with `FAI_PUPPET_PORT` set,
+FairBattleAI describes the battle before every decision of such a side as one line of JSON to a
+listener on this machine and plays the action it answers (`AI/FairAI/Combat/Puppet.h`). A side can
+also be left to a combat AI (`fairai`, `battleai`, `stupidai`). Nothing of this runs in a real game.
+
+```
+python3 arena/puppet.py play --client build/bin/vcmiclient --scen arena/puppet_scen/bild2.json \
+    --left kite --right battleai --seeds 50 [--nodice] --out out
+python3 arena/puppet.py list out/trace_tb_bild2_kite_battleai_x1.json       # every action of one battle
+python3 arena/puppet.py show out/trace_tb_bild2_kite_battleai_x1.json --step 0   # the field before an action
+```
+
+Three ways to play a battle: as the game plays it; `--nodice`, without the dice of morale and luck
+(`ARENA_NO_MORALE_LUCK`); with a fixed seed (`--first-seed N --seeds 1` - the same seed and the same
+actions give the same battle). Battles in which nobody gets anywhere are ended after 250 rounds.
+
+A scenario (`arena/puppet_scen/*.json`) is a scenario of `--arena-genbattle` with the place of the
+battle: `mapSize`, `tile` (the obstacles of a battlefield follow from the tile alone), `rows` (bands
+of another terrain: water north of a beach) and the monster's own split (`stacks`, `upgraded`). A
+battle of a real map is rebuilt from `vcmiclient --headless --arena-dump-map MAPS/DIR/NAME --arena-out
+FILE` (objects, armies, the monsters' split settings, terrain). A hero named in a scenario has exactly
+the skills the scenario lists - none, if it lists none.
+
+`arena/pursuit.py` answers exactly whether a fast flyer nobody retaliates against can wear down one
+walking stack without ever being struck: every position of the field is gone through, no sampling
+(`--obst` hexes of the obstacles, `--kiter` / `--chaser` starting hexes, `--kspeed` / `--cspeed`).
+The five battles of the user's test map of 23.11.2026 are `arena/puppet_scen/bild1.json` to
+`bild5.json`; the strategies found for them are in `arena/puppet_plays.py`.

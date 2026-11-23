@@ -1,0 +1,74 @@
+{
+ "name": "tb_bild4",
+ "note": "TESTBERGER (user's test map, 23.11.2026): Lord Haart's 10 Mighty Gorgons and six stacks of Gnolls against 3 Ancient Behemoths (one stack) on the beach at (22,11). The hero counts for nothing: no skills, attack and defence 0.",
+ "mapSize": [
+  36,
+  36
+ ],
+ "terrain": "dirt",
+ "rows": [
+  [
+   0,
+   10,
+   "water"
+  ],
+  [
+   16,
+   35,
+   "grass"
+  ]
+ ],
+ "tile": [
+  22,
+  11
+ ],
+ "sides": [
+  {
+   "hero": "lordHaart",
+   "primary": [
+    0,
+    0,
+    1,
+    1
+   ],
+   "army": [
+    [
+     "mightyGorgon",
+     10
+    ],
+    [
+     "gnoll",
+     5
+    ],
+    [
+     "gnoll",
+     1
+    ],
+    [
+     "gnoll",
+     1
+    ],
+    [
+     "gnoll",
+     1
+    ],
+    [
+     "gnoll",
+     1
+    ],
+    [
+     "gnoll",
+     1
+    ]
+   ]
+  },
+  {
+   "guard": [
+    "ancientBehemoth",
+    3
+   ],
+   "stacks": 1,
+   "upgraded": -1
+  }
+ ]
+}

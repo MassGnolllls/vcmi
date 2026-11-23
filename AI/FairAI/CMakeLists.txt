@@ -6,6 +6,7 @@ set(fairAI_SRCS
 		Combat/GuardModel.cpp
 		Combat/SpellSim.cpp
 		Combat/FairBattleAI.cpp
+		Combat/Puppet.cpp
 		Adventure/AdventureAI.cpp
 )
 
@@ -35,6 +36,7 @@ set(fairAI_HEADERS
 		Combat/GuardModel.h
 		Combat/SpellSim.h
 		Combat/FairBattleAI.h
+		Combat/Puppet.h
 		Adventure/AdventureAI.h
 		Adventure/Params.h
 )
@@ -53,6 +55,10 @@ endif()
 
 target_include_directories(FairAI PUBLIC ${CMAKE_CURRENT_SOURCE_DIR})
 target_link_libraries(FairAI PRIVATE vcmi TBB::tbb)
+if(WIN32)
+	# the test bench's remote control of battles (Combat/Puppet.cpp) talks over a socket of this machine
+	target_link_libraries(FairAI PRIVATE ws2_32 mswsock)
+endif()
 
 vcmi_set_output_dir(FairAI "AI")
 enable_pch(FairAI)

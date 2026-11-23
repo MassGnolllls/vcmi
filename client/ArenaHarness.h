@@ -63,6 +63,9 @@ int generateBattleMap(const boost::program_options::variables_map & vm);
 /// --arena-dump-library: write creatures, heroes, spells and skills as JSON (input for scenario generators)
 int dumpLibrary(const boost::program_options::variables_map & vm);
 
+/// --arena-dump-map MAPS/DIR/NAME: objects, armies, heroes and terrain of a map as JSON (--arena-out)
+int dumpMap(const boost::program_options::variables_map & vm);
+
 /// Battle result hook (called before the result is applied to the game state)
 void onBattleResult(CClient & client, const BattleResult & result);
 }

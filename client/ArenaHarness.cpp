@@ -685,6 +685,113 @@ int dumpLibrary(const po::variables_map & vm)
 	return 0;
 }
 
+int dumpMap(const po::variables_map & vm)
+{
+	// what stands where on a map somebody made: every object with its position, owner and army, the
+	// heroes with their skills, and the terrain of every tile (to stage the map's fights again on the
+	// same tiles - the obstacles of a battlefield follow from the tile)
+	const std::string name = vm["arena-dump-map"].as<std::string>();
+	const std::string outFile = vm.count("arena-out") ? vm["arena-out"].as<std::string>() : std::string("map.json");
+	try
+	{
+		CMapService mapService;
+		auto map = mapService.loadMap(ResourcePath(name, EResType::MAP), nullptr);
+		JsonNode out;
+		out["width"].Integer() = map->width;
+		out["height"].Integer() = map->height;
+		out["levels"].Integer() = map->levels();
+		for(const auto * obj : map->getObjects<CGObjectInstance>())
+		{
+			JsonNode o;
+			o["id"].Integer() = obj->id.getNum();
+			o["type"].String() = obj->getTypeName();
+			o["subtype"].String() = obj->getSubtypeName();
+			o["objectID"].Integer() = obj->ID.getNum();
+			for(int v : {obj->anchorPos().x, obj->anchorPos().y, obj->anchorPos().z})
+				o["pos"].Vector().emplace_back(v);
+			for(int v : {obj->visitablePos().x, obj->visitablePos().y, obj->visitablePos().z})
+				o["visitable"].Vector().emplace_back(v);
+			o["owner"].String() = obj->tempOwner.isValidPlayer() ? obj->tempOwner.toString() : std::string("neutral");
+			if(const auto * armed = dynamic_cast<const CArmedInstance *>(obj))
+			{
+				for(const auto & slot : armed->Slots())
+				{
+					JsonNode st;
+					st.Vector().emplace_back(slot.first.getNum());
+					st.Vector().emplace_back(slot.second && slot.second->getCreature() ? slot.second->getCreature()->getJsonKey() : std::string("?"));
+					st.Vector().emplace_back(slot.second ? slot.second->getCount() : 0);
+					o["army"].Vector().push_back(st);
+				}
+			}
+			if(const auto * monster = dynamic_cast<const CGCreature *>(obj))
+			{
+				o["creature"].String() = monster->getCreatureID().hasValue() ? monster->getCreatureID().toCreature()->getJsonKey() : std::string("?");
+				o["character"].Integer() = static_cast<int>(monster->initialCharacter);
+				o["stacksCount"].Integer() = monster->stacksCount;
+				o["upgradedStack"].Integer() = static_cast<int>(monster->upgradedStackPresence);
+				o["neverFlees"].Bool() = monster->neverFlees;
+			}
+			if(const auto * hero = dynamic_cast<const CGHeroInstance *>(obj))
+			{
+				o["hero"].String() = hero->getHeroTypeID().hasValue() ? hero->getHeroType()->getJsonKey() : std::string("?");
+				o["experience"].Integer() = hero->exp;
+				for(const auto & spell : hero->getSpellsInSpellbook())
+					if(spell.getNum() >= 0)
+						o["spells"].Vector().emplace_back(spell.toSpell()->getJsonKey());
+				for(const auto & skill : hero->secSkills)
+				{
+					if(!skill.first.hasValue())
+						continue;
+					JsonNode sk;
+					sk.Vector().emplace_back(LIBRARY->skillh->objects.at(skill.first.getNum())->getJsonKey());
+					sk.Vector().emplace_back(static_cast<int>(skill.second));
+					o["secondary"].Vector().push_back(sk);
+				}
+				for(const auto & worn : hero->artifactsWorn)
+				{
+					const auto * art = worn.second.getID().hasValue() ? map->getArtifactInstance(worn.second.getID()) : nullptr;
+					JsonNode a;
+					a.Vector().emplace_back(static_cast<int>(worn.first.getNum()));
+					a.Vector().emplace_back(art ? art->getType()->getJsonKey() : std::string("?"));
+					o["artifacts"].Vector().push_back(a);
+				}
+				for(const auto & pack : hero->artifactsInBackpack)
+				{
+					const auto * art = pack.getID().hasValue() ? map->getArtifactInstance(pack.getID()) : nullptr;
+					o["backpack"].Vector().emplace_back(art ? art->getType()->getJsonKey() : std::string("?"));
+				}
+			}
+			out["objects"].Vector().push_back(o);
+		}
+		for(int z = 0; z < map->levels(); ++z)
+		{
+			JsonNode level;
+			for(int y = 0; y < map->height; ++y)
+			{
+				std::string row;
+				for(int x = 0; x < map->width; ++x)
+				{
+					const auto & t = map->getTile(int3(x, y, z));
+					// one letter per tile: the terrain's first letter, water as '~', rock as '#'
+					const std::string key = t.getTerrain()->getJsonKey();
+					row += t.isWater() ? '~' : (t.getTerrain()->isPassable() ? key.at(key.find(':') == std::string::npos ? 0 : key.find(':') + 1) : '#');
+				}
+				level.Vector().emplace_back(row);
+			}
+			out["terrain"].Vector().push_back(level);
+		}
+		std::ofstream file(outFile, std::ios::trunc);
+		file << out.toString();
+		std::cout << "ARENA_MAP_DUMP " << outFile << std::endl;
+		return 0;
+	}
+	catch(const std::exception & e)
+	{
+		std::cerr << "ARENA_MAP_DUMP_FAILED " << e.what() << std::endl;
+		return 1;
+	}
+}
+
 int generateBattleMap(const po::variables_map & vm)
 {
 	const std::string scenarioFile = vm["arena-genbattle"].as<std::string>();
@@ -700,8 +807,13 @@ int generateBattleMap(const po::variables_map & vm)
 		auto map = std::make_unique<CMap>(nullptr);
 		map->version = EMapFormat::VCMI;
 		map->creationDateTime = std::time(nullptr);
-		map->width = 10;
-		map->height = 10;
+		// "mapSize": [width, height] and "tile": [x, y] - the place of the battle. The obstacles of a
+		// battlefield follow from the tile alone, the terrain from the tile and its neighbours (a tile next
+		// to water is fought on a beach): a battle of a real map is rebuilt on the same tile.
+		const bool placed = !scenario["tile"].isNull();
+		map->width = scenario["mapSize"].isNull() ? 10 : static_cast<int>(scenario["mapSize"].Vector().at(0).Integer());
+		map->height = scenario["mapSize"].isNull() ? 10 : static_cast<int>(scenario["mapSize"].Vector().at(1).Integer());
+		const int3 tile = placed ? int3(static_cast<int>(scenario["tile"].Vector().at(0).Integer()), static_cast<int>(scenario["tile"].Vector().at(1).Integer()), 0) : int3(4, 5, 0);
 		map->mapLayers = {MapLayerId::SURFACE};
 		map->battleOnly = true;
 		map->name.appendRawString(scenario["name"].isNull() ? std::string("Arena battle") : scenario["name"].String());
@@ -714,6 +826,17 @@ int generateBattleMap(const po::variables_map & vm)
 		map->getEditManager()->getTerrainSelection().selectAll();
 		const std::string terrain = scenario["terrain"].isNull() ? std::string("dirt") : scenario["terrain"].String();
 		map->getEditManager()->drawTerrain(requireId<TerrainId>("terrain", terrain), 0, rng);
+		// "rows": [[firstRow, lastRow, terrain], ...] - bands of another terrain across the map (water north of a beach)
+		for(const auto & band : scenario["rows"].Vector())
+		{
+			const int first = static_cast<int>(band.Vector().at(0).Integer());
+			const int last = static_cast<int>(band.Vector().at(1).Integer());
+			auto & selection = map->getEditManager()->getTerrainSelection();
+			selection.clearSelection();
+			selection.selectRange(MapRect(int3(0, first, 0), map->width, last - first + 1));
+			map->getEditManager()->drawTerrain(requireId<TerrainId>("terrain", band.Vector().at(2).String()), 0, rng);
+		}
+		map->getEditManager()->getTerrainSelection().clearSelection();
 
 		map->players[0].canComputerPlay = true;
 		map->players[0].canHumanPlay = true;
@@ -740,7 +863,13 @@ int generateBattleMap(const po::variables_map & vm)
 				guard->neverFlees = true;
 				guard->notGrowingTeam = true;
 				guard->putStack(SlotID(0), std::make_unique<CStackInstance>(&callback, creature, std::max(1, count)));
-				guard->pos = int3(5, 5, 0);
+				// "stacks" / "upgraded": the map's own settings of the monster (number of stacks; an upgraded stack
+				// among them: 1 always, 0 never, -1 by the game's rule for the place)
+				if(!side["stacks"].isNull())
+					guard->stacksCount = static_cast<int>(side["stacks"].Integer());
+				if(!side["upgraded"].isNull())
+					guard->upgradedStackPresence = static_cast<CGCreature::UpgradedStackPresence>(side["upgraded"].Integer());
+				guard->pos = placed ? tile + guard->getVisitableOffset() : int3(5, 5, 0);
 				map->getEditManager()->insertObject(guard);
 				map->players[1].canComputerPlay = false; // nobody owns the guards
 				map->players[1].canHumanPlay = false;
@@ -753,6 +882,8 @@ int generateBattleMap(const po::variables_map & vm)
 			hero->setHeroType(heroType);
 			hero->setOwner(PlayerColor(sel));
 			hero->pos = sel == 0 ? int3(5, 6, 0) : int3(5, 5, 0);
+			if(placed && sel == 0)
+				hero->pos = tile + int3(0, 1, 0) + hero->getVisitableOffset();
 
 			const auto & primary = side["primary"].Vector();
 			for(size_t i = 0; i < GameConstants::PRIMARY_SKILLS; i++)
@@ -803,6 +934,10 @@ int generateBattleMap(const po::variables_map & vm)
 			for(const auto & spell : side["spells"].Vector())
 				hero->addSpellToSpellbook(requireId<SpellID>("spell", spell.String()));
 
+			// A new hero object carries the mark "skills of its class" - with it the map is saved without any
+			// skills and the game hands the hero its class's two starting skills (and drops the ones named here).
+			// The scenario names all the skills there are: none, unless it lists them.
+			hero->secSkills.clear();
 			for(const auto & skill : LIBRARY->skillh->objects)
 				hero->setSecSkillLevel(SecondarySkill(skill->getId()), MasteryLevel::NONE, ChangeValueMode::ABSOLUTE);
 			static const std::map<std::string, MasteryLevel::Type> levels = {
@@ -855,7 +990,10 @@ void onBattleResult(CClient & client, const BattleResult & result)
 		uint64_t initial = army ? army->getArmyStrength() : 0;
 		uint64_t lost = 0;
 		for(const auto & casualty : result.casualties[side])
+		{
 			lost += static_cast<uint64_t>(casualty.first.toCreature()->getAIValue()) * casualty.second;
+			s["lost"][casualty.first.toCreature()->getJsonKey()].Integer() = casualty.second; // creatures lost, by kind
+		}
 		s["initialStrength"].Integer() = initial;
 		s["lostStrength"].Integer() = lost;
 		// spell points the side's hero has left (what a fight costs besides troops)

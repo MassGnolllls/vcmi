@@ -79,6 +79,7 @@ private:
 	bool oracleAction(const std::shared_ptr<CBattleInfoCallback> & real, const SimState & sim, int unit, int baseRound, SimAction & out, std::string * trace = nullptr);
 	std::map<uint32_t, int64_t> lastHealth; ///< unit -> health after the previous action (changes in between: regeneration, poison...)
 	bool lastActionWasSpell = false;
+	int actionsSeen = 0; ///< actions of this battle so far, whoever made them (numbers them for the test bench's listener)
 	int quietDecisions = 0; ///< our decisions since anybody was hurt (the attacker must not let a battle stand still)
 	/// A battle that stands still. Troops that regenerate or drain life can trade blows for ever
 	/// without anybody getting weaker, and the game knows no draw: the battle - and with it the whole
@@ -136,6 +137,10 @@ private:
 	/// lost whole armies that way). nullopt: there is a way in, let BattleAI lead the assault.
 	std::optional<BattleAction> siegeWalkerAction(const BattleID & battleID, const CStack * stack) const;
 	std::optional<BattleAction> considerRetreat(const BattleID & battleID);
+	/// The enemy shoots and we have nothing that reaches it from afar - no shot, no caster, no hero with
+	/// spell points: standing back only costs troops. (Not where the battle plan weighs holding against
+	/// advancing by playing both out.)
+	bool outranged(const BattleID & battleID) const;
 	void logForecast(const BattleID & battleID);
 	/// urgency: 0 = free choice, 1 = waiting and defending are no option, 2 = the unit must strike (or, with nobody in reach, advance)
 	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack, int urgency = 0);
