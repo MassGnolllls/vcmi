@@ -690,3 +690,51 @@ def vl_drain(floor=120, greed=1.0):
 
 
 PLAYS.update({"vl": vl_drain(), "vlgreedy": vl_drain(greed=0.5)})
+
+
+# --------------------------------------------------------------------- With Sword and Fire (sword.py)
+
+def lone_corner(corners):
+    """One strong stack against many small ones (a minotaur king against troglodytes): a first blow at
+    the end of round 1, when they have come forward; then into a corner of the field that only two
+    hexes touch - on the right, where they came from -, and from there every turn a blow at the
+    neighbour that would hurt most. Never more than two of them strike in a round."""
+    def play(state, memory):
+        me = state.active
+        foes = state.foes()
+        if not foes:
+            return {"a": "defend"}
+        if "home" not in memory:
+            # the corner reached soonest; taken once the enemy has left it
+            memory["home"] = None
+        here = me["pos"]
+        attacks = state.attacks
+        in_corner = here in corners
+        if in_corner:
+            mine = [(t, h) for t, h in attacks if h == here]
+            if mine:
+                target = max(mine, key=lambda p: state.units[p[0]]["count"])[0]
+                return {"a": "attack", "target": target, "hex": here}
+            return {"a": "defend"} if me["waited"] else {"a": "wait"}
+        free = [c for c in corners if c in state.reach_now]
+        if state.round == 1 and not me["waited"]:
+            return {"a": "wait"}
+        if state.round == 1 and attacks:
+            # the free blow: at the stack whose answer is weakest afterwards - the smallest
+            target, origin = min(attacks, key=lambda p: (state.units[p[0]]["count"], dist(p[1], min(corners, key=lambda c: dist(c, p[1])))))
+            return {"a": "attack", "target": target, "hex": origin}
+        if free:
+            return {"a": "move", "hex": min(free, key=lambda c: dist(c, here))}
+        # towards the nearest corner, as far as the way is open
+        goal = min(corners, key=lambda c: dist(c, here))
+        steps = [h for h in state.reach_now if h != here]
+        if steps:
+            return {"a": "move", "hex": min(steps, key=lambda h: dist(h, goal))}
+        if attacks:
+            target, origin = max(attacks, key=lambda p: state.units[p[0]]["count"])
+            return {"a": "attack", "target": target, "hex": origin}
+        return {"a": "defend"}
+    return play
+
+
+PLAYS.update({"mkright": lone_corner([hx(15, 0), hx(15, 10)]), "mkleft": lone_corner([hx(1, 0), hx(1, 10)])})
