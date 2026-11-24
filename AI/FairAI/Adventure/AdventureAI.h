@@ -77,6 +77,7 @@ struct Threat
 	int3 pos;
 	double strength = 0;
 	double radius = 0;
+	double reach = 0; ///< tiles it may cover in a day (radius when seen today)
 	int age = 0; ///< days since we saw it
 	ObjectInstanceID hero;
 };
@@ -253,6 +254,10 @@ private:
 	/// Strongest enemy hero that might attack this tile before our next turn
 	/// Cautious: weak heroes also fear enemies seen up to three days ago, in a wider radius
 	double threatAt(const int3 & tile, ObjectInstanceID ignoreHero = ObjectInstanceID(), bool cautious = false) const;
+	/// (threatReach) How far an enemy hero may come until our next turn, in tiles
+	double reachEstimate(const ObservedObject & hero) const;
+	std::map<int, double> learnedReach; ///< hero type -> the furthest it has been seen to come in a day (tiles, plus half a tile)
+	void learnReach(int heroType, double tiles, const char * how);
 	/// Tiles a collector may work on: close to one of our towns
 	bool inTerritory(const int3 & tile) const;
 	std::vector<uint16_t> fogDistances(const int3 & from) const;

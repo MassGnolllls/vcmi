@@ -250,6 +250,7 @@ void Params::loadOverrides(int playerIndex)
 	read("reinforceFactor", reinforceFactor);
 	read("heroGoldReserve", heroGoldReserve);
 	read("threatRadius", threatRadius);
+	read("threatReach", threatReach);
 	read("enemyHeroFactor", enemyHeroFactor);
 	read("threatTolerance", threatTolerance);
 	read("threatToleranceSecondary", threatToleranceSecondary);
@@ -3914,6 +3915,8 @@ void AdventureAI::updateThreats()
 					outcome.gone ? 1 : 0, static_cast<int64_t>(std::lround(outcome.ownLostShare * 100)), static_cast<int64_t>(std::lround(theirLost * 100)),
 					modelDistance, sightingAge,
 					seen != enemySightings.end() && seen->second.army > 0 ? static_cast<int64_t>(seen->second.army) : -1});
+				if(params.threatReach && !outcome.weAttack && modelDistance >= 0 && modelDistance < 9999 && sightingAge == 0)
+					learnReach(outcome.hero, modelDistance / 10.0, "attacked us from");
 				const HeroTypeID type(outcome.hero);
 				const std::string reach = outcome.weAttack ? std::string() : (modelDistance < 0 ? std::string("; it was not among the threats we knew")
 					: boost::str(boost::format("; our reach model had it %.1f tiles away (sighting %d day(s) old)") % (modelDistance / 10.0) % sightingAge));
@@ -3970,13 +3973,25 @@ void AdventureAI::updateThreats()
 		t.pos = object.visitablePos;
 		const double factor = heroFactor(object);
 		t.strength = observedDanger(object) * factor * (1.0 + params.threatGrowth * age);
+		if(age == 0 && params.threatReach)
+		{
+			// seen yesterday and today: it has walked the way between in one day (the enemy moves once between our turns)
+			auto previous = enemySightings.find(object.subtype.getNum());
+			if(previous != enemySightings.end() && previous->second.day == today - 1 && previous->second.pos.x >= 0 && previous->second.pos != object.visitablePos)
+			{
+				const double moved = enemyDistance(id, previous->second.pos, observedDanger(object) * factor, object.visitablePos, 45.0);
+				if(std::isfinite(moved))
+					learnReach(object.subtype.getNum(), moved, "moved");
+			}
+		}
 		if(age == 0)
 		{
 			enemySightings[object.subtype.getNum()] = Sighting{today, observedDanger(object) * factor, object.visitablePos, observedDanger(object), factor};
 			std::unique_lock lock(intelMutex);
 			heroFirstSeen.emplace(object.subtype.getNum(), today);
 		}
-		t.radius = params.threatRadius * (1 + 0.5 * age);
+		t.reach = reachEstimate(object);
+		t.radius = t.reach * (1 + 0.5 * age);
 		t.age = age;
 		t.hero = id;
 		threats.push_back(t);
@@ -4251,6 +4266,7 @@ void AdventureAI::updateThreats()
 				staged.pos = leader->visitablePos();
 				staged.strength = 5.0 * fieldStrength(leader) + 1000;
 				staged.radius = 40;
+				staged.reach = 40;
 				staged.hero = ObjectInstanceID(1000000); // nobody's: a threat without a hero is skipped
 				threats.push_back(staged);
 				logAi->info("FairAI %s day %d: TEST a pursuer of %.0f stands next to %s at %s; Sanctuary at %s is %.2f days away", me.toString(), today,
@@ -4703,6 +4719,51 @@ double AdventureAI::superiority(const CGHeroInstance * hero) const
 	return fieldStrength(hero) / oppositionHeroes;
 }
 
+double AdventureAI::reachEstimate(const ObservedObject & hero) const
+{
+	if(!params.threatReach)
+		return params.threatRadius;
+	// What a player sees of an enemy hero: the creatures in its army - the slowest one sets the daily
+	// march (the game's table) - and its face and skills. A seasoned hero is taken to have Expert
+	// Logistics and Boots of Speed, the worst case a careful player reckons with; and no hero comes
+	// less far than we have seen it come in a day.
+	int lowest = std::numeric_limits<int>::max();
+	if(hero.army && hero.army->known)
+		for(const auto & stack : hero.army->units)
+			if(const auto * creature = stack.creature.hasValue() ? stack.creature.toCreature() : nullptr)
+				lowest = std::min(lowest, static_cast<int>(creature->getMovementRange()));
+	const auto & table = cb->getSettings().getValue(EGameSettings::HEROES_MOVEMENT_POINTS_LAND).Vector();
+	double points = 2000; // (army not seen: as fast as any)
+	if(!table.empty())
+		points = static_cast<double>((lowest >= 0 && lowest < static_cast<int>(table.size()) ? table[lowest] : table.back()).Integer());
+	const auto skills = heroSkillsEstimate(hero);
+	double initial = 0;
+	const HeroTypeID type(hero.subtype.getNum());
+	if(const CHero * heroType = type.hasValue() ? type.toHeroType() : nullptr; heroType && heroType->heroClass)
+		for(int v : heroType->heroClass->primarySkillInitial)
+			initial += v;
+	const double level = std::clamp(1.0 + (skills[0] + skills[1] + skills[2] + skills[3] - initial) / 1.2, 1.0, 40.0);
+	const bool seasoned = level >= 8;
+	double tiles = points / 100.0 * (seasoned ? 1.3 : 1.1) + (seasoned ? 6.0 : 0.0);
+	if(auto learned = learnedReach.find(hero.subtype.getNum()); learned != learnedReach.end())
+		tiles = std::max(tiles, learned->second);
+	return std::max(tiles, params.threatRadius);
+}
+
+void AdventureAI::learnReach(int heroType, double tiles, const char * how)
+{
+	// (a town portal or dimension door would make it look further: no march is longer than 40 tiles)
+	const double value = std::min(40.0, tiles + 0.5);
+	double & learned = learnedReach[heroType];
+	if(value > learned + 0.99)
+	{
+		const HeroTypeID type(heroType);
+		logAi->debug("FairAI %s day %d: %s %s %.1f tiles in a day - reach now %.1f", me.toString(), today,
+			type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?"), how, tiles, value);
+	}
+	learned = std::max(learned, value);
+}
+
 double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, bool cautious) const
 {
 	double worst = 0;
@@ -4712,7 +4773,8 @@ double AdventureAI::threatAt(const int3 & tile, ObjectInstanceID ignoreHero, boo
 			continue;
 		if(!cautious && t.age > 2)
 			continue;
-		double radius = cautious ? params.threatRadius + 8.0 * t.age : t.radius;
+		// (cautious: as far as two more days of marching, eight tiles a day; with the old fixed reach both are the same)
+		double radius = cautious ? std::max(t.radius, t.reach + 8.0 * t.age) : t.radius;
 		if(enemyDistance(t.hero, t.pos, t.strength, tile, radius) <= radius)
 			worst = t.strength;
 	}
