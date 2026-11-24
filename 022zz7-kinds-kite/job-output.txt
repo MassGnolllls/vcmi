@@ -345,3 +345,27 @@ K: match    9 FairAI as blue of 2: victory winner=blue day=225 score=1.00 [940.5
 base: match    8 FairAI as red of 2: victory winner=blue day=255 score=0.00 [1474.8s]
 base: match   10 FairAI as red of 2: victory winner=blue day=174 score=0.00 [1106.4s]
 K: match   11 FairAI as blue of 2: victory winner=red day=163 score=0.00 [801.2s]
+K: match   10 FairAI as red of 2: victory winner=blue day=263 score=0.00 [1456.3s]
+base: match   11 FairAI as blue of 2: victory winner=red day=249 score=0.00 [1518.4s]
+# A/B test (2 configs, seeds 93, 94)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 21 | 6 | 14 | 0.332 ± 0.206 | - | 0.327 ± 0.203 | - | 21 |
+| K | `{"kitePlan": 1, "latePlan": 1}` | 24 | 4 | 20 | 0.167 ± 0.152 | -0.141 ± 0.203 | 0.167 ± 0.152 | -0.136 ± 0.199 | 21 |
+
+# Matrix test: 5 map categories, configs base, K, seeds 93, 94
+
+Score: 1 = win, 0 = loss, otherwise army share per seat at the day limit (0.5 = parity). ± = 95 % interval. Won and lost count the games decided before the day limit.
+
+| category | base (games, score, decided) | K (games, score, decided) | K − base |
+|---|---|---|---|
+| s-land-2p | 44, 0.368 ± 0.138, 14 won 24 lost | 46, 0.330 ± 0.130, 12 won 27 lost | -0.044 ± 0.159 (43) |
+| m-islands-2p | 24, 0.833 ± 0.152, 20 won 4 lost | 23, 0.783 ± 0.172, 18 won 5 lost | -0.087 ± 0.210 (23) |
+| m-ffa-4p | 23, 0.695 ± 0.192, 14 won 7 lost | 23, 0.778 ± 0.172, 16 won 5 lost | +0.087 ± 0.284 (22) |
+| m-teams-4p | 23, 0.870 ± 0.141, 20 won 3 lost | 24, 0.750 ± 0.177, 18 won 6 lost | -0.087 ± 0.210 (23) |
+| l-land-2p | 21, 0.332 ± 0.206, 6 won 14 lost | 24, 0.167 ± 0.152, 4 won 20 lost | -0.141 ± 0.203 (21) |
+| **mean of categories** | 0.620 | 0.562 | -0.055 (all games: -0.053 ± 0.092) |
+
