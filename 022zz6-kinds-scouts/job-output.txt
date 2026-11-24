@@ -323,3 +323,7 @@ X: match   11 FairAI as blue of 2: victory winner=red day=229 score=0.00 [1294.3
 X: match   10 FairAI as red of 2: victory winner=blue day=213 score=0.00 [1690.0s]
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/f6ec25a59a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 92 --out /home/alex/fairai/runs/022zz6-kinds-scouts/l-land-2p --variants {"base": {}, "X": {"scouts": 2}} --pool long1-l-land-2p --max-days 400 --timeout 9000 --stall-seconds 300 --base-port 7400
 playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
+base: match    4 FairAI as red of 2: victory winner=blue day=135 score=0.00 [584.5s]
+X: match    1 FairAI as blue of 2: victory winner=blue day=163 score=1.00 [619.8s]
+base: match    0 FairAI as red of 2: victory winner=blue day=137 score=0.00 [631.2s]
+base: match    2 FairAI as red of 2: no result file winner=- day=- score=- [632.3s]
