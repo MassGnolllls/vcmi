@@ -195,3 +195,7 @@ X: match    9 FairAI as blue,green of 4: victory winner=tan day=132 score=0.00 [
 base: match   10 FairAI as red,tan of 4: victory winner=tan day=129 score=1.00 [273.9s]
 X: match    0 FairAI as red,tan of 4: timeout winner= day=301 score=1.00 [908.0s]
 X: match   11 FairAI as blue,green of 4: victory winner=tan day=94 score=0.00 [273.2s]
+base: match    6 FairAI as red,tan of 4: victory winner=tan day=221 score=1.00 [758.7s]
+X: match    7 FairAI as blue,green of 4: timeout winner= day=301 score=0.91 [1246.3s]
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/f6ec25a59a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 92 --out /home/alex/fairai/runs/022zz6-kinds-scouts/m-ffa-4p --variants {"base": {}, "X": {"scouts": 2}} --pool long1-m-ffa-4p --max-days 300 --timeout 9000 --stall-seconds 300 --base-port 7200
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
