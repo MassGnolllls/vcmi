@@ -1,9 +1,12 @@
 {
  "job": "028-mirror-m-duel-spellsearch-logs",
- "state": "running",
+ "state": "done",
  "commit": "3e0747023dabfc4ceb0de3458f63a5f2f8cf9f3a",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-24T19:50:47",
- "note": "Restart of job 027 with detailed logs of all 24 games (owner's word of 24.11. 19:25: 'starte den test von vorne und stelle sicher, dass wir detaillierte protokolle fuer alle 24 spiele bekommen. es ist wichtiger zu wissen, warum eine seite verliert als ob sie verliert'). Duel of two FairAI versions on the twelve mirror maps: both seats run FairAI on the adventure map and in battle, from the same build; the version under test differs only in the spells its heroes cast in battle: spellSearch 2 (a spell is cast when it changes how the fight ends by more than its spell points are worth, manaShare 0.15) against the default (VCMI's BattleAI evaluator, which casts whenever a spell gains anything). Each map twice with the seats swapped, guards by BattleAI, day limit 300, seed 25. Score of the version under test: 1 win, 0 loss, army share at the day limit; 0.5 means equal. Logs: every game packed as won_/lost_/open_NNNN.tar.xz, with the AIs' decisions and their reasons (log level debug), every hero's level, primary skills and spell points at the end of each day, every level-up (skills offered and taken), and the battle records with both heroes' morale and luck."
+ "note": "Restart of job 027 with detailed logs of all 24 games (owner's word of 24.11. 19:25: 'starte den test von vorne und stelle sicher, dass wir detaillierte protokolle fuer alle 24 spiele bekommen. es ist wichtiger zu wissen, warum eine seite verliert als ob sie verliert'). Duel of two FairAI versions on the twelve mirror maps: both seats run FairAI on the adventure map and in battle, from the same build; the version under test differs only in the spells its heroes cast in battle: spellSearch 2 (a spell is cast when it changes how the fight ends by more than its spell points are worth, manaShare 0.15) against the default (VCMI's BattleAI evaluator, which casts whenever a spell gains anything). Each map twice with the seats swapped, guards by BattleAI, day limit 300, seed 25. Score of the version under test: 1 win, 0 loss, army share at the day limit; 0.5 means equal. Logs: every game packed as won_/lost_/open_NNNN.tar.xz, with the AIs' decisions and their reasons (log level debug), every hero's level, primary skills and spell points at the end of each day, every level-up (skills offered and taken), and the battle records with both heroes' morale and luck.",
+ "returncode": 0,
+ "finished": "2026-11-24T20:54:55",
+ "minutes": 64.1
 }
