@@ -1,0 +1,9 @@
+{
+ "job": "022zz7-kinds-kite",
+ "state": "running",
+ "commit": "bfebc987066b4c5f77c2d4e9740dc09c9f74f45a",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-24T08:35:26",
+ "note": "The plans 'shoot and stay out of reach' and 'wait, then advance' (kitePlan 1, latePlan 1) on five kinds of map, played to the end: small land, medium islands, free-for-all with four players, two teams of two, large land - 72 games per configuration and seed, two seeds, 288 games. Two screenings on medium maps found the pair at +0.06 each (screening 6: +0.060 +- 0.062 over 372 whole games); together that is about +0.06 +- 0.044. Before it becomes the default: the other kinds of map (two scouts were +0.11 +- 0.06 with two players and -0.15 +- 0.15 with four). Base: the defaults of 24.11. (scouts by the number of players, freeKite on). Evaluate per kind and over all: arena/effects.py FOLDER/s-land-2p FOLDER/m-islands-2p FOLDER/m-ffa-4p FOLDER/m-teams-4p FOLDER/l-land-2p --factors '{\"K\": {\"kitePlan\": 1, \"latePlan\": 1}}'."
+}
