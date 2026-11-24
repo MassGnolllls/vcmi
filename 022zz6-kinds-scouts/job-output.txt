@@ -297,3 +297,7 @@ Paired against `base`: mean difference over the games both played (95% CI). scor
 == l-land-2p
 $ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/f6ec25a59a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 91 --out /home/alex/fairai/runs/022zz6-kinds-scouts/l-land-2p --variants {"base": {}, "X": {"scouts": 2}} --pool long1-l-land-2p --max-days 400 --timeout 9000 --stall-seconds 300 --base-port 7400
 playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
+base: match    0 FairAI as red of 2: victory winner=blue day=120 score=0.00 [553.1s]
+base: match    1 FairAI as blue of 2: victory winner=red day=167 score=0.00 [812.1s]
+base: match    4 FairAI as red of 2: victory winner=blue day=157 score=0.00 [814.3s]
+base: match    2 FairAI as red of 2: victory winner=blue day=179 score=0.00 [860.1s]
