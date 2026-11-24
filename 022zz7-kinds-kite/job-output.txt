@@ -64,3 +64,51 @@ K: match    8 FairAI as red of 2: victory winner=blue day=20 score=0.00 [8.2s]
 K: match    0 FairAI as red of 2: victory winner=blue day=53 score=0.00 [36.5s]
 base: match    9 FairAI as blue of 2: victory winner=red day=18 score=0.00 [7.3s]
 K: match    9 FairAI as blue of 2: victory winner=red day=19 score=0.00 [8.4s]
+K: match    1 FairAI as blue of 2: victory winner=red day=66 score=0.00 [55.0s]
+K: match    5 FairAI as blue of 2: victory winner=red day=70 score=0.00 [70.4s]
+base: match    8 FairAI as red of 2: victory winner=red day=70 score=1.00 [63.8s]
+K: match   11 FairAI as blue of 2: victory winner=red day=25 score=0.00 [16.1s]
+K: match   10 FairAI as red of 2: victory winner=blue day=65 score=0.00 [58.6s]
+base: match    7 FairAI as blue of 2: timeout winner= day=301 score=0.79 [86.3s]
+K: match    7 FairAI as blue of 2: timeout winner= day=301 score=0.79 [89.1s]
+base: match   14 FairAI as red of 2: victory winner=red day=29 score=1.00 [8.4s]
+K: match   14 FairAI as red of 2: victory winner=red day=26 score=1.00 [10.0s]
+K: match   12 FairAI as red of 2: victory winner=blue day=67 score=0.00 [40.4s]
+base: match   12 FairAI as red of 2: victory winner=blue day=102 score=0.00 [44.2s]
+base: match   13 FairAI as blue of 2: victory winner=red day=48 score=0.00 [31.2s]
+base: match   15 FairAI as blue of 2: victory winner=red day=16 score=0.00 [8.4s]
+K: match   13 FairAI as blue of 2: victory winner=red day=46 score=0.00 [35.0s]
+base: match   10 FairAI as red of 2: victory winner=red day=106 score=1.00 [101.5s]
+base: match   18 FairAI as red of 2: victory winner=red day=18 score=1.00 [3.0s]
+base: match   16 FairAI as red of 2: victory winner=blue day=34 score=0.00 [13.0s]
+K: match   18 FairAI as red of 2: victory winner=red day=19 score=1.00 [3.4s]
+base: match   17 FairAI as blue of 2: victory winner=red day=41 score=0.00 [21.6s]
+K: match   15 FairAI as blue of 2: victory winner=red day=32 score=0.00 [24.1s]
+base: match   19 FairAI as blue of 2: victory winner=red day=25 score=0.00 [13.1s]
+K: match   17 FairAI as blue of 2: victory winner=red day=38 score=0.00 [21.9s]
+K: match   19 FairAI as blue of 2: victory winner=red day=25 score=0.00 [14.6s]
+base: match   11 FairAI as blue of 2: victory winner=blue day=109 score=1.00 [115.6s]
+base: match   22 FairAI as red of 2: victory winner=red day=23 score=1.00 [9.2s]
+base: match   23 FairAI as blue of 2: victory winner=red day=34 score=0.00 [27.1s]
+K: match   23 FairAI as blue of 2: victory winner=blue day=12 score=1.00 [6.0s]
+base: match    6 FairAI as red of 2: timeout winner= day=301 score=0.05 [216.8s]
+K: match    6 FairAI as red of 2: timeout winner= day=301 score=0.15 [219.6s]
+K: match   22 FairAI as red of 2: victory winner=red day=98 score=1.00 [109.8s]
+K: match   20 FairAI as red of 2: timeout winner= day=301 score=0.20 [263.3s]
+base: match   20 FairAI as red of 2: timeout winner= day=301 score=0.20 [291.3s]
+K: match   21 FairAI as blue of 2: stalled winner= day=215 score=- [355.7s]
+base: match   21 FairAI as blue of 2: stalled winner= day=253 score=- [360.6s]
+K: match   16 FairAI as red of 2: stalled winner= day=138 score=- [410.6s]
+# A/B test (2 configs, seeds 93, 94)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 44 | 14 | 24 | 0.368 ± 0.138 | - | 0.375 ± 0.137 | - | 44 |
+| K | `{"kitePlan": 1, "latePlan": 1}` | 46 | 12 | 27 | 0.330 ± 0.130 | -0.044 ± 0.159 | 0.332 ± 0.129 | -0.047 ± 0.159 | 43 |
+
+== m-islands-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/bfebc98706/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 93 --out /home/alex/fairai/runs/022zz7-kinds-kite/m-islands-2p --variants {"base": {}, "K": {"kitePlan": 1, "latePlan": 1}} --pool long1-m-islands-2p --max-days 300 --timeout 4200 --stall-seconds 300 --base-port 7100
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
+K: match    3 FairAI as blue of 2: victory winner=red day=51 score=0.00 [127.5s]
