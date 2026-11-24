@@ -827,6 +827,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	planVsPlayers = params.planVsPlayers != 0;
 	modelSearch = params.modelSearch != 0;
 	kitePlan = params.kitePlan;
+	freeKite = params.freeKite;
 	latePlan = params.latePlan;
 }
 
@@ -1949,20 +1950,30 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		// walker that never reaches us is shot down without a scratch -, so it is played to the end of
 		// the battle, and judged by what the plan itself does with this unit. It is taken when the
 		// battle ends better with it than with the best action of the other plans, played as far.
-		if(kitePlan > 0 && modelGuards && best && urgency == 0)
+		// (freeKite) The same with troops nothing strikes back at, shots or none: they wait while the
+		// enemy cannot reach them, strike when it has moved, and are gone before it moves again.
+		const int kiteWith = (kitePlan > 0 && modelGuards ? 1 : 0) | (freeKite > 0 ? 2 : 0);
+		if(kiteWith && best && urgency == 0)
 		{
 			bool shots = false;
 			for(const auto & own : base.units)
-				shots = shots || (own.alive() && own.side == base.units[me].side && own.shooter && own.shots > 0);
+			{
+				if(!own.alive() || own.side != base.units[me].side)
+					continue;
+				shots = shots || ((kiteWith & 1) && own.shooter && own.shots > 0) || ((kiteWith & 2) && own.blocksRetaliation && own.canMove);
+			}
 			if(shots)
 			{
 				const int kiteEnd = base.round + KITE_ROUNDS;
 				SimState sim = base;
+				sim.kiteWith = kiteWith;
 				sim.stance[ownSide] = Stance::KITE;
 				sim.stance[enemySide] = Stance::STALK;
 				sim.guardModel[enemySide] = guardTurns;
 				sim.stopAtKiteEnd = true;
+				sim.kiteDeep = true;
 				sim.playDefault(me);
+				sim.kiteDeep = false;
 				const SimAction first = sim.lastAction;
 				// (cornered at once, or no shot left: there is no such plan now)
 				const bool noKite = sim.kiteOver[ownSide];
@@ -2002,6 +2013,7 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 				}
 				// (how long to keep it up - see playKite)
 				double kiteValue = -std::numeric_limits<double>::max();
+				bool kiteWhole = false; // nothing of ours is lost under the plan
 				int bestTurn = -1;
 				int lasted = -1;
 				if(!noKite)
@@ -2010,6 +2022,7 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 					SimState turned = sim;
 					const SimState end = playKite(sim, side, ownPlans, KITE_TURNS, kiteEnd, &bestTurn, &lasted, traced ? &report : nullptr, traced ? &turned : nullptr);
 					kiteValue = end.evaluate(side);
+					kiteWhole = end.sideValue(side) > base.sideValue(side) - 1e-6;
 					if(traced)
 					{
 						// ... and the best way on from where we turn, step by step
@@ -2043,7 +2056,9 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 				// weak guards, the usual case, only with the margin fewer battles got worse (3 of 68
 				// instead of 6; 0.5 +- 0.3 points less instead of none). Three per cent: 0.9 +- 0.8.
 				static const double marginShare = envInt("FAI_KITE_MARGIN", 1) / 100.0;
-				const double margin = marginShare * base.sideValue(side) + 1e-6;
+				// A plan under which nothing of ours is ever struck wins a tie: it does not depend on the
+				// forecast of the blows we would take otherwise.
+				const double margin = kiteWhole ? -1e-6 : marginShare * base.sideValue(side) + 1e-6;
 				if(!noKite && kiteValue > best->score + margin)
 				{
 					// (the same horizon for the best of the others)

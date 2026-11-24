@@ -126,6 +126,7 @@ private:
 	bool modelSearch = false; ///< from the player's FairAI parameters: the plain search plays the enemy by GuardModel too
 	int latePlan = 0;         ///< from the player's FairAI parameters: "wait, then advance" is one more plan (1: against troops that shoot, 2: always)
 	int kitePlan = 0;         ///< from the player's FairAI parameters: "shoot and stay out of reach" is a fifth plan against guards
+	int freeKite = 1;         ///< ... and so is "strike and stay out of reach" with troops nothing strikes back at
 	static constexpr int KITE_ROUNDS = 40; ///< ... played this many rounds ahead (to the end of the battle, as a rule)
 	static constexpr int KITE_TURNS = 6;   ///< ... and turning to fight is tried after each of this many rounds
 	bool planVsPlayers = false; ///< from the player's FairAI parameters: the battle plan is also used against the army of a player

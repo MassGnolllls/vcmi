@@ -311,6 +311,7 @@ void Params::loadOverrides(int playerIndex)
 	read("modelSearch", modelSearch);
 	read("detour", detour);
 	read("kitePlan", kitePlan);
+	read("freeKite", freeKite);
 	read("latePlan", latePlan);
 	read("tour", tour);
 	read("wholeCreatures", wholeCreatures);
@@ -792,6 +793,16 @@ void AdventureAI::playTurn()
 {
 	const auto turnStart = std::chrono::steady_clock::now();
 	today = cb->getDate(Date::DAY);
+	if(params.scouts < 0)
+	{
+		// (scouts by the kind of game) how many players the game has is on the scenario screen
+		int players = 0;
+		for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
+			if(cb->getPlayerStatus(PlayerColor(c), false) == EPlayerStatus::INGAME)
+				++players;
+		params.scouts = players == 2 ? 2 : 0;
+		logAi->info("FairAI %s: %d players in the game, %d scouts", me.toString(), players, params.scouts);
+	}
 	townsPeak = std::max(townsPeak, static_cast<int>(perception.ownTowns().size())); // (lastStand: have we held more towns than now?)
 	// (test) FAI_TEST_LASTSTAND: the one town we hold counts as the last of several from the first day
 	if(static const bool staged = std::getenv("FAI_TEST_LASTSTAND") != nullptr; staged)

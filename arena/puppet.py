@@ -395,7 +395,7 @@ def play(client, testmap, left, right, seed, out_dir, tag, nodice=False, mods="h
     record["actions"] = sum(1 for t in brain.trace if t.get("t") == "act")
     if keep_trace:
         (out_dir / f"trace_{tag}.json").write_text(json.dumps(brain.trace))
-    if not record.get("error"):
+    if not record.get("error") and not os.environ.get("PUPPET_KEEP_LOGS"):
         shutil.rmtree(log_dir, ignore_errors=True)
     return record
 

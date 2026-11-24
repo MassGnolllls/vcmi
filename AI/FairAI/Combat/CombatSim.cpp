@@ -1008,11 +1008,16 @@ void SimState::reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZ
 SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 {
 	const auto & u = units[unit];
-	// (only while shots are left: running alone wins nothing)
-	bool shots = false;
+	// (only while there is something to win by it: shots left, or troops nothing strikes back at -
+	// running alone wins nothing)
+	bool means = false;
 	for(const auto & own : units)
-		shots = shots || (own.alive() && own.side == u.side && own.shooter && own.shots > 0);
-	if(!shots)
+	{
+		if(!own.alive() || own.side != u.side)
+			continue;
+		means = means || ((kiteWith & 1) && own.shooter && own.shots > 0) || ((kiteWith & 2) && own.blocksRetaliation && own.canMove);
+	}
+	if(!means)
 		return KiteStep::OVER;
 
 	// Who can strike this unit before it acts again, and where: an enemy that has its turn of this
@@ -1094,6 +1099,31 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 		int bestTarget = -1;
 		BattleHex bestFrom;
 		double bestValue = 0;
+		int bestEscape = 0;
+		// (troops nothing strikes back at) After the blow we stand next to the enemy, and move before
+		// it in the next round: how much room is there to be had from this hex? Struck from the wrong
+		// side, a flyer of speed 9 gets no further than 9 hexes from a walker in the middle of the
+		// field - one short of waiting out its next move, and the flight never ends.
+		const bool foresight = (kiteWith & 2) && u.blocksRetaliation && !u.returnsAfterStrike && u.canMove;
+		const auto escapeFrom = [&](const BattleHex & from)
+		{
+			int most = std::numeric_limits<int>::min();
+			for(int h = 0; h < FIELD_SIZE; ++h)
+			{
+				const BattleHex hex(h);
+				if(static_cast<int>(BattleHex::getDistance(from, hex)) > u.speed || !canStand(unit, hex))
+					continue;
+				int room = 1000;
+				for(const auto & enemy : units)
+				{
+					if(!enemy.alive() || enemy.side == u.side || (enemy.shooter && enemy.shots > 0))
+						continue;
+					room = std::min<int>(room, static_cast<int>(BattleHex::getDistance(enemy.pos, hex)) - (enemy.canMove ? enemy.speed : 0));
+				}
+				most = std::max(most, room);
+			}
+			return most;
+		};
 		if(u.canMove)
 		{
 			reachable(unit, dist);
@@ -1110,7 +1140,7 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 						continue;
 				}
 				const double value = meleeTradeValue(unit, e);
-				if(value <= bestValue)
+				if(value <= 0 || value < bestValue || (value == bestValue && !foresight))
 					continue;
 				for(const auto & around : battle::Unit::getSurroundingHexes(enemy.pos, enemy.doubleWide, enemy.side))
 				{
@@ -1128,9 +1158,13 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 							continue;
 						if(threatened(u.returnsAfterStrike ? u.pos : head))
 							continue;
+						const int escape = foresight ? escapeFrom(head) : 0;
+						if(value == bestValue && bestTarget >= 0 && escape <= bestEscape)
+							continue;
 						bestValue = value;
 						bestTarget = e;
 						bestFrom = head;
+						bestEscape = escape;
 					}
 				}
 			}
@@ -1139,6 +1173,66 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 		{
 			out = {SimActionType::ATTACK, bestTarget, bestFrom};
 			return KiteStep::ACT;
+		}
+		// Troops nothing strikes back at, with nothing in reach to strike: close in - to where the enemy
+		// cannot reach them with its next move either. There they wait again in the next round, and
+		// strike when it has moved. (Running further would keep the two apart for good.)
+		if((kiteWith & 2) && u.blocksRetaliation && u.canMove && !canShoot(unit))
+		{
+			std::bitset<FIELD_SIZE> next;
+			std::array<int8_t, FIELD_SIZE> theirs;
+			for(int e = 0; e < static_cast<int>(units.size()); ++e)
+			{
+				const auto & enemy = units[e];
+				if(!enemy.alive() || enemy.side == u.side || canShoot(e))
+					continue;
+				reachableWithin(e, enemy.canMove ? enemy.speed : 0, theirs);
+				for(int h = 0; h < FIELD_SIZE; ++h)
+				{
+					if(theirs[h] < 0)
+						continue;
+					for(const auto & part : battle::Unit::getHexes(BattleHex(h), enemy.doubleWide, enemy.side))
+					{
+						for(const auto & beside : part.getNeighbouringTiles())
+							if(beside.isValid())
+								next.set(beside.toInt());
+					}
+				}
+			}
+			BattleHex near;
+			int nearGap = std::numeric_limits<int>::max();
+			int nearWay = 0;
+			for(int h = 0; h < FIELD_SIZE; ++h)
+			{
+				const BattleHex hex(h);
+				if(dist[h] < 0 || threatened(hex))
+					continue;
+				bool reached = false;
+				for(const auto & part : battle::Unit::getHexes(hex, u.doubleWide, u.side))
+					reached = reached || (part.isValid() && next.test(part.toInt()));
+				if(reached)
+					continue;
+				int gap = std::numeric_limits<int>::max();
+				for(const auto & enemy : units)
+				{
+					if(enemy.alive() && enemy.side != u.side)
+						gap = std::min<int>(gap, BattleHex::getDistance(enemy.pos, hex));
+				}
+				if(gap < nearGap || (gap == nearGap && dist[h] < nearWay))
+				{
+					nearGap = gap;
+					nearWay = dist[h];
+					near = hex;
+				}
+			}
+			if(near.isValid())
+			{
+				if(near == u.pos)
+					out = {SimActionType::DEFEND, -1, BattleHex()};
+				else
+					out = {SimActionType::MOVE, -1, near};
+				return KiteStep::ACT;
+			}
 		}
 		// Nothing to strike: the turn is free for getting away from where the enemy comes next. (Late
 		// in a round and early in the next we move twice while it moves once - that is how troops
@@ -1200,6 +1294,84 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 				bestWay = dist[h];
 				best = hex;
 			}
+		}
+	}
+	// (kiteDeep: the decision itself, not the play-outs) No hex leaves room enough to wait out the
+	// enemy's next move: then the flight is chosen two moves ahead - wherever the pursuer goes now,
+	// which hex lets us get away from it for good with the move after? A pursuer that holds the
+	// middle of the field keeps a flyer on the run for ever otherwise.
+	if(kiteDeep && best.isValid() && u.flying && !chasers.empty())
+	{
+		int need = 0;
+		for(const auto & [e, range] : chasers)
+			need = std::max(need, (units[e].canMove ? units[e].speed : 0) + 2);
+		if(bestRoom < need)
+		{
+			std::vector<int> standable;
+			for(int h = 0; h < FIELD_SIZE; ++h)
+				if(canStand(unit, BattleHex(h)))
+					standable.push_back(h);
+			std::vector<std::vector<int>> replies(chasers.size());
+			std::array<int8_t, FIELD_SIZE> theirs;
+			for(size_t c = 0; c < chasers.size(); ++c)
+			{
+				reachableWithin(chasers[c].first, chasers[c].second, theirs);
+				for(int h = 0; h < FIELD_SIZE; ++h)
+					if(theirs[h] >= 0)
+						replies[c].push_back(h);
+			}
+			BattleHex deep;
+			int deepValue = std::numeric_limits<int>::min();
+			int deepRoom = std::numeric_limits<int>::min();
+			for(int h = 0; h < FIELD_SIZE; ++h)
+			{
+				const BattleHex hex(h);
+				if(dist[h] <= 0 || threatened(hex))
+					continue;
+				int room = 1000;
+				for(const auto & [e, range] : chasers)
+					room = std::min<int>(room, static_cast<int>(BattleHex::getDistance(units[e].pos, hex)) - range);
+				int worst = std::numeric_limits<int>::max();
+				for(size_t c = 0; c < chasers.size() && worst >= deepValue; ++c)
+				{
+					const auto & enemy = units[chasers[c].first];
+					const int speed = enemy.canMove ? enemy.speed : 0;
+					const int good = speed + 2;
+					const int touch = speed + 1 + (enemy.doubleWide ? 1 : 0) + (u.doubleWide ? 1 : 0);
+					for(int reply : replies[c])
+					{
+						const BattleHex there(reply);
+						int value;
+						if(static_cast<int>(BattleHex::getDistance(there, hex)) > touch)
+							value = good + 1; // it cannot reach us from there: we wait in the next round
+						else
+						{
+							value = std::numeric_limits<int>::min();
+							for(int again : standable)
+							{
+								const BattleHex then(again);
+								if(static_cast<int>(BattleHex::getDistance(hex, then)) > u.speed)
+									continue;
+								value = std::max<int>(value, static_cast<int>(BattleHex::getDistance(there, then)) - speed - (enemy.doubleWide ? 1 : 0) - (u.doubleWide ? 1 : 0));
+								if(value >= good)
+									break;
+							}
+							value = std::min(value, good);
+						}
+						worst = std::min(worst, value);
+						if(worst < deepValue)
+							break;
+					}
+				}
+				if(worst > deepValue || (worst == deepValue && room > deepRoom))
+				{
+					deepValue = worst;
+					deepRoom = room;
+					deep = hex;
+				}
+			}
+			if(deep.isValid())
+				best = deep;
 		}
 	}
 	if(best.isValid())
@@ -2354,8 +2526,11 @@ SimState playKite(const SimState & start, BattleSide ownSide, const std::vector<
 		sim.playout(lastRound);
 	if(sim.kiteOver[own] && !sim.battleOver())
 		foughtOut(sim, sim.round);
-	else if(sim.evaluate(ownSide) > bestValue)
+	else if(sim.evaluate(ownSide) > bestValue - 1e-6)
 	{
+		// (as good to the end as turning to fight: then to the end - what never comes into reach
+		// needs no forecast to come true. Ten vampire lords that turned on thirteen dendroid guards
+		// "without a loss" lost seven on average, 24.11.)
 		bestTurn = sim.round;
 		best = sim;
 	}

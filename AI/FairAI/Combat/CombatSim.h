@@ -338,6 +338,13 @@ public:
 	KiteStep kiteAction(int unit, SimAction & out) const;
 	std::array<Stance, 2> stanceAfterKite = {Stance::CHARGE, Stance::CHARGE};
 	std::array<bool, 2> kiteOver = {false, false};
+	/// what staying out of reach is kept up with: 1 - shots, 2 - troops nothing strikes back at
+	/// (vampire lords against walkers slower than they: wait, strike at the end of the round, be
+	/// gone at the start of the next - 300 of 300 staged battles without a loss, 24.11.)
+	int kiteWith = 3;
+	/// the flight of a unit that cannot wait out the enemy's next move anywhere is chosen two moves
+	/// ahead (the decision itself only: too slow for play-outs)
+	bool kiteDeep = false;
 	bool stopAtKiteEnd = false; ///< playout() returns when staying out of reach is over for a side (to try what comes after)
 	/// The unit our side closes ranks around: its most valuable stack that can shoot (-1: none)
 	int anchorOf(BattleSide side) const;
