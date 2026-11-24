@@ -42,7 +42,7 @@ RESULTS_BRANCH = "fairai-results"
 POLL_SECONDS = 120
 SYNC_SECONDS = 600
 DEFAULT_JOBS = max(1, (os.cpu_count() or 2) // 2)
-KEEP_SUFFIXES = {".json", ".jsonl", ".md", ".txt", ".xz"}  # .xz: packed logs of lost games (run_tournament.py --keep-lost-logs)
+KEEP_SUFFIXES = {".json", ".jsonl", ".md", ".txt", ".xz"}  # .xz: packed game logs (run_tournament.py --keep-lost-logs / --keep-all-logs), up to 40 MB each
 SELF = Path(__file__).resolve()
 SELF_CODE = SELF.read_bytes()
 
@@ -146,7 +146,7 @@ def copy_small_files(src: Path, dst: Path) -> None:
     for path in list(src.rglob("*")):
         try:
             if path.is_file() and path.suffix in KEEP_SUFFIXES and "logs_" not in str(path.relative_to(src)) \
-                    and path.stat().st_size < 5_000_000:
+                    and path.stat().st_size < (40_000_000 if path.suffix == ".xz" else 5_000_000):
                 target = dst / path.relative_to(src)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 shutil.copy2(path, target)

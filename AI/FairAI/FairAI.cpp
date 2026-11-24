@@ -310,6 +310,14 @@ void FairAIGateway::heroGotLevel(const CGHeroInstance * hero, PrimarySkill pskil
 {
 	status.addQuery(queryID, "HeroGotLevel");
 	int choice = adventure ? adventure->chooseSkill(hero, skills) : 0;
+	{
+		std::string offered;
+		for(const auto & skill : skills)
+			offered += (offered.empty() ? "" : ", ") + (skill.hasValue() ? skill.toSkill()->getJsonKey() : std::string("?"));
+		const std::string taken = choice >= 0 && choice < static_cast<int>(skills.size()) && skills[choice].hasValue() ? skills[choice].toSkill()->getJsonKey() : std::string("-");
+		logAi->info("FairAI %s: %s reaches level %d (+%s), offered [%s], takes %s", playerID.toString(), hero->getNameTranslated(),
+			hero->level, pskill.hasValue() ? PrimarySkill::encode(pskill.getNum()) : std::string("?"), offered, taken);
+	}
 	executeActionAsync("heroGotLevel", [this, queryID, choice]() { answerQuery(queryID, choice); });
 }
 

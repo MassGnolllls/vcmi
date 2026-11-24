@@ -1230,10 +1230,13 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		{
 			const auto * hero = ai.ownHero(id);
 			if(hero)
-				logAi->info("FairAI %s: %s%s ends at %s, strength %d, known threat %.0f (cautious %.0f), defence %.0f, mp %d%s", ai.me.toString(), hero->getNameTranslated(),
+				logAi->info("FairAI %s: %s%s ends at %s, strength %d, known threat %.0f (cautious %.0f), defence %.0f, mp %d%s; level %d, A%d D%d P%d K%d, mana %d/%d", ai.me.toString(), hero->getNameTranslated(),
 					ai.isMain(hero) ? " (main)" : "", hero->visitablePos().toString(), static_cast<int>(hero->getTotalStrength()),
 					ai.threatAt(hero->visitablePos()), ai.threatAt(hero->visitablePos(), ObjectInstanceID(), true),
-					ai.defenceAt(hero, hero->visitablePos()), hero->movementPointsRemaining(), hero->getVisitedTown() ? ", in town" : "");
+					ai.defenceAt(hero, hero->visitablePos()), hero->movementPointsRemaining(), hero->getVisitedTown() ? ", in town" : "",
+					hero->level, hero->getPrimSkillLevel(PrimarySkill::ATTACK), hero->getPrimSkillLevel(PrimarySkill::DEFENSE),
+					hero->getPrimSkillLevel(PrimarySkill::SPELL_POWER), hero->getPrimSkillLevel(PrimarySkill::KNOWLEDGE),
+					hero->mana, hero->manaLimit());
 		}
 	} endOfDayLog{*this, heroId};
 	for(int step = 0; step < MAX_STEPS_PER_HERO; ++step)

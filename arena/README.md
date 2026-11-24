@@ -148,6 +148,9 @@ Duell zweier FairAI-Versionen: beide Sitze spielen FairAI aus demselben Build, d
 eigenen Parametern (`--opponent FairAI+FairAI --ai-params '{"spellSearch": 2}'`); jede Karte zweimal mit
 getauschten Plätzen, 0,5 heißt gleich stark. Geht nur für Änderungen hinter einem Schalter.
 
+Protokolle aller Partien: `--keep-all-logs` packt jede Partie (`won_`, `lost_`, `open_NNNN.tar.xz`), `--ai-log debug`
+schreibt dazu jede Entscheidung der KIs mit ihren Gründen ins Protokoll (etwa 2 bis 4 MB je Partie über 300 Tage).
+
 Protokolle: mit `--keep-lost-logs` packt `run_tournament.py play` das Protokoll jeder Partie, die die geprüfte
 KI nicht gewonnen hat, neben die Ergebnisse – `lost_NNNN.tar.xz` (verloren oder abgestürzt) und
 `open_NNNN.tar.xz` (Tageslimit erreicht oder stehen geblieben), je 0,3 bis 0,5 MB. Unabhängig davon steht in

@@ -1049,6 +1049,8 @@ void onBattleResult(CClient & client, const BattleResult & result)
 					if(skill.first.hasValue())
 						h["secondary"][skill.first.toSkill()->getJsonKey()].Integer() = skill.second;
 				h["manaMax"].Integer() = sideHero->manaLimit();
+				h["morale"].Integer() = sideHero->moraleVal(); // (what the hero gives his army; spells in battle not counted)
+				h["luck"].Integer() = sideHero->luckVal();
 				// what the hero could have cast, what he did cast, and so the spell points he came with
 				for(const auto & spell : sideHero->getSpellsInSpellbook())
 					if(spell.hasValue() && !spell.toSpell()->isSpecial() && spell.toSpell()->isCombat())

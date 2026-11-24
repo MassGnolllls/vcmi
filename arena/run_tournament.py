@@ -224,7 +224,7 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     if os.name != "nt":
         # isolate settings.json per match: parallel clients would otherwise race on it
         # ARENA_AI_LOG, e.g. "debug": detailed AI decisions in the match log
-        config_home = make_config_home(getattr(args, "mods", ""), os.environ.get("ARENA_AI_LOG"))
+        config_home = make_config_home(getattr(args, "mods", ""), getattr(args, "ai_log", None) or os.environ.get("ARENA_AI_LOG"))
         env = client_env(config_home, args.client)
 
     # FairAI writes what its main hero spent the days on (and the like) next to the logs; see below
@@ -309,10 +309,14 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     result = record.get("result") or {}
     won = "error" not in record and result.get("outcome") == "victory" and record.get("score") == 1.0
     lost = record.get("score") == 0 or "error" in record
-    if getattr(args, "keep_lost_logs", False) and not won and log_dir.exists():
+    # --keep-all-logs: every game, won ones as won_NNNN.tar.xz (in a duel of two FairAI versions every
+    # decided game is the defeat of one of them)
+    keep = getattr(args, "keep_all_logs", False) or (getattr(args, "keep_lost_logs", False) and not won)
+    if keep and log_dir.exists():
         try:
             import tarfile
-            with tarfile.open(out_dir / f"{'lost' if lost else 'open'}_{match_id:04d}.tar.xz", "w:xz") as archive:
+            kind = "won" if won else "lost" if lost else "open"
+            with tarfile.open(out_dir / f"{kind}_{match_id:04d}.tar.xz", "w:xz") as archive:
                 archive.add(log_dir, arcname=f"match_{match_id:04d}")
         except OSError as e:
             print(f"match {match_id}: could not pack the log: {e}", file=sys.stderr)
@@ -706,6 +710,8 @@ def main() -> int:
     p.add_argument("--base-port", type=int, default=3100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--keep-logs", action="store_true")
+    p.add_argument("--ai-log", default=None, help="log level of the AIs in the match logs, e.g. debug: every decision with its reasons (also ARENA_AI_LOG)")
+    p.add_argument("--keep-all-logs", action="store_true", help="pack the log of every game: won_, lost_ or open_NNNN.tar.xz")
     p.add_argument("--keep-lost-logs", action="store_true", help="pack the log of every game that was not won: lost_NNNN.tar.xz (lost, failed), open_NNNN.tar.xz (day limit, stalled)")
     p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the AI under test")
     p.add_argument("--opponent-params", default="", help="FairAI parameter overrides (JSON) for the opponent")
