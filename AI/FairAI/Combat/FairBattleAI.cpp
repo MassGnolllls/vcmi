@@ -1379,13 +1379,51 @@ void FairBattleAI::activeStack(const BattleID & battleID, const CStack * stack)
 				chosen = *cast;
 			}
 		}
-		cb->battleMakeUnitAction(battleID, chosen);
+		cb->battleMakeUnitAction(battleID, withinReach(battleID, stack, chosen));
 	}
 	catch(const std::exception & e)
 	{
 		logAi->error("FairBattleAI: search failed (%s), falling back to BattleAI", e.what());
 		fallback->activeStack(battleID, stack);
 	}
+}
+
+BattleAction FairBattleAI::withinReach(const BattleID & battleID, const CStack * stack, const BattleAction & order) const
+{
+	// An order the engine turns down costs the unit its turn (and once ended a whole game: the server
+	// threw on a destination it had no way to, mirror test 24.11.2026). Plans come out of our own
+	// simulator; whatever it does not know about the field must not reach the engine as an order.
+	if(order.actionType != EActionType::WALK && order.actionType != EActionType::WALK_AND_ATTACK)
+		return order;
+	auto battle = cb->getBattle(battleID);
+	if(!battle)
+		return order;
+	const auto target = order.getTarget(battle.get());
+	if(target.empty())
+		return order;
+	const BattleHex wanted = target.at(0).hexValue;
+	if(!wanted.isValid() || wanted == stack->getPosition())
+		return order;
+	const auto reach = battle->getReachability(stack);
+	const auto hexes = battle->battleGetAvailableHexes(reach, stack, true);
+	if(hexes.contains(wanted))
+		return order;
+
+	// as near to where it was sent as it gets
+	BattleHex best;
+	int bestDistance = BattleHex::getDistance(stack->getPosition(), wanted);
+	for(const auto & hex : hexes)
+	{
+		const int distance = BattleHex::getDistance(hex, wanted);
+		if(distance < bestDistance)
+		{
+			bestDistance = distance;
+			best = hex;
+		}
+	}
+	logAi->info("FairAI battle: %s has no way to hex %d, %s", stack->getDescription(), wanted.toInt(),
+		best.isValid() ? "goes to hex " + std::to_string(best.toInt()) : std::string("stands"));
+	return best.isValid() ? BattleAction::makeMove(stack, best) : BattleAction::makeDefend(stack);
 }
 
 bool FairBattleAI::outranged(const BattleID & battleID) const

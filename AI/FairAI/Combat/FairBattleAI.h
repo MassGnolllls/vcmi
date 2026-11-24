@@ -145,6 +145,8 @@ private:
 	void logForecast(const BattleID & battleID);
 	/// urgency: 0 = free choice, 1 = waiting and defending are no option, 2 = the unit must strike (or, with nobody in reach, advance)
 	BattleAction searchUnitAction(const BattleID & battleID, const CStack * stack, int urgency = 0);
+	/// The engine has the last word on where a unit gets to: an order it would turn down is replaced.
+	BattleAction withinReach(const BattleID & battleID, const CStack * stack, const BattleAction & order) const;
 
 	struct UnitChoice
 	{

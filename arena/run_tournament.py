@@ -298,19 +298,53 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     record["wallSec"] = round(time.time() - started, 1)
     if not battle_mode:
         record["score"] = game_score(record)
-    # --keep-lost-logs: the log of every game the AI under test lost (and of every game that failed), packed
-    # next to the results as lost_NNNN.tar.xz - small enough for the worker to send home (0.3 MB a game)
+    # what the engine turned down in this game (an order a unit could not carry out costs its turn): kept
+    # with the result, because the log itself goes
+    refused = refused_orders(log_dir)
+    if refused:
+        record["refused"] = refused
+    # --keep-lost-logs: the log of every game the AI under test did not win, packed next to the results -
+    # lost_NNNN.tar.xz for a lost or failed game, open_NNNN.tar.xz for one that ran into the day limit
+    # (or stalled). Small enough for the worker to send home (0.3 to 0.5 MB a game).
+    result = record.get("result") or {}
+    won = "error" not in record and result.get("outcome") == "victory" and record.get("score") == 1.0
     lost = record.get("score") == 0 or "error" in record
-    if getattr(args, "keep_lost_logs", False) and lost and log_dir.exists():
+    if getattr(args, "keep_lost_logs", False) and not won and log_dir.exists():
         try:
             import tarfile
-            with tarfile.open(out_dir / f"lost_{match_id:04d}.tar.xz", "w:xz") as archive:
+            with tarfile.open(out_dir / f"{'lost' if lost else 'open'}_{match_id:04d}.tar.xz", "w:xz") as archive:
                 archive.add(log_dir, arcname=f"match_{match_id:04d}")
         except OSError as e:
             print(f"match {match_id}: could not pack the log: {e}", file=sys.stderr)
     if not args.keep_logs and "error" not in record:
         shutil.rmtree(log_dir, ignore_errors=True)
     return record
+
+
+REFUSED_MARKS = ("cannot move from", "ended early at", "has no way to hex")
+
+
+def refused_orders(log_dir: Path, samples: int = 8):
+    """Orders the engine turned down (server: "... cannot move from A to B ...") and orders FairAI's own
+    last check replaced ("... has no way to hex ..."), counted from a game's log; None if there were none."""
+    log = log_dir / "VCMI_Client_log.txt"
+    if not log.exists():
+        return None
+    count, seen = 0, []
+    try:
+        with open(log, encoding="utf-8", errors="replace") as lines:
+            for line in lines:
+                if not any(mark in line for mark in REFUSED_MARKS):
+                    continue
+                # (the client repeats the server's complaint as a system message: count the server's line only)
+                if "System message" in line:
+                    continue
+                count += 1
+                if len(seen) < samples:
+                    seen.append(line.split(" - ", 1)[-1].strip()[:200])
+    except OSError:
+        return None
+    return {"count": count, "samples": seen} if count else None
 
 
 def winner_ai(record: dict):
@@ -669,7 +703,7 @@ def main() -> int:
     p.add_argument("--base-port", type=int, default=3100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--keep-logs", action="store_true")
-    p.add_argument("--keep-lost-logs", action="store_true", help="pack the logs of lost and failed games as lost_NNNN.tar.xz")
+    p.add_argument("--keep-lost-logs", action="store_true", help="pack the log of every game that was not won: lost_NNNN.tar.xz (lost, failed), open_NNNN.tar.xz (day limit, stalled)")
     p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the AI under test")
     p.add_argument("--opponent-params", default="", help="FairAI parameter overrides (JSON) for the opponent")
     p.add_argument("--variants", default="", help="JSON object name -> FairAI parameter overrides: play all of them through one pool of games; --out is then the folder that holds one sub-folder per variant")

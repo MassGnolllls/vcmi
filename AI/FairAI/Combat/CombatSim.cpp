@@ -14,6 +14,7 @@
 #include "../../../lib/CCreatureHandler.h"
 #include "../../../lib/battle/AccessibilityInfo.h"
 #include "../../../lib/battle/BattleAttackInfo.h"
+#include "../../../lib/battle/CObstacleInstance.h"
 #include "../../../lib/battle/CBattleInfoCallback.h"
 #include "../../../lib/battle/CUnitState.h"
 #include "../../../lib/battle/Unit.h"
@@ -352,6 +353,27 @@ void SimState::init(const CBattleInfoCallback & cb, const std::vector<const batt
 	{
 		auto a = access[h];
 		occupant[h] = (a == EAccessibility::ACCESSIBLE || a == EAccessibility::ALIVE_STACK) ? -1 : -2;
+	}
+	// Tiles that end a walk - as far as our side sees them (the engine's own list for our seat: what the
+	// enemy has hidden is not in it). Without them the simulator sent units behind our own fresh
+	// Quicksand: a destination the engine has no way to (mirror test 24.11.2026).
+	stoppers.reset();
+	const BattleSide mine = cb.battleGetMySide();
+	if(mine == BattleSide::ATTACKER || mine == BattleSide::DEFENDER)
+	{
+		const EGateState gate = cb.battleGetGateState();
+		for(const auto & obstacle : cb.battleGetAllObstacles(mine))
+		{
+			for(const auto & hex : obstacle->getStoppingTile())
+			{
+				// (the engine's getStoppers: a lowered or broken drawbridge covers the moat under it)
+				if(hex == BattleHex::GATE_BRIDGE && obstacle->obstacleType == CObstacleInstance::MOAT
+					&& (gate == EGateState::OPENED || gate == EGateState::DESTROYED))
+					continue;
+				if(hex.isAvailable())
+					stoppers.set(hex.toInt());
+			}
+		}
 	}
 
 	for(const battle::Unit * u : battleUnits)
@@ -963,6 +985,21 @@ void SimState::reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const
 	reachableWithin(unit, units[unit].speed, dist);
 }
 
+bool SimState::stoppedAt(int unit, BattleHex at) const
+{
+	if(stoppers.none())
+		return false;
+	const auto & u = units[unit];
+	const BattleHex tail = u.doubleWide ? battle::Unit::occupiedHex(u.pos, true, u.side) : BattleHex();
+	for(const auto & h : battle::Unit::getHexes(at, u.doubleWide, u.side))
+	{
+		// (as in the engine: what the unit stands on at the start of its move does not hold it)
+		if(h.isAvailable() && stoppers.test(h.toInt()) && h != u.pos && h != tail)
+			return true;
+	}
+	return false;
+}
+
 void SimState::reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZE> & dist) const
 {
 	dist.fill(-1);
@@ -983,6 +1020,7 @@ void SimState::reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZ
 		return;
 	}
 
+	const bool anyStoppers = stoppers.any();
 	std::array<int16_t, FIELD_SIZE> queue;
 	int head = 0;
 	int tail = 0;
@@ -992,6 +1030,9 @@ void SimState::reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZ
 		int cur = queue[head++];
 		int d = dist[cur];
 		if(d >= range)
+			continue;
+		// a walker gets onto a stopping tile and no further (engine: makeBFS)
+		if(anyStoppers && stoppedAt(unit, BattleHex(cur)))
 			continue;
 		for(const auto & next : BattleHex(cur).getNeighbouringTiles())
 		{
@@ -1722,6 +1763,14 @@ void SimState::apply(int unit, const SimAction & action)
 	{
 		const BattleHex origin = u.pos;
 		int chargeHexes = 0;
+		if(action.hex.isValid() && action.hex != u.pos && stoppedAt(unit, action.hex))
+		{
+			// the walk ends on Quicksand (or in a moat): the unit stands there and does not strike
+			lift(unit);
+			place(unit, action.hex);
+			finishTurn(unit, false);
+			break;
+		}
 		if(action.hex.isValid() && action.hex != u.pos)
 		{
 			if(damage->chargeStep(unit, action.target) > 0)

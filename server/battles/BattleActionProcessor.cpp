@@ -794,8 +794,13 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 	if (battle.battleGetTacticDist() > 0 && unitMovementRange > 0)
 		unitMovementRange = GameConstants::BFIELD_SIZE;
 
-	if (pathDistance > unitMovementRange)
+	// getPath() answers a destination the unit has no way to with an empty path of length 0: that must
+	// not pass as "within range" - a walking unit then ran into "Movement terminated abnormally" below,
+	// an exception that ended the whole game (seen 24.11.2026: a unit sent behind fresh Quicksand)
+	if (pathDistance > unitMovementRange || unitPath.empty())
 	{
+		logGlobal->error("%s cannot move from %d to %d: path of %d tiles, distance %d, range %d",
+			currentUnit->nodeName(), start.toInt(), dest.toInt(), static_cast<int>(unitPath.size()), pathDistance, unitMovementRange);
 		gameHandler->complain("Given destination is not reachable!");
 		return { 0, false, true };
 	}
@@ -933,7 +938,14 @@ BattleActionProcessor::MovementResult BattleActionProcessor::moveStack(const CBa
 		while(movementSuccess)
 		{
 			if (movementsLeft<tilesToMove)
-				throw std::runtime_error("Movement terminated abnormally");
+			{
+				// every tile of the path is walked and the unit is still not where it was sent: the move
+				// ends where the unit stands - an error in the log instead of an exception that ends the game
+				logGlobal->error("Movement of %s from %d to %d ended early at %d",
+					currentUnit->nodeName(), start.toInt(), dest.toInt(), currentUnit->getPosition().toInt());
+				movementSuccess = false; // (reported like a unit stopped on its way: no attack from where it stands)
+				break;
+			}
 
 			bool gateStateChanging = false;
 			//special handling for opening gate on from starting hex

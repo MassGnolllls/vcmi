@@ -144,6 +144,14 @@ python3 arena/mirror_maps.py play --src maps/mirror-m --pool mirror-m -- --clien
 
 Die zwölf M-Karten vom 24.11. (je eine Stadt für beide Spieler) liegen in `arena/maps/mirror-m`.
 
+Protokolle: mit `--keep-lost-logs` packt `run_tournament.py play` das Protokoll jeder Partie, die die geprüfte
+KI nicht gewonnen hat, neben die Ergebnisse – `lost_NNNN.tar.xz` (verloren oder abgestürzt) und
+`open_NNNN.tar.xz` (Tageslimit erreicht oder stehen geblieben), je 0,3 bis 0,5 MB. Unabhängig davon steht in
+jedem Ergebnis unter `refused`, wie oft die Engine in der Partie einen Befehl abgelehnt hat (Server:
+„… cannot move from A to B: path of N tiles, distance D, range R“ – die Einheit verliert dann ihren Zug)
+und wie oft FairAIs eigene letzte Prüfung einen Befehl ersetzt hat („… has no way to hex …“), mit den
+ersten acht Zeilen als Beleg.
+
 ## A/B-Tests (gepaart)
 
 `ab_test.py` lässt mehrere Parametersätze mit demselben Build exakt dieselben Partien spielen (Karten, Seiten, Spiel-Seeds) und vergleicht jede Partie mit der ersten Konfiguration. Die Paarung entfernt den Großteil des Rauschens zwischen Karten. Neue Funktionen kommen deshalb hinter einen Parameter (alt/neu umschaltbar) und werden so gemessen.

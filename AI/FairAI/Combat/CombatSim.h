@@ -20,6 +20,7 @@
  */
 #pragma once
 
+#include <bitset>
 #include "../../../lib/battle/BattleHex.h"
 #include "../../../lib/constants/EntityIdentifiers.h"
 #include "../../../lib/constants/Enumerations.h"
@@ -281,6 +282,9 @@ class SimState
 public:
 	std::vector<SimUnit> units;
 	std::array<int16_t, FIELD_SIZE> occupant{}; ///< -1 free, -2 blocked by terrain, >= 0 unit index
+	/// Tiles that end a walk (Quicksand, a moat) - those our side sees. A unit that steps on one stands
+	/// there, and strikes nobody this turn; the hexes it starts its move on do not count.
+	std::bitset<FIELD_SIZE> stoppers;
 	int round = 0;
 	BattleSide lastMoved = BattleSide::NONE;
 	const DamageTable * damage = nullptr;
@@ -311,6 +315,8 @@ public:
 	std::vector<BattleHex> unitHexes(int unit, BattleHex at) const;
 	bool canStand(int unit, BattleHex at) const;
 	void reachable(int unit, std::array<int8_t, FIELD_SIZE> & dist) const;
+	/// Would the unit, coming to `at`, stand on a tile that ends its walk?
+	bool stoppedAt(int unit, BattleHex at) const;
 	/// ... within \p range hexes instead of its speed (several moves in a row, taken as one)
 	void reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZE> & dist) const;
 	bool adjacent(int a, BattleHex aPos, int b) const;
