@@ -330,3 +330,8 @@ base: match    2 FairAI as red of 2: no result file winner=- day=- score=- [632.
 base: match    3 FairAI as blue of 2: victory winner=red day=134 score=0.00 [720.9s]
 X: match    0 FairAI as red of 2: victory winner=blue day=157 score=0.00 [1029.1s]
 base: match    1 FairAI as blue of 2: victory winner=red day=204 score=0.00 [1237.6s]
+X: match    2 FairAI as red of 2: stalled winner= day=187 score=- [1331.5s]
+base: match    6 FairAI as red of 2: victory winner=blue day=160 score=0.00 [803.3s]
+base: match    7 FairAI as blue of 2: victory winner=red day=117 score=0.00 [442.7s]
+X: match    3 FairAI as blue of 2: victory winner=red day=221 score=0.00 [1561.9s]
+X: match    4 FairAI as red of 2: victory winner=blue day=216 score=0.00 [1228.2s]
