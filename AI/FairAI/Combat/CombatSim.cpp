@@ -1005,17 +1005,35 @@ void SimState::reachableWithin(int unit, int range, std::array<int8_t, FIELD_SIZ
 	}
 }
 
+bool SimState::kiteStriker(int unit) const
+{
+	const auto & u = units[unit];
+	if(!u.alive() || !u.canMove)
+		return false;
+	if(u.blocksRetaliation)
+		return true;
+	// faster than everything the enemy has: it waits, strikes when the enemy has moved, and moves
+	// first again in the next round (centaurs against gnolls - a blow that leaves nobody to answer)
+	for(const auto & enemy : units)
+	{
+		if(enemy.alive() && enemy.side != u.side && enemy.speed >= u.speed)
+			return false;
+	}
+	return true;
+}
+
 SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 {
 	const auto & u = units[unit];
 	// (only while there is something to win by it: shots left, or troops nothing strikes back at -
 	// running alone wins nothing)
 	bool means = false;
-	for(const auto & own : units)
+	for(int i = 0; i < static_cast<int>(units.size()) && !means; ++i)
 	{
+		const auto & own = units[i];
 		if(!own.alive() || own.side != u.side)
 			continue;
-		means = means || ((kiteWith & 1) && own.shooter && own.shots > 0) || ((kiteWith & 2) && own.blocksRetaliation && own.canMove);
+		means = ((kiteWith & 1) && own.shooter && own.shots > 0) || ((kiteWith & 2) && kiteStriker(i));
 	}
 	if(!means)
 		return KiteStep::OVER;
@@ -1104,7 +1122,7 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 		// it in the next round: how much room is there to be had from this hex? Struck from the wrong
 		// side, a flyer of speed 9 gets no further than 9 hexes from a walker in the middle of the
 		// field - one short of waiting out its next move, and the flight never ends.
-		const bool foresight = (kiteWith & 2) && u.blocksRetaliation && !u.returnsAfterStrike && u.canMove;
+		const bool foresight = (kiteWith & 2) && kiteStriker(unit) && !u.returnsAfterStrike;
 		const auto escapeFrom = [&](const BattleHex & from)
 		{
 			int most = std::numeric_limits<int>::min();
@@ -1177,7 +1195,7 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 		// Troops nothing strikes back at, with nothing in reach to strike: close in - to where the enemy
 		// cannot reach them with its next move either. There they wait again in the next round, and
 		// strike when it has moved. (Running further would keep the two apart for good.)
-		if((kiteWith & 2) && u.blocksRetaliation && u.canMove && !canShoot(unit))
+		if((kiteWith & 2) && kiteStriker(unit) && !canShoot(unit))
 		{
 			std::bitset<FIELD_SIZE> next;
 			std::array<int8_t, FIELD_SIZE> theirs;
@@ -1296,11 +1314,13 @@ SimState::KiteStep SimState::kiteAction(int unit, SimAction & out) const
 			}
 		}
 	}
-	// (kiteDeep: the decision itself, not the play-outs) No hex leaves room enough to wait out the
-	// enemy's next move: then the flight is chosen two moves ahead - wherever the pursuer goes now,
-	// which hex lets us get away from it for good with the move after? A pursuer that holds the
-	// middle of the field keeps a flyer on the run for ever otherwise.
-	if(kiteDeep && best.isValid() && u.flying && !chasers.empty())
+	// No hex leaves room enough to wait out the enemy's next move: then the flight is chosen two
+	// moves ahead - wherever the pursuers go now, which hex lets us get away from them for good with
+	// the move after? Pursuers that hold the middle of the field keep a flyer on the run for ever
+	// otherwise, and a walker that takes the roomiest hex each time ends in a corner. (For troops
+	// that strike and are gone, and for the decision itself with kiteDeep; the second move is taken
+	// as the crow flies.)
+	if((kiteDeep || ((kiteWith & 2) && kiteStriker(unit))) && best.isValid() && !chasers.empty())
 	{
 		int need = 0;
 		for(const auto & [e, range] : chasers)

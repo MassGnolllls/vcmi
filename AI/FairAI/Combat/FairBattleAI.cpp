@@ -1956,11 +1956,12 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 		if(kiteWith && best && urgency == 0)
 		{
 			bool shots = false;
-			for(const auto & own : base.units)
+			for(int i = 0; i < static_cast<int>(base.units.size()) && !shots; ++i)
 			{
+				const auto & own = base.units[i];
 				if(!own.alive() || own.side != base.units[me].side)
 					continue;
-				shots = shots || ((kiteWith & 1) && own.shooter && own.shots > 0) || ((kiteWith & 2) && own.blocksRetaliation && own.canMove);
+				shots = ((kiteWith & 1) && own.shooter && own.shots > 0) || ((kiteWith & 2) && base.kiteStriker(i));
 			}
 			if(shots)
 			{

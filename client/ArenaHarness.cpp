@@ -17,6 +17,7 @@
 #include "../lib/GameLibrary.h"
 #include "../lib/StartInfo.h"
 #include "../lib/callback/EditorCallback.h"
+#include "../lib/entities/artifact/ArtifactUtils.h"
 #include "../lib/constants/StringConstants.h"
 #include "../lib/gameState/CGameState.h"
 #include "../lib/gameState/EVictoryLossCheckResult.h"
@@ -695,7 +696,9 @@ int dumpMap(const po::variables_map & vm)
 	try
 	{
 		CMapService mapService;
-		auto map = mapService.loadMap(ResourcePath(name, EResType::MAP), nullptr);
+		EditorCallback callback(nullptr);
+		auto map = mapService.loadMap(ResourcePath(name, EResType::MAP), &callback);
+		callback.setMap(map.get());
 		JsonNode out;
 		out["width"].Integer() = map->width;
 		out["height"].Integer() = map->height;
@@ -774,7 +777,9 @@ int dumpMap(const po::variables_map & vm)
 					const auto & t = map->getTile(int3(x, y, z));
 					// one letter per tile: the terrain's first letter, water as '~', rock as '#'
 					const std::string key = t.getTerrain()->getJsonKey();
-					row += t.isWater() ? '~' : (t.getTerrain()->isPassable() ? key.at(key.find(':') == std::string::npos ? 0 : key.find(':') + 1) : '#');
+					const char letter = t.isWater() ? '~' : (t.getTerrain()->isPassable() ? key.at(key.find(':') == std::string::npos ? 0 : key.find(':') + 1) : '#');
+					row += letter;
+					out["legend"][std::string(1, letter)].String() = key;
 				}
 				level.Vector().emplace_back(row);
 			}
@@ -782,6 +787,9 @@ int dumpMap(const po::variables_map & vm)
 		}
 		std::ofstream file(outFile, std::ios::trunc);
 		file << out.toString();
+		// ... and the whole map in the game's own format next to it (a zip of JSON files): quests,
+		// rewards, events, victory conditions - everything the map's author set
+		mapService.saveMap(map, boost::filesystem::path(outFile + ".vmap"));
 		std::cout << "ARENA_MAP_DUMP " << outFile << std::endl;
 		return 0;
 	}
@@ -837,6 +845,15 @@ int generateBattleMap(const po::variables_map & vm)
 			map->getEditManager()->drawTerrain(requireId<TerrainId>("terrain", band.Vector().at(2).String()), 0, rng);
 		}
 		map->getEditManager()->getTerrainSelection().clearSelection();
+		// "grid" + "legend": the terrain of every tile as a map somebody made has it - one string per row
+		// of the map, one letter per tile, the legend naming each letter's terrain (--arena-dump-map
+		// writes both). What lies around a battle's tile decides its field: a tile by the water is a beach.
+		for(size_t y = 0; y < scenario["grid"].Vector().size() && static_cast<int>(y) < map->height; ++y)
+		{
+			const std::string & row = scenario["grid"].Vector()[y].String();
+			for(size_t x = 0; x < row.size() && static_cast<int>(x) < map->width; ++x)
+				map->getTile(int3(static_cast<int>(x), static_cast<int>(y), 0)).terrainType = requireId<TerrainId>("terrain", scenario["legend"][std::string(1, row[x])].String());
+		}
 
 		map->players[0].canComputerPlay = true;
 		map->players[0].canHumanPlay = true;
@@ -933,6 +950,15 @@ int generateBattleMap(const po::variables_map & vm)
 
 			for(const auto & spell : side["spells"].Vector())
 				hero->addSpellToSpellbook(requireId<SpellID>("spell", spell.String()));
+			// "artifacts": what the hero wears, each in the first slot that takes it
+			for(const auto & name : side["artifacts"].Vector())
+			{
+				const auto id = requireId<ArtifactID>("artifact", name.String());
+				const auto slot = ArtifactUtils::getArtAnyPosition(hero.get(), id);
+				if(slot == ArtifactPosition::PRE_FIRST)
+					throw std::runtime_error("no slot for artifact " + name.String());
+				hero->putArtifact(slot, map->createArtifact(id));
+			}
 
 			// A new hero object carries the mark "skills of its class" - with it the map is saved without any
 			// skills and the game hands the hero its class's two starting skills (and drops the ones named here).

@@ -336,6 +336,8 @@ public:
 	/// cornered - staying out of reach is over for the side, it goes on with stanceAfterKite.
 	enum class KiteStep { ACT, SHOOT, OVER };
 	KiteStep kiteAction(int unit, SimAction & out) const;
+	/// a unit that can strike and be gone: nothing strikes back at it, or it is faster than every enemy
+	bool kiteStriker(int unit) const;
 	std::array<Stance, 2> stanceAfterKite = {Stance::CHARGE, Stance::CHARGE};
 	std::array<bool, 2> kiteOver = {false, false};
 	/// what staying out of reach is kept up with: 1 - shots, 2 - troops nothing strikes back at
