@@ -2,3 +2,8 @@
 /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --pool mirror-m --client /home/alex/fairai/snap/6341abc65d/vcmiclient --ai FairAI+FairAI --opponent FairAI+FairAI --ai-params {"spellSearch": 2} --mods hota --max-days 300 --timeout 7200 --stall-seconds 300 --seed 25 --jobs 6 --keep-lost-logs --out /home/alex/fairai/runs/027-mirror-m-duel-spellsearch
 playing 24 matches on 12 maps with 6 parallel job(s)
 match    5 FairAI+FairAI as blue of 2: victory winner=red day=151 score=0.00 [441.9s]
+match    3 FairAI+FairAI as blue of 2: victory winner=blue day=159 score=1.00 [600.2s]
+match    2 FairAI+FairAI as red of 2: victory winner=red day=170 score=1.00 [695.8s]
+match    1 FairAI+FairAI as blue of 2: timeout winner= day=301 score=0.39 [956.2s]
+match    0 FairAI+FairAI as red of 2: timeout winner= day=301 score=0.48 [957.5s]
+match    4 FairAI+FairAI as red of 2: timeout winner= day=301 score=0.56 [1076.5s]
