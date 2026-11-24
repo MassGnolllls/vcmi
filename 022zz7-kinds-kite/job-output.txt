@@ -213,3 +213,25 @@ K: match    7 FairAI as blue,green of 4: victory winner=blue day=93 score=1.00 [
 base: match    7 FairAI as blue,green of 4: victory winner=blue day=125 score=1.00 [220.6s]
 base: match    5 FairAI as blue,green of 4: victory winner=red day=221 score=0.00 [386.1s]
 K: match    5 FairAI as blue,green of 4: victory winner=blue day=169 score=1.00 [508.9s]
+K: match    8 FairAI as red,tan of 4: victory winner=tan day=137 score=1.00 [320.6s]
+base: match    9 FairAI as blue,green of 4: victory winner=blue day=151 score=1.00 [308.6s]
+base: match   10 FairAI as red,tan of 4: victory winner=blue day=119 score=0.00 [305.5s]
+K: match   11 FairAI as blue,green of 4: victory winner=green day=89 score=1.00 [137.9s]
+K: match    9 FairAI as blue,green of 4: victory winner=red day=131 score=0.00 [374.4s]
+K: match   10 FairAI as red,tan of 4: victory winner=blue day=151 score=0.00 [338.3s]
+K: match    1 FairAI as blue,green of 4: stalled winner= day=227 score=- [968.8s]
+base: match    8 FairAI as red,tan of 4: timeout winner= day=301 score=1.00 [642.3s]
+K: match    6 FairAI as red,tan of 4: timeout winner= day=301 score=0.98 [952.3s]
+base: match   11 FairAI as blue,green of 4: timeout winner= day=301 score=1.00 [576.5s]
+# A/B test (2 configs, seeds 93, 94)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 23 | 13 | 7 | 0.695 ± 0.192 | - | 0.674 ± 0.188 | - | 23 |
+| K | `{"kitePlan": 1, "latePlan": 1}` | 23 | 16 | 5 | 0.778 ± 0.172 | +0.087 ± 0.284 | 0.761 ± 0.170 | +0.091 ± 0.279 | 22 |
+
+== m-teams-4p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/bfebc98706/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 93 --out /home/alex/fairai/runs/022zz7-kinds-kite/m-teams-4p --variants {"base": {}, "K": {"kitePlan": 1, "latePlan": 1}} --pool long1-m-teams-4p --max-days 300 --timeout 9000 --stall-seconds 300 --base-port 7300
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
