@@ -283,3 +283,17 @@ K: match    7 FairAI as blue,green of 4: victory winner=red day=99 score=0.00 [2
 base: match   11 FairAI as blue,green of 4: victory winner=blue day=59 score=1.00 [139.5s]
 K: match    8 FairAI as red,tan of 4: victory winner=red day=97 score=1.00 [286.3s]
 K: match   11 FairAI as blue,green of 4: victory winner=blue day=63 score=1.00 [148.0s]
+K: match   10 FairAI as red,tan of 4: victory winner=red day=111 score=1.00 [271.3s]
+base: match    7 FairAI as blue,green of 4: victory winner=blue day=127 score=1.00 [450.2s]
+# A/B test (2 configs, seeds 93, 94)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 23 | 20 | 3 | 0.870 ± 0.141 | - | 0.870 ± 0.141 | - | 23 |
+| K | `{"kitePlan": 1, "latePlan": 1}` | 24 | 18 | 6 | 0.750 ± 0.177 | -0.087 ± 0.210 | 0.750 ± 0.177 | -0.087 ± 0.210 | 23 |
+
+== l-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/bfebc98706/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 93 --out /home/alex/fairai/runs/022zz7-kinds-kite/l-land-2p --variants {"base": {}, "K": {"kitePlan": 1, "latePlan": 1}} --pool long1-l-land-2p --max-days 400 --timeout 9000 --stall-seconds 300 --base-port 7400
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
