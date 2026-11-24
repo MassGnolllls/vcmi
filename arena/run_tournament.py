@@ -390,6 +390,9 @@ def summarize(records, ai: str, opponent: str) -> str:
             stalled_by[who] = stalled_by.get(who, 0) + 1
             continue
         w = winner_ai(r)
+        # by seat where we know it: in a duel of two FairAI versions both labels are the same
+        if r.get("mine") and res.get("outcome") == "victory" and res.get("winner"):
+            w = ai if res["winner"] in r["mine"] else opponent
         if w == ai:
             wins += 1
             days.append(res["day"])

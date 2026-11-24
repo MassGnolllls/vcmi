@@ -144,6 +144,10 @@ python3 arena/mirror_maps.py play --src maps/mirror-m --pool mirror-m -- --clien
 
 Die zwölf M-Karten vom 24.11. (je eine Stadt für beide Spieler) liegen in `arena/maps/mirror-m`.
 
+Duell zweier FairAI-Versionen: beide Sitze spielen FairAI aus demselben Build, die geprüfte Version mit
+eigenen Parametern (`--opponent FairAI+FairAI --ai-params '{"spellSearch": 2}'`); jede Karte zweimal mit
+getauschten Plätzen, 0,5 heißt gleich stark. Geht nur für Änderungen hinter einem Schalter.
+
 Protokolle: mit `--keep-lost-logs` packt `run_tournament.py play` das Protokoll jeder Partie, die die geprüfte
 KI nicht gewonnen hat, neben die Ergebnisse – `lost_NNNN.tar.xz` (verloren oder abgestürzt) und
 `open_NNNN.tar.xz` (Tageslimit erreicht oder stehen geblieben), je 0,3 bis 0,5 MB. Unabhängig davon steht in
