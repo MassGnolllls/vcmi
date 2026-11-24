@@ -212,3 +212,26 @@ base: match    5 FairAI as blue,green of 4: victory winner=blue day=132 score=1.
 X: match    6 FairAI as red,tan of 4: victory winner=green day=113 score=0.00 [298.2s]
 base: match    1 FairAI as blue,green of 4: victory winner=green day=270 score=1.00 [615.1s]
 X: match    5 FairAI as blue,green of 4: victory winner=red day=125 score=0.00 [353.4s]
+base: match    7 FairAI as blue,green of 4: victory winner=green day=127 score=1.00 [292.2s]
+X: match    9 FairAI as blue,green of 4: victory winner=blue day=77 score=1.00 [176.2s]
+base: match    6 FairAI as red,tan of 4: victory winner=tan day=171 score=1.00 [484.4s]
+base: match    9 FairAI as blue,green of 4: victory winner=blue day=124 score=1.00 [267.4s]
+base: match   11 FairAI as blue,green of 4: victory winner=green day=105 score=1.00 [202.9s]
+base: match   10 FairAI as red,tan of 4: victory winner=red day=121 score=1.00 [260.2s]
+X: match    7 FairAI as blue,green of 4: victory winner=green day=148 score=1.00 [504.4s]
+X: match   10 FairAI as red,tan of 4: victory winner=tan day=96 score=1.00 [227.6s]
+X: match    8 FairAI as red,tan of 4: victory winner=tan day=116 score=1.00 [373.7s]
+X: match   11 FairAI as blue,green of 4: victory winner=green day=98 score=1.00 [221.5s]
+base: match    8 FairAI as red,tan of 4: timeout winner= day=301 score=1.00 [805.5s]
+# A/B test (2 configs, seeds 91, 92)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 23 | 19 | 3 | 0.869 ± 0.141 | - | 0.862 ± 0.140 | - | 23 |
+| X | `{"scouts": 2}` | 24 | 16 | 7 | 0.704 ± 0.185 | -0.178 ± 0.200 | 0.701 ± 0.184 | -0.174 ± 0.202 | 23 |
+
+== m-teams-4p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/f6ec25a59a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 91 --out /home/alex/fairai/runs/022zz6-kinds-scouts/m-teams-4p --variants {"base": {}, "X": {"scouts": 2}} --pool long1-m-teams-4p --max-days 300 --timeout 9000 --stall-seconds 300 --base-port 7300
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
