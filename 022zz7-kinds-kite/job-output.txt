@@ -255,3 +255,9 @@ K: match   10 FairAI as red,tan of 4: victory winner=red day=53 score=1.00 [103.
 base: match    0 FairAI as red,tan of 4: stalled winner= day=126 score=- [613.2s]
 base: match    6 FairAI as red,tan of 4: victory winner=blue day=114 score=0.00 [347.4s]
 K: match    8 FairAI as red,tan of 4: victory winner=blue day=80 score=0.00 [199.8s]
+base: match   11 FairAI as blue,green of 4: victory winner=blue day=74 score=1.00 [167.8s]
+base: match    8 FairAI as red,tan of 4: victory winner=red day=96 score=1.00 [305.4s]
+K: match   11 FairAI as blue,green of 4: victory winner=blue day=103 score=1.00 [299.7s]
+base: match    9 FairAI as blue,green of 4: victory winner=green day=210 score=1.00 [789.2s]
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/bfebc98706/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 94 --out /home/alex/fairai/runs/022zz7-kinds-kite/m-teams-4p --variants {"base": {}, "K": {"kitePlan": 1, "latePlan": 1}} --pool long1-m-teams-4p --max-days 300 --timeout 9000 --stall-seconds 300 --base-port 7300
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
