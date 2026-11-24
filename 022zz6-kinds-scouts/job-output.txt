@@ -276,3 +276,24 @@ base: match    7 FairAI as blue,green of 4: victory winner=blue day=62 score=1.0
 X: match    6 FairAI as red,tan of 4: victory winner=red day=60 score=1.00 [201.1s]
 X: match    7 FairAI as blue,green of 4: victory winner=blue day=60 score=1.00 [129.1s]
 base: match    9 FairAI as blue,green of 4: victory winner=blue day=53 score=1.00 [125.2s]
+base: match   10 FairAI as red,tan of 4: victory winner=red day=44 score=1.00 [77.3s]
+base: match   11 FairAI as blue,green of 4: victory winner=blue day=38 score=1.00 [73.9s]
+X: match    9 FairAI as blue,green of 4: victory winner=blue day=61 score=1.00 [183.4s]
+base: match    5 FairAI as blue,green of 4: victory winner=blue day=134 score=1.00 [411.1s]
+base: match    8 FairAI as red,tan of 4: victory winner=red day=92 score=1.00 [285.6s]
+X: match    8 FairAI as red,tan of 4: victory winner=blue day=82 score=0.00 [289.3s]
+X: match    4 FairAI as red,tan of 4: victory winner=red day=137 score=1.00 [502.9s]
+X: match   11 FairAI as blue,green of 4: victory winner=red day=87 score=0.00 [258.1s]
+X: match   10 FairAI as red,tan of 4: victory winner=red day=108 score=1.00 [356.8s]
+# A/B test (2 configs, seeds 91, 92)
+
+Paired against `base`: mean difference over the games both played (95% CI). score = army share at the day limit, towns = share of the towns held; both 1 for a win and 0 for a loss.
+
+| config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
+|---|---|---|---|---|---|---|---|---|---|
+| base | `{}` | 24 | 22 | 2 | 0.917 ± 0.113 | - | 0.917 ± 0.113 | - | 24 |
+| X | `{"scouts": 2}` | 24 | 19 | 5 | 0.792 ± 0.166 | -0.125 ± 0.215 | 0.792 ± 0.166 | -0.125 ± 0.215 | 24 |
+
+== l-land-2p
+$ /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --client /home/alex/fairai/snap/f6ec25a59a/vcmiclient --ai FairAI --opponent Nullkiller2 --jobs 9 --seed 91 --out /home/alex/fairai/runs/022zz6-kinds-scouts/l-land-2p --variants {"base": {}, "X": {"scouts": 2}} --pool long1-l-land-2p --max-days 400 --timeout 9000 --stall-seconds 300 --base-port 7400
+playing 24 matches (2 variants x 12 on 6 maps) with 9 parallel job(s)
