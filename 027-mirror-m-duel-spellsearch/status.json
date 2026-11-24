@@ -1,9 +1,12 @@
 {
  "job": "027-mirror-m-duel-spellsearch",
- "state": "running",
+ "state": "cancelled",
  "commit": "6341abc65d4c2f77b343c47b807ab0a47371a9ff",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-24T19:19:19",
- "note": "Duel of two FairAI versions on the twelve mirror maps (owner's word of 24.11. 19:11: 'ich w\u00fcrde die neue gegen die vorige version von fairAI spielen lassen'). Both seats run FairAI on the adventure map and in battle, from the same build; the version under test differs only in the spells its heroes cast in battle: spellSearch 2 (a spell is cast when it changes how the fight ends by more than its spell points are worth, manaShare 0.15) against the default (VCMI's BattleAI evaluator, which casts whenever a spell gains anything - seen in 026: spell points spent on guards that would have fallen anyway, the main hero without points in the decisive battle). Each map twice with the seats swapped, guards by BattleAI, day limit 300, seed 25. The score is that of the version under test: 1 win, 0 loss, army share at the day limit - 0.5 means equal. The logs of every game it did not win are kept (lost_/open_NNNN.tar.xz)."
+ "note": "Duel of two FairAI versions on the twelve mirror maps (owner's word of 24.11. 19:11: 'ich w\u00fcrde die neue gegen die vorige version von fairAI spielen lassen'). Both seats run FairAI on the adventure map and in battle, from the same build; the version under test differs only in the spells its heroes cast in battle: spellSearch 2 (a spell is cast when it changes how the fight ends by more than its spell points are worth, manaShare 0.15) against the default (VCMI's BattleAI evaluator, which casts whenever a spell gains anything - seen in 026: spell points spent on guards that would have fallen anyway, the main hero without points in the decisive battle). Each map twice with the seats swapped, guards by BattleAI, day limit 300, seed 25. The score is that of the version under test: 1 win, 0 loss, army share at the day limit - 0.5 means equal. The logs of every game it did not win are kept (lost_/open_NNNN.tar.xz).",
+ "returncode": -15,
+ "finished": "2026-11-24T19:49:34",
+ "minutes": 30.2
 }
