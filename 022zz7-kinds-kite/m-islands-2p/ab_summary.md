@@ -4,5 +4,5 @@ Paired against `base`: mean difference over the games both played (95% CI). scor
 
 | config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|---|---|
-| base | `{}` | 12 | 9 | 3 | 0.750 ± 0.256 | - | 0.750 ± 0.256 | - | 12 |
-| K | `{"kitePlan": 1, "latePlan": 1}` | 11 | 8 | 3 | 0.727 ± 0.276 | -0.091 ± 0.414 | 0.727 ± 0.276 | -0.091 ± 0.414 | 11 |
+| base | `{}` | 24 | 20 | 4 | 0.833 ± 0.152 | - | 0.833 ± 0.152 | - | 24 |
+| K | `{"kitePlan": 1, "latePlan": 1}` | 23 | 18 | 5 | 0.783 ± 0.172 | -0.087 ± 0.210 | 0.783 ± 0.172 | -0.087 ± 0.210 | 23 |
