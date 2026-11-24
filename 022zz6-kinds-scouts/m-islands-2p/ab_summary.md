@@ -4,5 +4,5 @@ Paired against `base`: mean difference over the games both played (95% CI). scor
 
 | config | params | games | won | lost | score | diff vs base | towns | diff vs base | pairs |
 |---|---|---|---|---|---|---|---|---|---|
-| base | `{}` | 12 | 7 | 4 | 0.643 ± 0.272 | - | 0.625 ± 0.273 | - | 12 |
-| X | `{"scouts": 2}` | 12 | 6 | 4 | 0.628 ± 0.268 | -0.015 ± 0.405 | 0.611 ± 0.268 | -0.014 ± 0.401 | 12 |
+| base | `{}` | 24 | 14 | 8 | 0.651 ± 0.190 | - | 0.639 ± 0.189 | - | 24 |
+| X | `{"scouts": 2}` | 24 | 15 | 5 | 0.742 ± 0.163 | +0.091 ± 0.225 | 0.722 ± 0.166 | +0.083 ± 0.220 | 24 |
