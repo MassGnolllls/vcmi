@@ -42,7 +42,7 @@ RESULTS_BRANCH = "fairai-results"
 POLL_SECONDS = 120
 SYNC_SECONDS = 600
 DEFAULT_JOBS = max(1, (os.cpu_count() or 2) // 2)
-KEEP_SUFFIXES = {".json", ".jsonl", ".md", ".txt"}
+KEEP_SUFFIXES = {".json", ".jsonl", ".md", ".txt", ".xz"}  # .xz: packed logs of lost games (run_tournament.py --keep-lost-logs)
 SELF = Path(__file__).resolve()
 SELF_CODE = SELF.read_bytes()
 

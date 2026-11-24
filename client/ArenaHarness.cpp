@@ -18,6 +18,7 @@
 #include "../lib/StartInfo.h"
 #include "../lib/callback/EditorCallback.h"
 #include "../lib/entities/artifact/ArtifactUtils.h"
+#include "../lib/CStack.h"
 #include "../lib/constants/StringConstants.h"
 #include "../lib/gameState/CGameState.h"
 #include "../lib/gameState/EVictoryLossCheckResult.h"
@@ -1026,8 +1027,36 @@ void onBattleResult(CClient & client, const BattleResult & result)
 		if(const auto * sideHero = battle->getSideHero(side))
 			s["heroMana"].Integer() = sideHero->mana;
 		s["remainingFraction"].Float() = initial ? std::max(0.0, 1.0 - static_cast<double>(lost) / initial) : 0.0;
+		// battles between players: what each side brought - the hero with his skills and every stack, at the
+		// start and at the end (to tell afterwards why a battle of equals went one way)
+		if(battle->getSidePlayer(BattleSide::ATTACKER).isValidPlayer() && battle->getSidePlayer(BattleSide::DEFENDER).isValidPlayer())
+		{
+			if(const auto * sideHero = battle->getSideHero(side))
+			{
+				JsonNode & h = s["hero"];
+				h["type"].String() = sideHero->getHeroTypeID().hasValue() ? sideHero->getHeroType()->getJsonKey() : std::string("?");
+				h["level"].Integer() = sideHero->level;
+				for(auto skill : {PrimarySkill::ATTACK, PrimarySkill::DEFENSE, PrimarySkill::SPELL_POWER, PrimarySkill::KNOWLEDGE})
+					h["primary"].Vector().emplace_back(sideHero->getPrimSkillLevel(skill));
+				for(const auto & skill : sideHero->secSkills)
+					if(skill.first.hasValue())
+						h["secondary"][skill.first.toSkill()->getJsonKey()].Integer() = skill.second;
+				h["manaMax"].Integer() = sideHero->manaLimit();
+			}
+			for(const auto & stack : battle->stacks)
+			{
+				if(stack->unitSide() != side || stack->isClone() || !stack->unitType())
+					continue;
+				JsonNode st;
+				st.Vector().emplace_back(stack->unitType()->getJsonKey());
+				st.Vector().emplace_back(stack->unitBaseAmount());
+				st.Vector().emplace_back(stack->alive() ? stack->getCount() : 0);
+				s["stacks"].Vector().push_back(st);
+			}
+		}
 		info["sides"].Vector().push_back(s);
 	}
+	info["rounds"].Integer() = battle->getRound();
 
 	if(!gs.getMap().battleOnly)
 	{

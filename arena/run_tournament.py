@@ -298,6 +298,16 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     record["wallSec"] = round(time.time() - started, 1)
     if not battle_mode:
         record["score"] = game_score(record)
+    # --keep-lost-logs: the log of every game the AI under test lost (and of every game that failed), packed
+    # next to the results as lost_NNNN.tar.xz - small enough for the worker to send home (0.3 MB a game)
+    lost = record.get("score") == 0 or "error" in record
+    if getattr(args, "keep_lost_logs", False) and lost and log_dir.exists():
+        try:
+            import tarfile
+            with tarfile.open(out_dir / f"lost_{match_id:04d}.tar.xz", "w:xz") as archive:
+                archive.add(log_dir, arcname=f"match_{match_id:04d}")
+        except OSError as e:
+            print(f"match {match_id}: could not pack the log: {e}", file=sys.stderr)
     if not args.keep_logs and "error" not in record:
         shutil.rmtree(log_dir, ignore_errors=True)
     return record
@@ -659,6 +669,7 @@ def main() -> int:
     p.add_argument("--base-port", type=int, default=3100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--keep-logs", action="store_true")
+    p.add_argument("--keep-lost-logs", action="store_true", help="pack the logs of lost and failed games as lost_NNNN.tar.xz")
     p.add_argument("--ai-params", default="", help="FairAI parameter overrides (JSON) for the AI under test")
     p.add_argument("--opponent-params", default="", help="FairAI parameter overrides (JSON) for the opponent")
     p.add_argument("--variants", default="", help="JSON object name -> FairAI parameter overrides: play all of them through one pool of games; --out is then the folder that holds one sub-folder per variant")
