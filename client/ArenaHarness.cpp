@@ -671,6 +671,13 @@ int dumpLibrary(const po::variables_map & vm)
 		sp["adventure"].Bool() = spell->isAdventure();
 		sp["special"].Bool() = spell->isSpecial();
 		sp["creatureAbility"].Bool() = spell->isCreatureAbility();
+		sp["name"].String() = spell->getNameTranslated();
+		for(int mastery = 0; mastery < 4; ++mastery)
+			sp["cost"].Vector().emplace_back(spell->getCost(mastery));
+		spell->forEachSchool([&sp](const SpellSchool & school, bool &)
+		{
+			sp["schools"].Vector().emplace_back(SpellSchool::encode(school.getNum()));
+		});
 		out["spells"].Vector().push_back(sp);
 	}
 
@@ -1042,6 +1049,22 @@ void onBattleResult(CClient & client, const BattleResult & result)
 					if(skill.first.hasValue())
 						h["secondary"][skill.first.toSkill()->getJsonKey()].Integer() = skill.second;
 				h["manaMax"].Integer() = sideHero->manaLimit();
+				// what the hero could have cast, what he did cast, and so the spell points he came with
+				for(const auto & spell : sideHero->getSpellsInSpellbook())
+					if(spell.hasValue() && !spell.toSpell()->isSpecial() && spell.toSpell()->isCombat())
+						h["spellbook"].Vector().emplace_back(spell.toSpell()->getJsonKey());
+				int spent = 0;
+				for(const auto & spell : battle->getSide(side).usedSpellsHistory)
+				{
+					if(!spell.hasValue())
+						continue;
+					h["cast"].Vector().emplace_back(spell.toSpell()->getJsonKey());
+					spent += sideHero->getSpellCost(spell.toSpell());
+				}
+				h["manaStart"].Integer() = sideHero->mana + spent;
+				for(const auto & worn : sideHero->artifactsWorn)
+					if(const auto * art = worn.second.getArt())
+						h["artifacts"].Vector().emplace_back(art->getType()->getJsonKey());
 			}
 			for(const auto & stack : battle->stacks)
 			{
