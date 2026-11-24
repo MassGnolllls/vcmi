@@ -121,6 +121,10 @@ private:
 	int getDefaultNumberOfStacks(const CGHeroInstance * hero) const;
 	int getNumberOfStacksFromBonus(const CGHeroInstance * hero) const;
 	ui32 hashByPosition() const;
+
+public:
+	/// (arena) maps whose underground is a copy of the surface: a monster and its copy split alike
+	static bool levelBlindSplit;
 };
 
 VCMI_LIB_NAMESPACE_END

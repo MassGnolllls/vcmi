@@ -228,6 +228,7 @@ private:
 	void initTowns(vstd::RNG & randomGenerator);
 	void initTownNames(vstd::RNG & randomGenerator);
 	void initMapObjects(IGameRandomizer & gameRandomizer);
+	void checkMirror() const; ///< (arena) mirror maps: an object and its copy on the other level are alike
 	void initVisitingAndGarrisonedHeroes();
 	void initCampaign();
 

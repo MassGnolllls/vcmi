@@ -1,0 +1,36 @@
+{
+ "note": "First test on mirror maps (owner's design of 24.11.): both players get the same world - the underground is an exact copy of the surface, one player in each, the two worlds joined by a subterranean gate where the players' ways meet (arena/mirror_maps.py; what the game rolls at the start is rolled alike for an object and its copy, checked at every start: 'Mirror check: N pairs, 0 differ' in the log). Twelve medium maps from the generator's Skirmish M template, one per town type, both players with the same town (castle against castle, ... bulwark against bulwark), each map twice with the seats swapped: 24 games. FairAI (adventure map and combat, the defaults of 24.11.) against Nullkiller2 with MMAI as its combat AI; guards played by BattleAI; day limit 300. Evaluate: arena/run_tournament.py summary in summary.md, per map and seat from results.jsonl (the red player moves first).",
+ "script": "mirror_maps.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "play",
+  "--src",
+  "maps/mirror-m",
+  "--pool",
+  "mirror-m",
+  "--",
+  "--client",
+  "{client}",
+  "--ai",
+  "FairAI+FairAI",
+  "--opponent",
+  "Nullkiller2+MMAI",
+  "--mods",
+  "hota",
+  "--max-days",
+  "300",
+  "--timeout",
+  "4200",
+  "--stall-seconds",
+  "300",
+  "--seed",
+  "25",
+  "--jobs",
+  "{jobs}",
+  "--out",
+  "{out}"
+ ],
+ "jobs": 6
+}

@@ -681,6 +681,8 @@ int CGCreature::getDefaultNumberOfStacks(const CGHeroInstance *hero) const
 	return split;
 }
 
+bool CGCreature::levelBlindSplit = false;
+
 ui32 CGCreature::hashByPosition() const
 {
 	ui32 a = 1550811371u;
@@ -688,7 +690,7 @@ ui32 CGCreature::hashByPosition() const
 	ui32 c = 1943276003u;
 	ui32 d = 3174620878u;
 
-	ui32 R1 = a * static_cast<ui32>(visitablePos().x) + b * static_cast<ui32>(visitablePos().y) + c * static_cast<ui32>(visitablePos().z) + d;
+	ui32 R1 = a * static_cast<ui32>(visitablePos().x) + b * static_cast<ui32>(visitablePos().y) + c * static_cast<ui32>(levelBlindSplit ? 0 : visitablePos().z) + d;
 	ui32 R2 = (R1 >> 16) & 0x7fff;
 
 	return R2;

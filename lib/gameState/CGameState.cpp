@@ -71,6 +71,9 @@
 #include "mapObjects/CGPandoraBox.h"
 
 #include <vstd/RNG.h>
+#include "../serializer/JsonSerializer.h"
+#include "../CRandomGenerator.h"
+#include "../mapObjects/CGCreature.h"
 
 VCMI_LIB_NAMESPACE_BEGIN
 
@@ -187,6 +190,134 @@ void CGameState::preInit(Services * newServices)
 	services = newServices;
 }
 
+
+namespace
+{
+// (arena) Mirror maps: the underground is a copy of the surface, one player in each ("arena-mirror" in the
+// map's description, arena/mirror_maps.py). Whatever the game rolls for an object when the game starts is
+// rolled once for the object and its copy - the same kind at the same x and y -, so that both players get
+// the same world: random artifacts and resources, creature banks, shrines, mage guilds, starting bonuses.
+bool arenaMirror = false;
+int arenaMirrorSeed = 0;
+
+int mirrorSeed(int x, int y, int kind, int sub, int stage)
+{
+	uint64_t h = static_cast<uint32_t>(arenaMirrorSeed) * 0x9E3779B97F4A7C15ull;
+	for(int v : {x, y, kind, sub, stage})
+		h = (h ^ static_cast<uint32_t>(v)) * 0x100000001B3ull + 0x632BE59BD9B4E019ull;
+	return static_cast<int>(h >> 33);
+}
+
+class MirrorRandomizer final : public IGameRandomizer
+{
+public:
+	struct Record
+	{
+		std::vector<ArtifactID> artifacts;
+		std::vector<std::vector<ArtifactID>> markets;
+		std::vector<CreatureID> creatures;
+		size_t artifactsUsed = 0;
+		size_t marketsUsed = 0;
+		size_t creaturesUsed = 0;
+	};
+
+	MirrorRandomizer(IGameRandomizer & base, Record & record, bool replay, int seed)
+		: base(base), record(record), replay(replay), rng(seed)
+	{}
+
+	ArtifactID rollArtifact() override { return artifact([&]() { return base.rollArtifact(); }); }
+	ArtifactID rollArtifact(EArtifactClass type) override { return artifact([&]() { return base.rollArtifact(type); }); }
+	ArtifactID rollArtifact(std::set<ArtifactID> filtered) override { return artifact([&]() { return base.rollArtifact(filtered); }); }
+	std::vector<ArtifactID> rollMarketArtifactSet() override
+	{
+		if(replay && record.marketsUsed < record.markets.size())
+			return record.markets[record.marketsUsed++];
+		auto set = base.rollMarketArtifactSet();
+		if(!replay)
+			record.markets.push_back(set);
+		return set;
+	}
+	CreatureID rollCreature() override { return creature([&]() { return base.rollCreature(); }); }
+	CreatureID rollCreature(int tier) override { return creature([&]() { return base.rollCreature(tier); }); }
+	PrimarySkill rollPrimarySkillForLevelup(const CGHeroInstance * hero) override { return base.rollPrimarySkillForLevelup(hero); }
+	SecondarySkill rollSecondarySkillForLevelup(const CGHeroInstance * hero, const std::set<SecondarySkill> & candidates) override
+	{
+		return base.rollSecondarySkillForLevelup(hero, candidates);
+	}
+	std::vector<SecondarySkill> rollSecondarySkills(const CGHeroInstance * hero) override { return base.rollSecondarySkills(hero); }
+	vstd::RNG & getDefault() override { return rng; }
+
+private:
+	template<typename Roll>
+	ArtifactID artifact(Roll roll)
+	{
+		if(replay && record.artifactsUsed < record.artifacts.size())
+			return record.artifacts[record.artifactsUsed++];
+		ArtifactID id = roll();
+		if(!replay)
+			record.artifacts.push_back(id);
+		return id;
+	}
+	template<typename Roll>
+	CreatureID creature(Roll roll)
+	{
+		if(replay && record.creaturesUsed < record.creatures.size())
+			return record.creatures[record.creaturesUsed++];
+		CreatureID id = roll();
+		if(!replay)
+			record.creatures.push_back(id);
+		return id;
+	}
+
+	IGameRandomizer & base;
+	Record & record;
+	bool replay;
+	CRandomGenerator rng;
+};
+
+/// rolls for an object: the first of a pair records, its copy replays
+template<typename Action>
+void rollMirrored(std::map<std::tuple<int, int, int, int>, MirrorRandomizer::Record> & records, CGObjectInstance * obj, int stage, IGameRandomizer & base, Action action)
+{
+	const int3 at = obj->anchorPos();
+	const auto key = std::make_tuple(at.x, at.y, obj->ID.getNum(), obj->subID.getNum());
+	const bool replay = records.count(key) != 0;
+	MirrorRandomizer mirrored(base, records[key], replay, mirrorSeed(at.x, at.y, obj->ID.getNum(), obj->subID.getNum(), stage));
+	action(mirrored);
+}
+
+/// the object's state as the map format would store it (names of other objects as they are, without the
+/// copy's number), to compare an object with its copy
+class MirrorNames final : public IInstanceResolver
+{
+	const CMap & map;
+public:
+	explicit MirrorNames(const CMap & map) : map(map) {}
+	si32 decode(const std::string &) const override { return -1; }
+	std::string encode(si32 identifier) const override
+	{
+		const auto * obj = map.getObject(ObjectInstanceID(identifier));
+		return obj ? original(obj->instanceName) : std::string();
+	}
+	/// the copy of "kind_N" is "kind_(N + 100000)" (arena/mirror_maps.py)
+	static std::string original(const std::string & name)
+	{
+		const auto at = name.find_last_of('_');
+		if(at == std::string::npos)
+			return name;
+		try
+		{
+			const int index = std::stoi(name.substr(at + 1));
+			return index >= 100000 ? name.substr(0, at + 1) + std::to_string(index - 100000) : name;
+		}
+		catch(const std::exception &)
+		{
+			return name;
+		}
+	}
+};
+}
+
 void CGameState::init(const IMapService * mapService, StartInfo * si, IGameRandomizer & gameRandomizer, Load::ProgressAccumulator & progressTracking, bool allowSavingRandomMap)
 {
 	assert(services);
@@ -208,6 +339,14 @@ void CGameState::init(const IMapService * mapService, StartInfo * si, IGameRando
 		return;
 	}
 	logGlobal->info("Map loaded!");
+
+	arenaMirror = map->levels() == 2 && map->description.toString().find("arena-mirror") != std::string::npos;
+	CGCreature::levelBlindSplit = arenaMirror;
+	if(arenaMirror)
+	{
+		arenaMirrorSeed = randomGenerator.nextInt();
+		logGlobal->info("Mirror map: what is rolled at the start is rolled alike for both levels");
+	}
 
 	day = 0;
 
@@ -233,6 +372,8 @@ void CGameState::init(const IMapService * mapService, StartInfo * si, IGameRando
 	buildBonusSystemTree();
 	initVisitingAndGarrisonedHeroes();
 	initFogOfWar();
+	if(arenaMirror)
+		checkMirror();
 
 	for(auto & elem : teams)
 	{
@@ -510,9 +651,13 @@ void CGameState::initRandomFactionsForPlayers(vstd::RNG & randomGenerator)
 void CGameState::randomizeMapObjects(IGameRandomizer & gameRandomizer)
 {
 	logGlobal->debug("\tRandomizing objects");
+	std::map<std::tuple<int, int, int, int>, MirrorRandomizer::Record> mirrored;
 	for(const auto & object : map->getObjects())
 	{
-		object->pickRandomObject(gameRandomizer);
+		if(arenaMirror)
+			rollMirrored(mirrored, object, 1, gameRandomizer, [&](IGameRandomizer & r) { object->pickRandomObject(r); });
+		else
+			object->pickRandomObject(gameRandomizer);
 
 		//handle Favouring Winds - mark tiles under it
 		if(object->ID == Obj::FAVORABLE_WINDS)
@@ -719,29 +864,32 @@ void CGameState::initStartingBonus(IGameRandomizer & gameRandomizer)
 	// campaign bonuses are spread out over other init* functions.
 
 	logGlobal->debug("\tStarting bonuses");
+	const int bonusSeed = arenaMirror ? gameRandomizer.getDefault().nextInt() : 0;
 	for(auto & elem : players)
 	{
+		CRandomGenerator mirrorBonus(bonusSeed);
+		vstd::RNG & bonusRandom = arenaMirror ? static_cast<vstd::RNG &>(mirrorBonus) : gameRandomizer.getDefault();
 		//starting bonus
 		if(scenarioOps->playerInfos[elem.first].bonus == PlayerStartingBonus::RANDOM)
-			scenarioOps->playerInfos[elem.first].bonus = static_cast<PlayerStartingBonus>(gameRandomizer.getDefault().nextInt(2));
+			scenarioOps->playerInfos[elem.first].bonus = static_cast<PlayerStartingBonus>(bonusRandom.nextInt(2));
 
 		switch(scenarioOps->playerInfos[elem.first].bonus)
 		{
 		case PlayerStartingBonus::GOLD:
-			elem.second.resources[EGameResID::GOLD] += gameRandomizer.getDefault().nextInt(5, 10) * 100;
+			elem.second.resources[EGameResID::GOLD] += bonusRandom.nextInt(5, 10) * 100;
 			break;
 		case PlayerStartingBonus::RESOURCE:
 			{
 				auto res = (*LIBRARY->townh)[scenarioOps->playerInfos[elem.first].castle]->town->primaryRes;
 				if(res == EGameResID::WOOD_AND_ORE)
 				{
-					int amount = gameRandomizer.getDefault().nextInt(5, 10);
+					int amount = bonusRandom.nextInt(5, 10);
 					elem.second.resources[EGameResID::WOOD] += amount;
 					elem.second.resources[EGameResID::ORE] += amount;
 				}
 				else
 				{
-					elem.second.resources[res] += gameRandomizer.getDefault().nextInt(3, 6);
+					elem.second.resources[res] += bonusRandom.nextInt(3, 6);
 				}
 				break;
 			}
@@ -817,6 +965,8 @@ void CGameState::initTowns(vstd::RNG & randomGenerator)
 	for (const auto & townID : map->getAllTowns())
 	{
 		auto vti = getTown(townID);
+		CRandomGenerator mirrorTown(arenaMirror ? mirrorSeed(vti->anchorPos().x, vti->anchorPos().y, vti->ID.getNum(), vti->subID.getNum(), 3) : 0);
+		vstd::RNG & townRandom = arenaMirror ? static_cast<vstd::RNG &>(mirrorTown) : randomGenerator;
 
 		assert(vti->getTown()->creatures.size() <= GameConstants::CREATURES_PER_TOWN);
 
@@ -836,7 +986,7 @@ void CGameState::initTowns(vstd::RNG & randomGenerator)
 
 			for(int i = 0; i < definesBuildingsChances.size(); i++)
 			{
-				if((randomGenerator.nextInt(1,100) <= definesBuildingsChances[i]))
+				if((townRandom.nextInt(1,100) <= definesBuildingsChances[i]))
 				{
 					vti->addBuilding(basicDwellings[i]);
 				}
@@ -932,7 +1082,7 @@ void CGameState::initTowns(vstd::RNG & randomGenerator)
 
 		while(!vti->possibleSpells.empty())
 		{
-			size_t index = RandomGeneratorUtil::nextItemWeighted(spellWeights, randomGenerator);
+			size_t index = RandomGeneratorUtil::nextItemWeighted(spellWeights, townRandom);
 
 			const auto * s = vti->possibleSpells[index].toSpell();
 			vti->spells[s->getLevel()-1].push_back(s->id);
@@ -943,12 +1093,79 @@ void CGameState::initTowns(vstd::RNG & randomGenerator)
 	}
 }
 
+void CGameState::checkMirror() const
+{
+	// (arena) an object and its copy on the other level must be alike after everything was rolled
+	MirrorNames names(*map);
+	const auto state = [&](const CGObjectInstance * obj)
+	{
+		JsonNode node;
+		JsonSerializer handler(&names, node);
+		const_cast<CGObjectInstance *>(obj)->serializeJson(handler);
+		node["options"].Struct().erase("owner");
+		node["options"].Struct().erase("name"); // (a town's name is picked from a list - each name once)
+		node.Struct().erase("instanceName");
+		node.Struct().erase("l");
+		if(const auto * town = dynamic_cast<const CGTownInstance *>(obj))
+		{
+			for(const auto & level : town->spells)
+				for(const auto & spell : level)
+					node["spells"].Vector().emplace_back(spell.getNum());
+			for(const auto & building : town->getBuildings())
+				node["built"].Vector().emplace_back(building.getNum());
+		}
+		return node.toCompactString();
+	};
+	// an object and its copy: the copy of "kind_N" is "kind_(N + 100000)"
+	std::map<std::string, const CGObjectInstance *> top;
+	for(const auto & obj : map->getObjects())
+		if(obj->anchorPos().z == 0)
+			top[obj->instanceName] = obj;
+	int pairs = 0;
+	int differ = 0;
+	for(const auto & obj : map->getObjects())
+	{
+		if(obj->anchorPos().z != 1 || obj->ID == Obj::HERO)
+			continue;
+		auto it = top.find(MirrorNames::original(obj->instanceName));
+		if(it == top.end() || it->second->anchorPos().x != obj->anchorPos().x || it->second->anchorPos().y != obj->anchorPos().y)
+		{
+			++differ;
+			logGlobal->warn("Mirror check: %s at %s has no copy on the surface", obj->getObjectName(), obj->anchorPos().toString());
+			continue;
+		}
+		++pairs;
+		std::string a = state(it->second);
+		std::string b = state(obj);
+		// (monoliths of the copy have colours of their own)
+		if(obj->ID == Obj::MONOLITH_TWO_WAY || obj->ID == Obj::MONOLITH_ONE_WAY_ENTRANCE || obj->ID == Obj::MONOLITH_ONE_WAY_EXIT)
+			continue;
+		if(a != b)
+		{
+			size_t at = 0;
+			while(at < a.size() && at < b.size() && a[at] == b[at])
+				++at;
+			const size_t from = at > 120 ? at - 120 : 0;
+			boost::replace_all(a, "\n", " ");
+			if(++differ <= 8)
+				logGlobal->warn("Mirror check: %s at %s differs from its copy: ...%s... / ...%s...", obj->getObjectName(), obj->anchorPos().toString(), a.substr(from, 240), b.substr(from, 240));
+		}
+	}
+	logGlobal->info("Mirror check: %d pairs, %d differ", pairs, differ);
+}
+
 void CGameState::initMapObjects(IGameRandomizer & gameRandomizer)
 {
 	logGlobal->debug("\tObject initialization");
 
+	std::map<std::tuple<int, int, int, int>, MirrorRandomizer::Record> mirrored;
 	for(auto & obj : map->getObjects())
-		obj->initObj(gameRandomizer);
+	{
+		if(arenaMirror)
+			rollMirrored(mirrored, obj, 2, gameRandomizer, [&](IGameRandomizer & r) { obj->initObj(r); });
+		else
+			obj->initObj(gameRandomizer);
+	}
 
 	logGlobal->debug("\tObject initialization done");
 	for(auto & q : map->getObjects<CGSeerHut>())

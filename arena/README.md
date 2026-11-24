@@ -125,6 +125,25 @@ FAI_PARAMS="$(cat tune1/best.json)" python3 run_tournament.py play ...   # Ergeb
 
 Eine Bewertung (24 Partien à 28 Tage) dauert mit 2 Kernen etwa 5 Minuten, mit 6 Kernen etwa 2. Für ernsthaftes Tuning (Hunderte Bewertungen) ist der Zweitrechner gedacht. Per Seat lassen sich Parameter auch direkt setzen: `run_tournament.py play --ai-params '{...}' --opponent-params '{...}'` (Client-Option `--arena-fairai-params`).
 
+## Spiegelkarten (beide Spieler mit derselben Welt)
+
+Wie bei HotAs Spiegelvorlagen ist der Untergrund eine exakte Kopie der Oberfläche, je Ebene ein Spieler.
+`arena/mirror_maps.py` macht aus einer Karte für zwei Spieler aus VCMIs Generator (eine Ebene) die Welt des
+ersten Spielers: die Stadt des zweiten fällt weg, ein Höhlentor kommt dorthin, wo sich die Wege beider Städte
+treffen, dann wird alles in den Untergrund kopiert; die Kopie der ersten Stadt gehört dem zweiten Spieler.
+Gral, Obelisken, Kartografen und Gefängnisse fallen weg; Monolithe der Kopie bekommen eigene Farben.
+Das Wort `arena-mirror` in der Kartenbeschreibung sorgt dafür, dass das Spiel beim Start für ein Objekt und
+seine Kopie dasselbe würfelt (Platzhalter, Banken, Schreine, Magiergilden, Startboni, Teilung der Monster);
+jeder Start prüft das selbst („Mirror check: N pairs, 0 differ“ im Protokoll).
+
+```bash
+python3 arena/mirror_maps.py make --client build/bin/vcmiclient --out arena/maps/mirror-m --seed 52000   # 12 Stadttypen
+python3 arena/mirror_maps.py play --src maps/mirror-m --pool mirror-m -- --client build/bin/vcmiclient \
+    --ai FairAI+FairAI --opponent Nullkiller2+MMAI --mods hota --max-days 300 --jobs 6 --out out
+```
+
+Die zwölf M-Karten vom 24.11. (je eine Stadt für beide Spieler) liegen in `arena/maps/mirror-m`.
+
 ## A/B-Tests (gepaart)
 
 `ab_test.py` lässt mehrere Parametersätze mit demselben Build exakt dieselben Partien spielen (Karten, Seiten, Spiel-Seeds) und vergleicht jede Partie mit der ersten Konfiguration. Die Paarung entfernt den Großteil des Rauschens zwischen Karten. Neue Funktionen kommen deshalb hinter einen Parameter (alt/neu umschaltbar) und werden so gemessen.
