@@ -1,0 +1,9 @@
+{
+ "job": "026-mirror-m-mmai-logs",
+ "state": "running",
+ "commit": "e0f23458f277ffd13860be4754e9deaef967b4eb",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-24T16:23:35",
+ "note": "Repeat of job 025 (owner's word of 24.11. 16:14: the same 24 games, with the logs of every lost game kept). Same twelve mirror maps (arena/maps/mirror-m), each twice with the seats swapped, FairAI (adventure map and combat) against Nullkiller2 with MMAI as its combat AI, guards by BattleAI, day limit 300, same seed (the games still run differently: the AIs are not deterministic). New: the log of every game FairAI loses or that fails is packed as lost_NNNN.tar.xz next to the results (run_tournament.py --keep-lost-logs; the worker sends .xz files home), and every battle between players is written down in full in the log (ARENA_BATTLE: both heroes with level, primary and secondary skills, every stack at the start and at the end, rounds); the spells of both sides were in the log before. 025 lost: Castle as red (day 247), Fortress as blue (day 281) - the main hero attacked in the field by an equal army while most troops stood in garrisons."
+}
