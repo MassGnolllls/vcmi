@@ -1,0 +1,9 @@
+{
+ "job": "030-mirror-m-duel-reach-seed26",
+ "state": "running",
+ "commit": "f5d43863f5954d76bf3cd9bbe5027c580279ae05",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-24T22:53:15",
+ "note": "Duel of two FairAI versions on the twelve mirror maps, seed 26 (the second seed: other starting heroes on both seats) (owner's word of 24.11. 21:34: keep spellSearch, add the improvements on top). Both seats: FairAI from the same build with the new defaults (spellSearch 2). The version under test also knows how far each enemy hero may come in a day (threatReach 1: the slowest creature of its army by the game's table, Expert Logistics and Boots of Speed once it is a seasoned hero, never less than it was seen to come); the previous one takes 16 tiles for every enemy hero (threatReach 0). Duel 028: 59 of 92 attackers we had seen the same day stood 16 to 26 tiles away when our turn ended, and in 13 of 14 decided games the loser was caught by a bigger army. Each map twice with the seats swapped, guards by BattleAI, day limit 300. Score of the version under test: 1 win, 0 loss, army share at the day limit; 0.5 means equal. Detailed logs of all games (won_/lost_/open_NNNN.tar.xz, log level debug)."
+}
