@@ -1,0 +1,9 @@
+{
+ "job": "038-anchor-nk2-battleai-base",
+ "state": "running",
+ "commit": "4078e97bbb57f7a5bd17072740fa7fea0cad1cef",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T00:14:16",
+ "note": "Anchor run of the base version against Nullkiller2 with BattleAI as its combat AI - the opponent the project is measured by (job 035 was against Nullkiller2 + MMAI: 15 won, 0 lost, 8 at the day limit; in local single games against BattleAI the base lost games in which the enemy's main hero had twice our hero factor). Twelve mirror maps, each twice with the seats swapped, day limit 300, seed 25, detailed logs of all games."
+}
