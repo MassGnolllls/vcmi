@@ -1,9 +1,12 @@
 {
  "job": "036-duel-chain-seed36",
- "state": "running",
+ "state": "done",
  "commit": "b7530404e0c99a272951f9995331886b98890da8",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-25T22:03:45",
- "note": "Hero chain (relayChain, BAUPLAN part 1) on against off: both seats FairAI from the same build on the twelve mirror maps, each twice with the seats swapped, guards by BattleAI, day limit 300, seed 36. Detailed logs of all 24 games (chain_scan / duel_reasons: deliveries, what waits in the towns for the main hero, reasons of defeat)."
+ "note": "Hero chain (relayChain, BAUPLAN part 1) on against off: both seats FairAI from the same build on the twelve mirror maps, each twice with the seats swapped, guards by BattleAI, day limit 300, seed 36. Detailed logs of all 24 games (chain_scan / duel_reasons: deliveries, what waits in the towns for the main hero, reasons of defeat).",
+ "returncode": 0,
+ "finished": "2026-11-25T22:48:10",
+ "minutes": 44.4
 }

@@ -24,3 +24,13 @@ match   20 FairAI+FairAI as red of 2: victory winner=blue day=84 score=0.00 [195
 match   14 FairAI+FairAI as red of 2: timeout winner= day=301 score=0.40 [1064.2s]
 match   21 FairAI+FairAI as blue of 2: victory winner=red day=119 score=0.00 [322.3s]
 match   22 FairAI+FairAI as red of 2: victory winner=blue day=154 score=0.00 [501.1s]
+match   23 FairAI+FairAI as blue of 2: victory winner=blue day=189 score=1.00 [659.0s]
+
+# Arena: FairAI+FairAI vs FairAI+FairAI
+
+- matches: 24 (runner errors: 0)
+- decided: 21 -> FairAI+FairAI won 21, lost 0  (win rate 100%, 95% CI 85%-100%)
+- day limit reached: 3 (material lead for FairAI+FairAI in 2)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 171 days
+- cheat flags raised: 0
