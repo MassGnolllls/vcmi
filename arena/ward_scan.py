@@ -96,7 +96,7 @@ def main():
             print(f"{r['match']:4d} {name:12s} {c:5s} {state:5s} {res.get('day'):3d} | {len(ours):3d} ({sum(1 for b in ours if b[7] == 0):3d}) | "
                   f"{len(theirs):3d} ({sum(1 for b in theirs if b[7] == 0):3d}; {len(met):2d}, {sum(1 for b in met if b[7] == 1):2d}) | {fell:3d}/{rose:3d} | "
                   f"{at(100, f, 1)} {at(200, f, 1)} {at(days[-1], f, 1)} | {log['formed']}/{log['ended']} (hunting {log.get('hunts', 0)}x), {log['moves']}, {army / 1000:.0f}k ({100 * share:.0f}%) | "
-                  f"enemy heroes of 20k+ we beat in the field {sum(1 for b in hunts if b[7] == 0)}/{len(hunts)}, ours of 20k+ they beat {sum(1 for b in caught if b[7] == 0)}/{len(caught)}  score {r.get('score', 0):.2f}")
+                  f"enemy heroes of 20k+ we beat in the field {sum(1 for b in hunts if b[7] == 0)}/{len(hunts)}, ours of 20k+ they beat {sum(1 for b in caught if b[7] == 0)}/{len(caught)}  score {(r.get('score') or 0):.2f}")
             totals.append((state, res.get("day"), fell, len(theirs), r.get("score") or 0))
     if totals:
         n = len(totals)

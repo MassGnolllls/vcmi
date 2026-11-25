@@ -405,3 +405,14 @@ gegnerische Hauptheld einen Heldenfaktor von 2,8 bis 4,4 gegen 1,2 bis 2,5 bei u
 2,7-fache der gegnerischen Armee) wurden dann einzeln geschlagen. Der Ankerlauf gegen Nullkiller2 + MMAI (0 Niederlagen)
 zeigt das nicht: MMAI kämpft deutlich schwächer als BattleAI. Der Maßstab des Projekts ist Nullkiller2 + BattleAI – dafür
 laufen jetzt eigene Ankerläufe (Basis, Wardens, und die vier Schalter des Themas „Held").
+
+### Messungen zur Heldenkette auf dem Zweitrechner (Aufträge 036 und 037)
+
+- **Duell Kette gegen ohne** (036, 24 Partien): 10 Siege, 11 Niederlagen, 3 offen – Wertung 0,48 ± 0,19. Was mitten in der
+  Woche in den Städten für den Haupthelden wartet, bleibt gleich (11,5 % gegen 11,0 % seiner Armee im Median); die
+  Hauptarmee ist im Median größer (367.000 gegen 294.000). 15 Lieferungen je Partie, an 40 Tagen je Partie kein Weg.
+- **Ankerlauf mit Kette gegen Nullkiller2 + MMAI** (037, 24 Partien): 18 Siege, 1 Niederlage (Inferno, Platz Blau, Tag 266 –
+  in der Basis die schwächste offene Partie), 4 am Tageslimit, 1 Partie hing bei Nullkiller2. Wertung 0,949 (Basis 0,966).
+  Verlorene Städte je Partie 11,1 (Basis 14,0).
+
+Die Kette ändert die Stärke nicht messbar. Sie bleibt aus, bis ein Test mit den anderen Teilen zusammen etwas anderes zeigt.
