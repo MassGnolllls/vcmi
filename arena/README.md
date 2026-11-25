@@ -216,3 +216,14 @@ walking stack without ever being struck: every position of the field is gone thr
 (`--obst` hexes of the obstacles, `--kiter` / `--chaser` starting hexes, `--kspeed` / `--cspeed`).
 The five battles of the user's test map of 23.11.2026 are `arena/puppet_scen/bild1.json` to
 `bild5.json`; the strategies found for them are in `arena/puppet_plays.py`.
+
+## Mirror maps with fewer towns (`maps/mirror-m2`)
+
+Twelve maps like `maps/mirror-m` (size M, the underground a copy of the surface, one map per town type), but with four
+towns instead of twelve: on each level the player's start town and one neutral town of the same type, in the first
+treasure zone. Made from the template `templates/arenaTwin.json` ("Arena Twin M": Skirmish M without the towns of the
+other treasure zones). To make them again, register the template in `Mods/vcmi/mod.json` for the time of the run
+(`"config/rmg/arena/arenaTwin.json"`, the file copied to `Mods/vcmi/Content/config/rmg/arena/`) and call
+`mirror_maps.py make --client build/bin/vcmiclient --out maps/mirror-m2 --template "Arena Twin M" --seed 54000`.
+`chain_losses.py REASONS_JSON RESULTS_DIR` puts every defeat of a run next to what the hero chain did before the battle
+that decided it.

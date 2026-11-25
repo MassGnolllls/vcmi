@@ -1,0 +1,274 @@
+[
+ {
+  "faction": "castle",
+  "gate": [
+   7,
+   16
+  ],
+  "gap": 1,
+  "way": 89,
+  "shortest": 84,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith3",
+   "monolithTwoWay:monolith2": "monolith4"
+  },
+  "objects": 1011,
+  "map": "mirror_castle_m_54000.vmap",
+  "seed": 54000
+ },
+ {
+  "faction": "rampart",
+  "gate": [
+   13,
+   61
+  ],
+  "gap": 1,
+  "way": 95,
+  "shortest": 94,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith4",
+   "monolithTwoWay:monolith2": "monolith5",
+   "monolithTwoWay:monolith3": "monolith6"
+  },
+  "objects": 1010,
+  "map": "mirror_rampart_m_54100.vmap",
+  "seed": 54100
+ },
+ {
+  "faction": "tower",
+  "gate": [
+   18,
+   58
+  ],
+  "gap": 0,
+  "way": 82,
+  "shortest": 81,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith4",
+   "monolithTwoWay:monolith2": "monolith5",
+   "monolithTwoWay:monolith3": "monolith6"
+  },
+  "objects": 1019,
+  "map": "mirror_tower_m_54200.vmap",
+  "seed": 54200
+ },
+ {
+  "faction": "inferno",
+  "gate": [
+   28,
+   20
+  ],
+  "gap": 0,
+  "way": 92,
+  "shortest": 91,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith4",
+   "monolithTwoWay:monolith2": "monolith5",
+   "monolithTwoWay:monolith3": "monolith6"
+  },
+  "objects": 1005,
+  "map": "mirror_inferno_m_54300.vmap",
+  "seed": 54300
+ },
+ {
+  "faction": "necropolis",
+  "gate": [
+   8,
+   29
+  ],
+  "gap": 0,
+  "way": 84,
+  "shortest": 81,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith5",
+   "monolithTwoWay:monolith2": "monolith6",
+   "monolithTwoWay:monolith3": "monolith7",
+   "monolithTwoWay:monolith4": "monolith8"
+  },
+  "objects": 1017,
+  "map": "mirror_necropolis_m_54400.vmap",
+  "seed": 54400
+ },
+ {
+  "faction": "dungeon",
+  "gate": [
+   36,
+   51
+  ],
+  "gap": -1,
+  "way": 99,
+  "shortest": 99,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith4",
+   "monolithTwoWay:monolith2": "monolith5",
+   "monolithTwoWay:monolith3": "monolith6"
+  },
+  "objects": 1025,
+  "map": "mirror_dungeon_m_54500.vmap",
+  "seed": 54500
+ },
+ {
+  "faction": "stronghold",
+  "gate": [
+   17,
+   5
+  ],
+  "gap": 3,
+  "way": 79,
+  "shortest": 79,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith3",
+   "monolithTwoWay:monolith2": "monolith4"
+  },
+  "objects": 1041,
+  "map": "mirror_stronghold_m_54600.vmap",
+  "seed": 54600
+ },
+ {
+  "faction": "fortress",
+  "gate": [
+   17,
+   63
+  ],
+  "gap": 0,
+  "way": 90,
+  "shortest": 88,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith4",
+   "monolithTwoWay:monolith2": "monolith5",
+   "monolithTwoWay:monolith3": "monolith6"
+  },
+  "objects": 1024,
+  "map": "mirror_fortress_m_54700.vmap",
+  "seed": 54700
+ },
+ {
+  "faction": "conflux",
+  "gate": [
+   10,
+   10
+  ],
+  "gap": 3,
+  "way": 105,
+  "shortest": 104,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith4",
+   "monolithTwoWay:monolith2": "monolith5",
+   "monolithTwoWay:monolith3": "monolith6"
+  },
+  "objects": 988,
+  "map": "mirror_conflux_m_54800.vmap",
+  "seed": 54800
+ },
+ {
+  "faction": "cove",
+  "gate": [
+   20,
+   57
+  ],
+  "gap": 0,
+  "way": 96,
+  "shortest": 92,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith3",
+   "monolithTwoWay:monolith2": "monolith4"
+  },
+  "objects": 1026,
+  "map": "mirror_cove_m_54900.vmap",
+  "seed": 54900
+ },
+ {
+  "faction": "factory",
+  "gate": [
+   13,
+   9
+  ],
+  "gap": 0,
+  "way": 86,
+  "shortest": 84,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith3",
+   "monolithTwoWay:monolith2": "monolith4"
+  },
+  "objects": 1065,
+  "map": "mirror_factory_m_55000.vmap",
+  "seed": 55000
+ },
+ {
+  "faction": "bulwark",
+  "gate": [
+   18,
+   2
+  ],
+  "gap": 2,
+  "way": 86,
+  "shortest": 83,
+  "dropped": [
+   "grail",
+   "obelisk",
+   "prison"
+  ],
+  "recoloured": {
+   "monolithTwoWay:monolith1": "monolith3",
+   "monolithTwoWay:monolith2": "monolith4"
+  },
+  "objects": 1069,
+  "map": "mirror_bulwark_m_55100.vmap",
+  "seed": 55100
+ }
+]

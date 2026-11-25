@@ -1,0 +1,39 @@
+{
+ "note": "New mirror maps with fewer towns (arena/maps/mirror-m2, owner's word of 26.11.2026 00:47: beside the start town only one more town of the same type on each level; template arena/templates/arenaTwin.json): four towns a map instead of twelve. The anchor run of job 035 (base against Nullkiller2 + MMAI: 15 won, 0 lost, 8 at the day limit) on these maps.",
+ "script": "mirror_maps.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "play",
+  "--src",
+  "maps/mirror-m2",
+  "--pool",
+  "mirror-m2",
+  "--",
+  "--client",
+  "{client}",
+  "--ai",
+  "FairAI+FairAI",
+  "--opponent",
+  "Nullkiller2+MMAI",
+  "--mods",
+  "hota",
+  "--max-days",
+  "300",
+  "--timeout",
+  "7200",
+  "--stall-seconds",
+  "300",
+  "--seed",
+  "25",
+  "--jobs",
+  "{jobs}",
+  "--keep-all-logs",
+  "--ai-log",
+  "debug",
+  "--out",
+  "{out}"
+ ],
+ "jobs": 6
+}
