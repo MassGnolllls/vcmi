@@ -1,0 +1,2 @@
+12 maps in /home/alex/.local/share/vcmi/Maps/mirror-m
+/usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --pool mirror-m --client /home/alex/fairai/snap/8cbeaf9b4c/vcmiclient --ai FairAI+FairAI --opponent FairAI+FairAI --duel-plan duel_themes.json --plan-offset 12 --mods hota --max-days 300 --timeout 10800 --stall-seconds 300 --seed 32 --jobs 6 --keep-all-logs --ai-log debug --out /home/alex/fairai/runs/032-themes-seed32
