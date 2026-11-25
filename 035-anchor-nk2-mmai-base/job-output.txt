@@ -1,2 +1,6 @@
 12 maps in /home/alex/.local/share/vcmi/Maps/mirror-m
 /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --pool mirror-m --client /home/alex/fairai/snap/dab71ee6fe/vcmiclient --ai FairAI+FairAI --opponent Nullkiller2+MMAI --mods hota --max-days 300 --timeout 7200 --stall-seconds 300 --seed 25 --jobs 6 --keep-all-logs --ai-log debug --out /home/alex/fairai/runs/035-anchor-nk2-mmai-base
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    2 FairAI+FairAI as red of 2: no result file winner=- day=- score=- [616.9s]
+match    0 FairAI+FairAI as red of 2: victory winner=red day=157 score=1.00 [834.9s]
+match    3 FairAI+FairAI as blue of 2: victory winner=blue day=173 score=1.00 [888.6s]
