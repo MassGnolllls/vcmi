@@ -300,3 +300,67 @@ Das Duell misst die Stärke gegen einen Gegner mit starkem Haupthelden und gebal
 
 Nicht mehr im Test: Zweite Armee, Gegner suchen, Städte zählen, Sicher stehen (im Turnier schädlich); Früher angreifen und
 Truppen sammeln (in den Teilen 1 und 2 aufgegangen); Früh kämpfen, Wege und Ziele, Gold nutzen (wirkungslos).
+
+## Stand des Baus
+
+### Teil 1 – Heldenkette (`relayChain`), gebaut am 25.11.2026
+
+Gebaut wie geplant mit diesen Abweichungen (jede aus einem Probelauf heraus):
+
+- **Sammelstadt = die Stadt, in der am meisten wächst** (nicht die frontnächste): die schwerste Last bekommt den schnellen
+  Weg. Eine einmal gewählte Sammelstadt bleibt, solange dort vier Fünftel des Besten wachsen.
+- **Posten** alle 1.350 Bewegungspunkte (`chainSpacing`) auf dem Weg Sammelstadt → Hauptheld, von der Sammelstadt aus
+  gezählt, nicht auf Feldern in Reichweite bekannter Gegner. Die Kette ist nur aktiv, wenn der Hauptheld weiter als einen
+  Posten entfernt ist; sonst holt er selbst wie bisher.
+- **Lieferung nur, wenn es heute einen Weg gibt:** vor dem Laden wird von den wirklichen Standorten aus geprüft, ob die
+  Last über Glieder mit vollem Tagesmarsch bis zum Haupthelden kommt, jeder Schritt in der Tagesreichweite des Helden, der
+  ihn geht (`chainRoute`). Gibt es keinen Weg, bleibt die Last in der Stadt (und der Hauptheld darf sie holen wie vor der
+  Kette). Erste Fassung ohne diese Prüfung: 17 von 26 Läufen kamen nicht am selben Tag an, ein Drittel der Truppen stand bei
+  Stufe-1-Helden im Freien. Mit der Prüfung: 81 von 84 Läufen am selben Tag.
+- **Liefertage:** erster Tag der Woche; am zweiten bis fünften Tag, wenn in der Stadt mindestens 15 % der Hauptarmee
+  warten (`chainShare`) und der letzte Lauf drei Tage her ist.
+- **Geladen wird nur, was der Hauptheld führen kann** (`usefulSlots`): seine eigenen Arten, neue Arten für freie Plätze,
+  und was klar besser ist als sein schwächster Trupp. Der Rest bleibt in der Stadt. Bei der Übergabe geht alles Brauchbare
+  weiter (`relayTransfer`), was der Empfänger an Unbrauchbarem trägt, geht mit dem Geber zurück (`relayReturn`).
+- **Glieder reisen leicht:** ein Glied behält ein Wesen seiner schnellsten Art, aber keines, das für sich eine Armee ist
+  (`keeperSlot`; ein Glied hatte seinen einzelnen Archangel als „schnellstes Wesen" wochenlang hin- und hergetragen). Wer
+  in einer Stadt übernachtet, lässt morgens die Stadttruppen dort (`leaveTroops`). Glieder werden nie Hauptheld.
+- **Leine:** ein Glied arbeitet tagsüber höchstens einen halben Tagesmarsch (`chainLeash`) von seinem Posten und steht
+  abends wieder dort; eigene Dwellings gehören zur Runde, wenn der Hauptheld die Art führen kann.
+- **Nebenstädte:** die zwei mit dem meisten Wachstum bekommen ein Glied, wenn nach den Posten Helden übrig sind; ihre Last
+  geht nur, wenn sie am selben Tag die Kette oder den Haupthelden erreicht.
+- **Heldenzahl:** bis zu sieben Glieder (`chainMaxLinks`); bis Tag 21 bleiben die Kundschafter Kundschafter, Helden für
+  die Kette werden ab Tag 15 angeworben.
+- Nicht gebaut: das Entgegenkommen des Haupthelden bei zu kurzer Kette (er wird nur über den Zielwert angezogen);
+  `towerGuard` bleibt, wie es ist (ein Wesen).
+
+Protokollzeilen: `chain of N links (P posts on the road of W wanted …, short by K), hub …`, `chain post <hero> at …`,
+`chain day N: n links, load X from <town>, delivered Y to <hero> (…); handed on H times: A > B > …`, `chain day N: X waits
+in <town>, no way along the chain to the main hero today (…): no run`, `chain round: <hero> buys …`; für beide Seiten,
+mit oder ohne Kette, zweimal je Woche: `troops: main army A, in our towns U for the main hero to take, garrisons G, heroes
+in towns H, other heroes in the field F`.
+
+Probelauf (2 Spiegelkarten × 2 Plätze, 150 Tage, Kette gegen ohne): 14 bis 26 Lieferungen je Partie, 525.000 bis 674.000
+Armeewert, im Mittel 2,3 bis 3,3 Übergaben, keine verweigerten Befehle, Zugdauer unverändert. Wertung 0,88 / 0,00 / 1,00 /
+0,15 – vier Partien sagen über die Stärke nichts.
+
+**Befund, der das Zielmaß von Teil 1 umwirft:** Von den Truppen in den Städten kann der Hauptheld nur einen kleinen Teil
+führen. Seiten ohne Kette in zwei Probeläufen (8 Partien, Tag 22 bis 150, zwei Messungen je Woche): in den Städten steht
+im Median das 1,2-fache der Hauptarmee (0,7 bis 1,8), davon kann der Hauptheld im Median 12 % seiner Armee übernehmen
+(0 bis 68 %) – er hat sieben Plätze, und die Städte einer Seite haben vier bis sechs verschiedene Stadttypen. „Unter 20 % der Truppen in Städten" ist mit einem Helden nicht erreichbar. Die Kette bringt dem
+Haupthelden, was er führen kann, am Tag des Kaufs; der große Rest braucht eigene Helden oder bleibt Besatzung.
+
+### Ankerlauf der Basis gegen Nullkiller2 + MMAI (Auftrag 035, 24 Partien)
+
+15 Siege, 0 Niederlagen, 8 Partien am Tageslimit (Truppenanteil 0,65 bis 0,98), 1 Partie ohne Ergebnis (Nullkiller2 blieb
+an Tag 120 in seiner eigenen Heldenkette hängen). Wertung 0,966.
+
+Die 8 offenen Partien: in 7 wechseln die Städte hin und her. FairAI gewann dort 16 bis 57 Belagerungen je Partie (alle),
+Nullkiller2 nahm 14 bis 39 Städte zurück (alle ohne Helden von uns in der Stadt; Angreifer im Median 182.000, Besatzung
+im Median 41.000, 2,5 Tage nach unserer letzten Eroberung). Nullkiller2 hält dabei 5 bis 8 Helden; FairAI hat insgesamt
+das 2- bis 20-fache an Truppen, zwei Drittel davon in den eigenen Städten. In der achten Partie hatte der Gegner eine
+Stadt, die FairAI 200 Tage lang nicht fand.
+
+Folgerung: gegen Nullkiller2 fehlt nicht die Stärke des Haupthelden, sondern das Halten des Eroberten und das Stellen der
+mittleren Helden. Dafür sind genau die Truppen da, die der Hauptheld nicht führen kann: als Besatzung der eroberten Städte
+und als zweite und dritte Armee. Vorschlag: als eigener Teil vor Teil 2 (siehe Bericht vom 25.11.).

@@ -392,6 +392,11 @@ void Params::loadOverrides(int playerIndex)
 	read("musterShare", musterShare);
 	read("musterBoost", musterBoost);
 	read("supplyRuns", supplyRuns);
+	read("relayChain", relayChain);
+	read("chainSpacing", chainSpacing);
+	read("chainShare", chainShare);
+	read("chainLeash", chainLeash);
+	read("chainMaxLinks", chainMaxLinks);
 	read("armyFirst", armyFirst);
 	read("townAmbush", townAmbush);
 	read("campaignPrior", campaignPrior);
@@ -481,6 +486,8 @@ void AdventureAI::chooseMainHero()
 			continue;
 		if(supply && supply->courier == hero->id && current)
 			continue; // carries the leader's troops: no candidate for the lead
+		if(params.relayChain && current && hero->id != mainHero && chainLinkOf(hero->id))
+			continue; // (relayChain) a link with its load is no leader: the load is on its way to one
 		if(!strongest || hero->getTotalStrength() > strongest->getTotalStrength())
 			strongest = hero;
 	}
@@ -879,6 +886,43 @@ void AdventureAI::playTurn()
 		economy.weeklyIncome, economy.weeklyRecruitCost, economy.rho);
 
 	resourceNeed.clear();
+	if(logAi->isDebugEnabled() && (today % 7 == 1 || today % 7 == 4))
+	{
+		// twice a week (as the week starts, and in the middle of it): where our troops stand, and what
+		// of it waits for the main hero (diagnostics, with or without the chain)
+		if(const auto * leader = ownHero(mainHero))
+		{
+			double useful = 0;
+			double garrisons = 0;
+			double others = 0;
+			double field = 0;
+			for(const auto * town : perception.ownTowns())
+			{
+				// (what the main hero could take of the troops that stand there - not what is for sale)
+				const auto * guard = town->getGarrisonHero();
+				useful += guard && guard != leader && guard->tempOwner == me ? transferGain(leader, guard) : transferGain(leader, town);
+				if(const auto * visitor = town->getVisitingHero(); visitor && visitor != leader && visitor->tempOwner == me)
+					useful += transferGain(leader, visitor);
+				garrisons += static_cast<double>(town->getArmyStrength());
+			}
+			for(const auto * hero : perception.ownHeroes())
+			{
+				if(hero == leader)
+					continue;
+				(hero->getVisitedTown() ? others : field) += static_cast<double>(hero->getArmyStrength());
+			}
+			logAi->debug("FairAI %s day %d: troops: main army %llu, in our towns %.0f for the main hero to take, garrisons %.0f, heroes in towns %.0f, other heroes in the field %.0f", me.toString(), today,
+				static_cast<unsigned long long>(leader->getArmyStrength()), useful, garrisons, others, field);
+		}
+	}
+	// (relayChain) before anything is built and before the main hero moves: what waits in our towns
+	// is bought and handed along the chain
+	planChain(true);
+	if(chainActive)
+	{
+		runRelay();
+		perception.refresh();
+	}
 	manageTowns(false);
 	hireHeroes();
 	chooseMainHero();
@@ -935,7 +979,9 @@ void AdventureAI::playTurn()
 		return (ha ? ha->getTotalStrength() : 0) > (hb ? hb->getTotalStrength() : 0);
 	});
 	planSupplyRun();
-	int roaming = 0;
+	planChain(false); // (relayChain) the posts follow where the main hero stands now
+	// (the links collect around their posts: whoever is left scouts)
+	int roaming = chainActive && !chainLinks.empty() ? params.collectorsRoam : 0;
 	for(auto id : others)
 	{
 		if(!timeLeft())
@@ -952,6 +998,22 @@ void AdventureAI::playTurn()
 		if(leads(ownHero(id)))
 		{
 			playHero(id);
+			continue;
+		}
+		// (relayChain) a link of the chain works around its post and ends the day on it; in a town it
+		// spends the night behind the walls, and the gate stays free
+		if(chainActive && chainLinkOf(id))
+		{
+			playHero(id);
+			if(const auto * now = ownHero(id))
+			{
+				const auto * town = now->getVisitedTown();
+				if(town && town->tempOwner == me && !now->isGarrisoned() && !town->getGarrisonHero() && now->canBeMergedWith(*town))
+				{
+					cb->swapGarrisonHero(town);
+					gateway.waitTillFree();
+				}
+			}
 			continue;
 		}
 		// (townHeroes) A hero that holds a town's troops is that town's hero. It takes no collector's
@@ -1263,6 +1325,16 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			hero = ownHero(heroId);
 			if(!hero || hero->isGarrisoned())
 				return;
+			// (relayChain) A link that slept behind the walls leaves the town's troops where they are:
+			// one creature goes with it. (When its post moved, a link walked out with the whole garrison
+			// - 131,000 in the open with a hero of the first level.)
+			if(params.relayChain && chainActive && chainLinkOf(heroId) && town->tempOwner == me && town->stacksCount() == 0 && hero->stacksCount() > 0)
+			{
+				leaveTroops(heroId, town);
+				hero = ownHero(heroId);
+				if(!hero)
+					return;
+			}
 			// (secondArmy) A second leader that walks out of the garrison takes all of it along: its
 			// weakest stack stays behind as a token guard - raiders take empty towns for free.
 			if(params.secondArmy && params.keepGarrison && leads(hero) && !isMain(hero) && town->stacksCount() == 0 && hero->stacksCount() > 1)
@@ -1450,7 +1522,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 				targets.push_back(t);
 			}
 		}
-		if(targets.empty() && !isMain(hero) && !hero->getVisitedTown())
+		if(targets.empty() && !isMain(hero) && !hero->getVisitedTown() && !(chainActive && chainLinkOf(heroId)))
 		{
 			// An idle hero does not stay out in the open: a hero cannot walk through another, so one
 			// standing in a pass locks our own heroes in (a whole game was lost with the main hero
@@ -5542,6 +5614,735 @@ double AdventureAI::supplyRoadThreat(const CGPathNode * node) const
 	return worst;
 }
 
+// ======================================================================= hero chain (relayChain)
+
+const AdventureAI::ChainLink * AdventureAI::chainLinkOf(ObjectInstanceID hero) const
+{
+	for(const auto & link : chainLinks)
+		if(link.hero == hero)
+			return &link;
+	return nullptr;
+}
+
+double AdventureAI::chainLoad(const CGHeroInstance * hero) const
+{
+	const CGHeroInstance * leader = ownHero(mainHero);
+	return leader && hero && leader != hero ? transferGain(leader, hero) : 0.0;
+}
+
+std::set<SlotID> AdventureAI::usefulSlots(const CArmedInstance * army) const
+{
+	// Which stacks of `army` the main hero could take, as pickBestCreatures decides: its own kinds, as
+	// many new kinds as it has free slots (the strongest first), and what is clearly better than its
+	// weakest stacks. The rest - the creatures of another town, as a rule - is no load for the chain.
+	std::set<SlotID> useful;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	if(!leader || !army)
+		return useful;
+	std::set<CreatureID> held;
+	std::vector<double> ownValues;
+	for(const auto & [slot, stack] : leader->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		held.insert(stack->getCreatureID());
+		ownValues.push_back(stackValue(stack.get()));
+	}
+	std::sort(ownValues.begin(), ownValues.end());
+	int room = GameConstants::ARMY_SIZE - static_cast<int>(held.size());
+	std::vector<std::pair<double, SlotID>> order;
+	for(const auto & [slot, stack] : army->Slots())
+		if(stack && stack->getCreature() && stack->getCount() > 0)
+			order.emplace_back(stackValue(stack.get()), slot);
+	std::sort(order.begin(), order.end(), [](const auto & a, const auto & b) { return a.first > b.first; });
+	size_t replaced = 0;
+	for(const auto & [value, slot] : order)
+	{
+		const CreatureID kind = army->getStackPtr(slot)->getCreatureID();
+		if(held.count(kind))
+			useful.insert(slot);
+		else if(room > 0)
+		{
+			--room;
+			held.insert(kind);
+			useful.insert(slot);
+		}
+		else if(replaced < ownValues.size() && value >= 1.1 * ownValues[replaced])
+		{
+			++replaced;
+			held.insert(kind);
+			useful.insert(slot);
+		}
+	}
+	return useful;
+}
+
+void AdventureAI::relayTransfer(ObjectInstanceID receiverId, ObjectInstanceID giverId)
+{
+	const CGHeroInstance * receiver = ownHero(receiverId);
+	const CGHeroInstance * giver = ownHero(giverId);
+	if(!receiver || !giver)
+		return;
+	pickBestCreatures(receiver, giver);
+	// The receiver's slots may be full of what the main hero cannot use (the army it was hired with,
+	// creatures of another town): those change places with what the giver still carries for the main
+	// hero. Whatever the giver ends up with goes back with it.
+	for(int guard = 0; guard < GameConstants::ARMY_SIZE && receiverId != mainHero; ++guard)
+	{
+		gateway.checkInterruption();
+		receiver = ownHero(receiverId);
+		giver = ownHero(giverId);
+		if(!receiver || !giver)
+			return;
+		SlotID from;
+		double best = 0;
+		for(const SlotID & slot : usefulSlots(giver))
+		{
+			const double value = stackValue(giver->getStackPtr(slot));
+			if(value > best)
+			{
+				best = value;
+				from = slot;
+			}
+		}
+		const auto keep = usefulSlots(receiver);
+		SlotID to;
+		double worst = std::numeric_limits<double>::max();
+		for(const auto & [slot, stack] : receiver->Slots())
+		{
+			const double value = stackValue(stack.get());
+			if(!keep.count(slot) && value < worst)
+			{
+				worst = value;
+				to = slot;
+			}
+		}
+		// (what is left with the giver is worth less than what it would push out: done)
+		if(!from.validSlot() || !to.validSlot() || best <= worst || best < 300)
+			return;
+		cb->swapCreatures(giver, receiver, from, to);
+		receiver = ownHero(receiverId);
+		giver = ownHero(giverId);
+		if(receiver && giver)
+			pickBestCreatures(receiver, giver);
+	}
+}
+
+void AdventureAI::relayReturn(ObjectInstanceID receiverId, ObjectInstanceID giverId)
+{
+	// The other way at the same meeting: what the receiver holds and the main hero cannot use goes
+	// back with the giver, a post nearer to the hub at every hand-over - until the hub's link leaves
+	// it in the town. (Else it stays with the links: slow heroes in the open with a third of our troops.)
+	if(receiverId == mainHero)
+		return;
+	for(int guard = 0; guard < GameConstants::ARMY_SIZE; ++guard)
+	{
+		gateway.checkInterruption();
+		const CGHeroInstance * receiver = ownHero(receiverId);
+		const CGHeroInstance * giver = ownHero(giverId);
+		if(!receiver || !giver || receiver->stacksCount() <= 1)
+			return;
+		const auto keep = usefulSlots(receiver);
+		if(keep.empty())
+			return; // nothing for the main hero arrived: its own troops stay with it
+		SlotID from;
+		SlotID to;
+		for(const auto & [slot, stack] : receiver->Slots())
+		{
+			if(!stack || !stack->getCreature() || keep.count(slot))
+				continue;
+			const SlotID target = giver->getSlotFor(stack->getCreatureID());
+			if(target.validSlot())
+			{
+				from = slot;
+				to = target;
+				break;
+			}
+		}
+		if(!from.validSlot())
+			return;
+		cb->mergeOrSwapStacks(receiver, giver, from, to);
+	}
+}
+
+void AdventureAI::leaveTroops(ObjectInstanceID heroId, const CGTownInstance * town)
+{
+	// everything but one creature of the kind the hero keeps goes into the town's garrison
+	for(int guard = 0; guard < 2 * GameConstants::ARMY_SIZE; ++guard)
+	{
+		gateway.checkInterruption();
+		const CGHeroInstance * hero = ownHero(heroId);
+		if(!hero || !town)
+			return;
+		const SlotID keep = keeperSlot(hero);
+		SlotID from;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(stack && stack->getCreature() && slot != keep)
+			{
+				from = slot;
+				break;
+			}
+		}
+		if(from.validSlot())
+		{
+			const SlotID target = town->getSlotFor(hero->getStackPtr(from)->getCreatureID());
+			if(!target.validSlot())
+				return;
+			cb->mergeOrSwapStacks(hero, town, from, target);
+			continue;
+		}
+		const CStackInstance * last = keep.validSlot() ? hero->getStackPtr(keep) : nullptr;
+		if(!last || last->getCount() <= 1)
+			return;
+		const SlotID target = town->getSlotFor(last->getCreatureID());
+		if(target.validSlot())
+			cb->splitStack(hero, town, keep, target, town->getStackCount(target) + last->getCount() - 1);
+		return;
+	}
+}
+
+void AdventureAI::loadChain(ObjectInstanceID heroId, const CGTownInstance * town)
+{
+	// A link takes on its load: troops before buildings - what waits is bought now -, and what the
+	// main hero can use goes along. What it cannot use stays in the town and holds the walls.
+	const CGHeroInstance * hero = ownHero(heroId);
+	if(!hero || !town)
+		return;
+	if(hero->isGarrisoned())
+	{
+		const CGHeroInstance * visitor = town->getVisitingHero();
+		if(visitor && visitor->tempOwner != me)
+			return;
+		cb->swapGarrisonHero(town); // into the gate (a hero of ours there changes places with it)
+		gateway.waitTillFree();
+		hero = ownHero(heroId);
+		if(!hero || hero->isGarrisoned())
+			return;
+	}
+	if(town->getGarrisonHero())
+	{
+		// another hero of ours holds the garrison: its troops are its own - what is for sale goes to the link
+		recruitInTown(town, hero, economy.rho > 1.5 ? 0 : 1000);
+		return;
+	}
+	recruitInTown(town, town->getUpperArmy(), economy.rho > 1.5 ? 0 : 1000);
+	hero = ownHero(heroId);
+	if(!hero)
+		return;
+	// out of the link's slots what is no load (one stack stays with a hero in any case: its fastest)
+	{
+		const auto useful = usefulSlots(hero);
+		std::vector<SlotID> junk;
+		SlotID fastest;
+		int speed = -1;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(!stack || !stack->getCreature())
+				continue;
+			if(!useful.count(slot))
+				junk.push_back(slot);
+			if(stack->getInitiative() > speed)
+			{
+				speed = stack->getInitiative();
+				fastest = slot;
+			}
+		}
+		for(const SlotID & slot : junk)
+		{
+			hero = ownHero(heroId);
+			if(!hero || hero->stacksCount() <= 1 || !hero->hasStackAtSlot(slot))
+				break;
+			if(junk.size() == hero->Slots().size() && slot == fastest)
+				continue;
+			const SlotID target = town->getSlotFor(hero->getStackPtr(slot)->getCreatureID());
+			if(target.validSlot())
+				cb->mergeOrSwapStacks(hero, town, slot, target);
+		}
+	}
+	// ... and into them what is: the strongest first
+	for(int guard = 0; guard < 2 * GameConstants::ARMY_SIZE; ++guard)
+	{
+		gateway.checkInterruption();
+		hero = ownHero(heroId);
+		if(!hero)
+			return;
+		SlotID from;
+		SlotID to;
+		double best = 0;
+		for(const SlotID & slot : usefulSlots(town))
+		{
+			const CStackInstance * stack = town->getStackPtr(slot);
+			const SlotID target = hero->getSlotFor(stack->getCreatureID());
+			if(target.validSlot() && stackValue(stack) > best)
+			{
+				best = stackValue(stack);
+				from = slot;
+				to = target;
+			}
+		}
+		if(!from.validSlot())
+		{
+			// no slot left for it: the link's weakest stack that is no load makes room
+			const auto useful = usefulSlots(hero);
+			const auto waiting = usefulSlots(town);
+			SlotID out;
+			double worst = std::numeric_limits<double>::max();
+			for(const auto & [slot, stack] : hero->Slots())
+			{
+				if(!useful.count(slot) && stackValue(stack.get()) < worst)
+				{
+					worst = stackValue(stack.get());
+					out = slot;
+				}
+			}
+			if(waiting.empty() || !out.validSlot())
+				return;
+			cb->swapCreatures(hero, town, out, *waiting.begin());
+			continue;
+		}
+		cb->mergeOrSwapStacks(town, hero, from, to);
+	}
+}
+
+void AdventureAI::planChain(bool morning)
+{
+	// The hero chain. What grows in our towns reaches the main hero on the day it is bought: light
+	// heroes stand a day's march apart on the road between the hub - the town where most grows -
+	// and the main hero, and hand the load on from one to the next (a hero's movement points are
+	// set in the morning; the army it takes over at noon does not slow it down today). In the logged
+	// games 40 to 60 % of our troops stood in the towns from day 60 on, the first big battle was
+	// lost by the side that had more troops than the attacker brought, and the main hero spent four
+	// days out of ten walking home.
+	const std::vector<ChainLink> before = chainLinks;
+	const bool wasActive = chainActive;
+	chainLinks.clear();
+	chainActive = false;
+	chainComplete = false;
+	chainNeeded = 0;
+	chainShort = 0;
+	if(!params.relayChain)
+		return;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	const auto towns = perception.ownTowns();
+	if(!leader || towns.empty())
+		return;
+	updateThreats();
+	auto leaderPaths = computePaths(leader, false, 30);
+	const double dayPoints = std::max(1, leader->movementPointsLimit(true));
+	struct Source
+	{
+		const CGTownInstance * town;
+		double growth;
+		double cost;
+	};
+	std::vector<Source> sources;
+	for(const auto * town : towns)
+	{
+		const CGPathNode * node = leaderPaths->getPathInfo(town->visitablePos());
+		if(!node || !node->reachable())
+			continue;
+		double growth = 0;
+		for(size_t level = 0; level < town->creatures.size(); ++level)
+		{
+			if(town->creatures[level].second.empty())
+				continue;
+			growth += town->creatureGrowth(static_cast<int>(level)) * town->creatures[level].second.back().toCreature()->getAIValue();
+		}
+		sources.push_back({town, growth, static_cast<double>(node->cost)});
+	}
+	if(sources.empty())
+		return;
+	// the hub: where most grows - the heaviest load takes the fast road. Once chosen it stays while
+	// it grows four fifths of the best (posts that jump with every new dwelling are no posts)
+	const Source * hub = &sources.front();
+	for(const auto & source : sources)
+		if(source.growth > hub->growth)
+			hub = &source;
+	for(const auto & source : sources)
+		if(source.town->id == chainHub && source.growth >= 0.8 * hub->growth)
+			hub = &source;
+	chainHub = hub->town->id;
+	// who could stand on a post
+	std::vector<const CGHeroInstance *> pool;
+	for(const auto * hero : perception.ownHeroes())
+		if(hero->id != mainHero && !leads(hero) && !(supply && supply->courier == hero->id))
+			pool.push_back(hero);
+	// How far apart: a fixed distance, below what a light hero marches in a day. (Taken from what our
+	// links march at the moment, it changed from day to day - and with it every post on the road.)
+	const double spacing = params.chainSpacing;
+	const int hops = static_cast<int>(std::ceil(hub->cost * dayPoints / spacing));
+	// The main hero within a march of the hub comes itself, as ever. (A chain once set up stays until
+	// the main hero is well inside that march: heroes that are links one day and collectors the next
+	// are neither.)
+	if(hops < 2 && !(wasActive && hub->cost * dayPoints >= 0.7 * spacing))
+		return;
+	CGPath path;
+	if(!leaderPaths->getPath(path, hub->town->visitablePos()) || path.nodes.size() < 3)
+		return;
+	chainActive = true;
+	if(!wasActive && chainLastDelivery < today - 10)
+		chainLastDelivery = today; // (the days without a delivery count from the day the chain is set up)
+
+	std::vector<ChainLink> wanted;
+	wanted.push_back({ObjectInstanceID(), hub->town->visitablePos(), hub->town->id, hub->cost});
+	// posts on the road, counted from the hub (nodes[0] is the hub, nodes.back() the main hero's tile)
+	auto standable = [&](const CGPathNode & node)
+	{
+		if(node.layer != EPathfindingLayer::LAND || node.action != EPathNodeAction::NORMAL || node.accessible != EPathAccessibility::ACCESSIBLE)
+			return false;
+		if(!cb->getVisitableObjs(node.coord, false).empty())
+			return false;
+		return threatAt(node.coord, ObjectInstanceID(), true) <= 0; // a light hero stands where no enemy we know of reaches
+	};
+	size_t lowest = 1;
+	for(int k = 1; k < hops; ++k)
+	{
+		const double want = hub->cost - k * spacing / dayPoints; // days from the main hero
+		size_t index = lowest;
+		while(index + 2 < path.nodes.size() && path.nodes[index + 1].cost >= want)
+			++index;
+		// not a place to stand: back towards the hub, half a post's distance at most
+		const double limit = want + 0.5 * spacing / dayPoints;
+		while(index >= lowest && !standable(path.nodes[index]) && path.nodes[index].cost <= limit)
+			--index;
+		if(index < lowest || index + 1 >= path.nodes.size() || !standable(path.nodes[index]))
+			break; // the road is not ours from here on: the chain ends at the post before
+		wanted.push_back({ObjectInstanceID(), path.nodes[index].coord, ObjectInstanceID(), static_cast<double>(path.nodes[index].cost)});
+		lowest = index + 1;
+	}
+	const int roadPosts = static_cast<int>(wanted.size()) - 1;
+	// side towns: a link stands in each (the two that grow most) and brings what grows there to the
+	// nearest link on the road, or to the main hero
+	std::vector<const Source *> side;
+	for(const auto & source : sources)
+		if(source.town != hub->town && source.growth >= std::max(1500.0, 0.15 * hub->growth))
+			side.push_back(&source);
+	std::sort(side.begin(), side.end(), [](const Source * a, const Source * b) { return a->growth > b->growth; });
+	for(size_t i = 0; i < side.size() && i < 2; ++i)
+		wanted.push_back({ObjectInstanceID(), side[i]->town->visitablePos(), side[i]->town->id, side[i]->cost});
+	chainNeeded = std::min<int>(static_cast<int>(wanted.size()), params.chainMaxLinks);
+
+	// who stands where: whoever held a post yesterday keeps it, else the nearest hero
+	// (the first three weeks the scouts go on scouting: what they find is what the chain will feed)
+	const int spare = today < 22 ? std::max(0, params.scouts) : 0;
+	const int most = std::min(chainNeeded, static_cast<int>(pool.size()) - spare);
+	for(size_t i = 0; i < wanted.size() && static_cast<int>(chainLinks.size()) < most; ++i)
+	{
+		const ChainLink & want = wanted[i];
+		size_t best = pool.size();
+		double bestCost = std::numeric_limits<double>::max();
+		for(size_t h = 0; h < pool.size(); ++h)
+		{
+			const int3 at = pool[h]->visitablePos();
+			double cost = std::max(std::abs(at.x - want.post.x), std::abs(at.y - want.post.y)) + (at.z != want.post.z ? 60 : 0);
+			for(const auto & old : before)
+			{
+				if(old.hero != pool[h]->id)
+					continue;
+				if(want.town.hasValue() ? old.town == want.town : (!old.town.hasValue() && old.post.z == want.post.z && old.post.dist2d(want.post) <= 8))
+					cost -= 1000;
+			}
+			if(cost < bestCost)
+			{
+				bestCost = cost;
+				best = h;
+			}
+		}
+		if(best >= pool.size())
+			break;
+		ChainLink link = want;
+		link.road = static_cast<int>(i) <= roadPosts;
+		link.hero = pool[best]->id;
+		pool.erase(pool.begin() + best);
+		chainLinks.push_back(link);
+	}
+	chainShort = static_cast<int>(wanted.size()) - static_cast<int>(chainLinks.size());
+	// the road is manned when the hub and every post between it and the main hero has its hero
+	chainComplete = roadPosts == hops - 1 && static_cast<int>(chainLinks.size()) >= hops;
+	if(morning && logAi->isDebugEnabled())
+	{
+		for(const auto & link : chainLinks)
+		{
+			const bool known = std::any_of(before.begin(), before.end(), [&](const ChainLink & old) { return old.hero == link.hero && old.post == link.post; });
+			const CGHeroInstance * hero = ownHero(link.hero);
+			if(!known && hero)
+				logAi->debug("FairAI %s day %d: chain post %s at %s%s (%.1f days from the main hero, now at %s)", me.toString(), today, hero->getNameTranslated(), link.post.toString(),
+					link.town.hasValue() ? (link.town == chainHub ? " - the hub" : " - a side town") : "", link.fromMain, hero->visitablePos().toString());
+		}
+	}
+	if(morning && chainLogDay != today)
+	{
+		chainLogDay = today;
+		logAi->info("FairAI %s day %d: chain of %d links (%d posts on the road of %d wanted %.0f points apart, short by %d), hub %s %.1f days from the main hero", me.toString(), today,
+			static_cast<int>(chainLinks.size()), roadPosts, hops - 1, spacing, chainShort, hub->town->getNameTranslated(), hub->cost);
+	}
+}
+
+bool AdventureAI::walkTo(ObjectInstanceID heroId, const int3 & tile)
+{
+	// tile by tile towards `tile`, as far as today's movement points go; true when the hero got somewhere
+	bool moved = false;
+	for(int step = 0; step < 80; ++step)
+	{
+		gateway.checkInterruption();
+		const CGHeroInstance * hero = ownHero(heroId);
+		if(!hero || hero->movementPointsRemaining() <= 0 || hero->visitablePos() == tile)
+			return moved;
+		auto paths = computePaths(hero, false, 8);
+		const int3 from = hero->visitablePos();
+		const int points = hero->movementPointsRemaining();
+		const int met = exchanges.load();
+		activeHero = heroId.getNum();
+		const bool sent = stepTowards(hero, tile, *paths);
+		if(sent)
+			gateway.waitTillFree();
+		activeHero = -1;
+		hero = ownHero(heroId);
+		if(!hero || !sent)
+			return moved;
+		if(exchanges.load() != met)
+			return true; // met the hero that stands there
+		if(hero->visitablePos() == from && !madeWay)
+			return moved || hero->movementPointsRemaining() != points; // a visit next door (a town with our hero inside), or no way on
+		moved = true;
+	}
+	return moved;
+}
+
+std::vector<ObjectInstanceID> AdventureAI::chainRoute(ObjectInstanceID start) const
+{
+	// From `start` to the main hero over links that have their day's march before them, every hop
+	// within today's reach of the hero that makes it - by its own ways, from where it really stands.
+	// The fewest hops. Empty: no way today. (Asking only whether everybody stood on its post, three
+	// weeks out of four began without a delivery: the road changes with every step of the main hero.)
+	const CGHeroInstance * leader = ownHero(mainHero);
+	if(!leader || !ownHero(start) || start == mainHero)
+		return {};
+	std::vector<ObjectInstanceID> nodes;
+	for(const auto & link : chainLinks)
+	{
+		const CGHeroInstance * hero = ownHero(link.hero);
+		if(link.hero == start || !hero || chainUsedToday.count(link.hero) || hero->movementPointsRemaining() < 0.9 * hero->movementPointsLimit(true))
+			continue;
+		nodes.push_back(link.hero);
+	}
+	std::map<ObjectInstanceID, ObjectInstanceID> from;
+	std::set<ObjectInstanceID> seen{start};
+	std::vector<ObjectInstanceID> queue{start};
+	for(size_t head = 0; head < queue.size(); ++head)
+	{
+		const ObjectInstanceID at = queue[head];
+		const CGHeroInstance * hero = ownHero(at);
+		if(!hero)
+			continue;
+		auto paths = computePaths(hero, false, 2);
+		auto reaches = [&](const CGHeroInstance * other)
+		{
+			const CGPathNode * node = other ? paths->getPathInfo(other->visitablePos()) : nullptr;
+			return node && node->reachable() && node->turns == 0;
+		};
+		if(reaches(leader))
+		{
+			std::vector<ObjectInstanceID> route{mainHero, at};
+			for(ObjectInstanceID step = at; from.count(step); step = from[step])
+				route.push_back(from[step]);
+			std::reverse(route.begin(), route.end());
+			return route;
+		}
+		for(const ObjectInstanceID & id : nodes)
+		{
+			if(seen.count(id) || !reaches(ownHero(id)))
+				continue;
+			seen.insert(id);
+			from[id] = at;
+			queue.push_back(id);
+		}
+	}
+	return {};
+}
+
+void AdventureAI::relayRun(const std::vector<ObjectInstanceID> & route)
+{
+	const CGHeroInstance * leader = ownHero(mainHero);
+	const CGHeroInstance * first = route.empty() ? nullptr : ownHero(route.front());
+	if(!leader || !first || route.size() < 2)
+		return;
+	const double load = chainLoad(first);
+	const std::string from = first->getVisitedTown() ? first->getVisitedTown()->getNameTranslated() : first->visitablePos().toString();
+	const uint64_t leaderBefore = leader->getArmyStrength();
+	std::string way = first->getNameTranslated();
+	bool delivered = false;
+	int handed = 0;
+	ObjectInstanceID carrierId = route.front();
+	for(size_t hop = 0; hop + 1 < route.size(); ++hop)
+	{
+		gateway.checkInterruption();
+		carrierId = route[hop];
+		const ObjectInstanceID next = route[hop + 1];
+		const CGHeroInstance * carrier = ownHero(carrierId);
+		const CGHeroInstance * receiver = ownHero(next);
+		if(!carrier || !receiver)
+			break;
+		if(carrier->isGarrisoned())
+		{
+			// out of the garrison (a hero of ours in the gate changes places with it)
+			const CGTownInstance * town = carrier->getVisitedTown();
+			if(!town || (town->getVisitingHero() && town->getVisitingHero()->tempOwner != me))
+				break;
+			cb->swapGarrisonHero(town);
+			gateway.waitTillFree();
+			carrier = ownHero(carrierId);
+			if(!carrier || carrier->isGarrisoned())
+				break;
+		}
+		if(receiver->isGarrisoned() && next != mainHero)
+		{
+			// a link inside a town comes to the gate: there it is met like any hero
+			const CGTownInstance * town = receiver->getVisitedTown();
+			if(town && !town->getVisitingHero())
+			{
+				cb->swapGarrisonHero(town);
+				gateway.waitTillFree();
+			}
+		}
+		receiver = ownHero(next);
+		if(!receiver)
+			break;
+		relayTo = next;
+		const int met = exchanges.load();
+		walkTo(carrierId, receiver->visitablePos());
+		relayTo = ObjectInstanceID();
+		chainUsedToday.insert(carrierId);
+		carrier = ownHero(carrierId);
+		receiver = ownHero(next);
+		if(!carrier || !receiver)
+			break;
+		if(exchanges.load() == met)
+		{
+			// in a town with the other one in its garrison nobody announces a meeting
+			const CGTownInstance * town = carrier->getVisitedTown();
+			if(!town || receiver->getVisitedTown() != town)
+			{
+				way += " > did not reach " + receiver->getNameTranslated();
+				break;
+			}
+			relayTransfer(next, carrierId);
+			relayReturn(next, carrierId);
+		}
+		++handed;
+		way += " > " + receiver->getNameTranslated();
+		if(next == mainHero)
+			delivered = true;
+	}
+	leader = ownHero(mainHero);
+	const double got = leader ? static_cast<double>(leader->getArmyStrength()) - static_cast<double>(leaderBefore) : 0.0;
+	if(delivered)
+		chainLastDelivery = today;
+	if(statsFile)
+		stats[phaseOf(today)][delivered ? "chainDelivered" : "chainStuck"] += 1;
+	std::string rest;
+	if(const CGHeroInstance * last = ownHero(carrierId); delivered && last && logAi->isDebugEnabled())
+	{
+		for(const auto & [slot, stack] : last->Slots())
+			if(stack && stack->getCreature())
+				rest += boost::str(boost::format(" %d %s") % stack->getCount() % stack->getCreature()->getJsonKey());
+		rest = "; the last link keeps" + rest;
+	}
+	logAi->info("FairAI %s chain day %d: %d links, load %.0f from %s, delivered %.0f to %s (short by %d links); handed on %d times: %s%s", me.toString(), today,
+		static_cast<int>(chainLinks.size()), load, from, std::max(0.0, got), leader ? leader->getNameTranslated() : std::string("?"), chainShort, handed, way, rest);
+}
+
+void AdventureAI::runRelay()
+{
+	chainUsedToday.clear();
+	if(!params.relayChain || !chainActive || chainLinks.empty())
+		return;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	if(!leader)
+		return;
+	const double army = std::max(1.0, static_cast<double>(leader->getArmyStrength()));
+	const double least = std::max(800.0, 0.03 * army);
+	auto fresh = [this](const CGHeroInstance * hero)
+	{
+		return hero && !chainUsedToday.count(hero->id) && hero->movementPointsRemaining() >= 0.9 * hero->movementPointsLimit(true);
+	};
+	// 1. A load that did not get through yesterday goes on, as soon as there is a way.
+	{
+		std::vector<ObjectInstanceID> carriers;
+		for(const auto & link : chainLinks)
+		{
+			const CGHeroInstance * hero = ownHero(link.hero);
+			const CGTownInstance * town = hero ? hero->getVisitedTown() : nullptr;
+			if(fresh(hero) && !(town && town->id == link.town) && chainLoad(hero) >= least)
+				carriers.push_back(link.hero);
+		}
+		for(const ObjectInstanceID & id : carriers)
+		{
+			if(!fresh(ownHero(id)))
+				continue;
+			const auto route = chainRoute(id);
+			if(!route.empty())
+				relayRun(route);
+		}
+	}
+	// 2. What waits in the towns where a link stands: the hub first, then where most waits. On the
+	// first day of a week (the towns have grown), and on its second to fifth day when enough waits -
+	// on the first day of the next the links are back on their posts.
+	struct Job
+	{
+		ObjectInstanceID hero;
+		const CGTownInstance * town;
+		double stock;
+	};
+	std::vector<Job> jobs;
+	for(const auto & link : chainLinks)
+	{
+		const CGHeroInstance * hero = ownHero(link.hero);
+		const CGTownInstance * town = hero ? hero->getVisitedTown() : nullptr;
+		if(!fresh(hero) || !town || town->id != link.town || town->tempOwner != me)
+			continue;
+		jobs.push_back({link.hero, town, townTroops(town, leader) + (hero->isGarrisoned() ? 0.0 : transferGain(leader, hero))});
+	}
+	std::sort(jobs.begin(), jobs.end(), [this](const Job & a, const Job & b)
+	{
+		if((a.town->id == chainHub) != (b.town->id == chainHub))
+			return a.town->id == chainHub;
+		return a.stock > b.stock;
+	});
+	const int weekday = (today - 1) % 7;
+	for(const Job & job : jobs)
+	{
+		auto last = chainTownRun.find(job.town->id);
+		const bool due = job.stock >= least
+			&& (weekday == 0 || (weekday <= 4 && job.stock >= params.chainShare * army && (last == chainTownRun.end() || today - last->second >= 3)));
+		if(!due || !fresh(ownHero(job.hero)))
+			continue;
+		const auto route = chainRoute(job.hero);
+		if(route.empty())
+		{
+			// the load waits in the town - where the main hero can come for it, as before the chain
+			std::string missing;
+			for(const auto & link : chainLinks)
+			{
+				const CGHeroInstance * hero = ownHero(link.hero);
+				if(link.road && hero && (hero->visitablePos().z != link.post.z
+					|| std::max(std::abs(hero->visitablePos().x - link.post.x), std::abs(hero->visitablePos().y - link.post.y)) > 2))
+					missing += " " + hero->getNameTranslated() + " at " + hero->visitablePos().toString() + " for " + link.post.toString();
+			}
+			logAi->info("FairAI %s chain day %d: %.0f waits in %s, no way along the chain to the main hero today (road manned %d, short by %d; not on their posts:%s): no run", me.toString(), today,
+				job.stock, job.town->getNameTranslated(), chainComplete ? 1 : 0, chainShort, missing.empty() ? " -" : missing);
+			continue;
+		}
+		chainLastRun = today;
+		chainTownRun[job.town->id] = today;
+		loadChain(job.hero, job.town);
+		if(chainLoad(ownHero(job.hero)) < least)
+			continue;
+		relayRun(route);
+	}
+}
+
 std::vector<Target> AdventureAI::supplyTargets(const CGHeroInstance * hero, const CPathsInfo & paths)
 {
 	std::vector<Target> targets;
@@ -6002,6 +6803,45 @@ double AdventureAI::transferableValue(const CGHeroInstance * from) const
 	return std::max(0.0, total - weakest);
 }
 
+SlotID AdventureAI::keeperSlot(const CArmedInstance * source) const
+{
+	// The one creature that stays with a hero when it hands its army on: of its fastest kind - a hero
+	// marches as fast as its slowest troop -, but not a creature that is an army by itself (a link of
+	// the chain kept its single Archangel as "the fastest" and carried it up and down for weeks).
+	SlotID fast;
+	int fastSpeed = -1;
+	double fastUnit = std::numeric_limits<double>::max();
+	SlotID cheap;
+	double cheapUnit = std::numeric_limits<double>::max();
+	for(const auto & [slot, stack] : source->Slots())
+	{
+		if(!stack || !stack->getCreature())
+			continue;
+		const int speed = stack->getInitiative();
+		const double unit = stack->getCreature()->getAIValue();
+		if(unit < cheapUnit)
+		{
+			cheapUnit = unit;
+			cheap = slot;
+		}
+		if(unit > 1500)
+			continue;
+		if(speed > fastSpeed || (speed == fastSpeed && unit < fastUnit))
+		{
+			fastSpeed = speed;
+			fastUnit = unit;
+			fast = slot;
+		}
+	}
+	return fast.validSlot() ? fast : cheap;
+}
+
+bool AdventureAI::keepsKeeper(const CArmedInstance * source) const
+{
+	return source && source->ID == Obj::HERO && source->id != mainHero && source->stacksCount() >= 1
+		&& (params.fastKeeper || (params.relayChain && chainLinkOf(source->id)));
+}
+
 double AdventureAI::transferGain(const CArmedInstance * destination, const CArmedInstance * source) const
 {
 	// What pickBestCreatures(destination, source) would really move, in army value: stacks that join
@@ -6030,6 +6870,25 @@ double AdventureAI::transferGain(const CArmedInstance * destination, const CArme
 	std::vector<Stack> dest = list(destination);
 	std::vector<Stack> src = list(source);
 	const bool sourceIsHero = source->ID == Obj::HERO;
+	// (fastKeeper, relayChain) one creature of the kind the hero keeps is no part of the load - exactly as pickBestCreatures decides
+	bool keeperStays = false;
+	if(keepsKeeper(source))
+	{
+		if(const SlotID keep = keeperSlot(source); keep.validSlot())
+		{
+			const CStackInstance * kept = source->getStackPtr(keep);
+			auto it = std::find_if(src.begin(), src.end(), [&](const Stack & stack) { return stack.type == kept->getCreatureID() && stack.count == kept->getCount(); });
+			// (with every slot taken there is no room to set one aside: the last stack stays, as without a keeper)
+			if(it != src.end() && (it->count == 1 || source->getFreeSlot().validSlot()))
+			{
+				keeperStays = true;
+				it->count -= 1;
+				it->value -= it->unit;
+				if(it->count <= 0)
+					src.erase(it);
+			}
+		}
+	}
 	if(!sourceIsHero && params.keepGarrison && destination->ID == Obj::HERO && !src.empty())
 	{
 		// a token guard stays in the town: a third of a single stack, else the weakest stack
@@ -6050,7 +6909,7 @@ double AdventureAI::transferGain(const CArmedInstance * destination, const CArme
 	double gained = 0;
 	for(int guard = 0; guard < 32 && !src.empty(); ++guard)
 	{
-		const bool lastOfHero = sourceIsHero && src.size() == 1; // a hero keeps one creature
+		const bool lastOfHero = sourceIsHero && !keeperStays && src.size() == 1; // a hero keeps one creature
 		// 1. join a stack of the same kind
 		bool joined = false;
 		for(size_t i = 0; i < src.size(); ++i)
@@ -6264,7 +7123,30 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 	case Obj::CREATURE_GENERATOR4:
 	{
 		if(own)
-			return 0;
+		{
+			// (relayChain) Our own dwellings are part of a link's weekly round: what has grown there is
+			// bought once a week and goes to the main hero with the next delivery. (Until now nobody
+			// came back to a dwelling once it carried our flag.)
+			if(!params.relayChain || !chainActive || main || !chainLinkOf(hero->id))
+				return 0;
+			if(auto bought = dwellingWeek.find(object.id); bought != dwellingWeek.end() && bought->second == (today - 1) / 7)
+				return 0;
+			double waiting = 0;
+			if(const auto * dwelling = dynamic_cast<const CGDwelling *>(instance))
+			{
+				for(const auto & level : dwelling->creatures)
+				{
+					if(level.second.empty())
+						continue;
+					const CCreature * creature = level.second.back().toCreature();
+					const CGHeroInstance * leader = ownHero(mainHero);
+					if(!leader || !leader->getSlotFor(creature->getId()).validSlot())
+						continue; // no load for the chain
+					waiting += creature->getGrowth() * creature->getAIValue() * params.goldPerArmyValue * params.ferryFactor;
+				}
+			}
+			return waiting;
+		}
 		double value = 800;
 		if(const auto * dwelling = dynamic_cast<const CGDwelling *>(instance))
 		{
@@ -6386,6 +7268,16 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 				return waiting * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(waiting);
 			}
 			double troops = townTroops(town, hero);
+			// (relayChain) What grows in a town where a link of the chain stands comes to the main hero:
+			// it does not walk home for it - unless the chain is short of links, or nothing has come
+			// for ten days.
+			if(params.relayChain && chainActive && chainComplete && today - chainLastDelivery <= 10)
+			{
+				// (the hub's: a side town's link brings its load only when it reaches the road or the main hero within a day)
+				for(const auto & chained : chainLinks)
+					if(chained.town == town->id && chained.road && ownHero(chained.hero))
+						troops = 0;
+			}
 			// what the hero left behind on its last visit (no free slot, garrison share) is no reason to return
 			if(auto left = townLeftover.find(town->id); left != townLeftover.end() && params.antiOscillation)
 				troops = std::max(0.0, troops - left->second);
@@ -6464,11 +7356,17 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			}
 			else
 				gain = main ? transferGain(hero, other) : (other->id == mainHero ? transferGain(other, hero) : 0.0);
+			// (relayChain) A link hands its load on in the morning (runRelay). Later in the day it and
+			// the main hero go for each other only with a real load: the few creatures of a weekly
+			// round wait for the next delivery.
+			const bool chained = params.relayChain && chainActive && (main ? chainLinkOf(other->id) : chainLinkOf(hero->id)) != nullptr;
+			if(chained && gain < std::max(800.0, 0.03 * static_cast<double>((main ? hero : other)->getArmyStrength())))
+				gain = 0;
 			if(gain < 1)
 				return 0;
 			// the main hero walks back for troops only as far as it needs them; the others bring them anyway
 			// - but a courier on its supply run is met halfway: both walking, the gap closes twice as fast
-			const bool courier = supply && supply->courier == other->id && !supply->returning;
+			const bool courier = (supply && supply->courier == other->id && !supply->returning) || chained; // (relayChain: a link that waits with its load is met like a courier)
 			return gain * params.goldPerArmyValue * params.ferryFactor * armyFactor * reinforcementBoost(gain) * (main && !second && !courier ? fetchFactor(hero) : 1.0);
 		}
 		if(!enemy || !object.visibleNow || !object.army)
@@ -6612,6 +7510,17 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	const bool cautious = !leads(hero);
 	const bool scout = scoutsToday.count(hero->id) > 0;
+	// (relayChain) A link of the chain works within a leash of its post and is back on it when its
+	// day ends: tomorrow morning the load may come, and the next link stands a day's march away.
+	const ChainLink * link = params.relayChain && chainActive ? chainLinkOf(hero->id) : nullptr;
+	const double linkBudget = link ? static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true)) : -1.0;
+	auto linkBack = [&](const int3 & tile)
+	{
+		// days from there back to the post (as the crow flies, with a margin for what stands in the way)
+		if(tile.z != link->post.z)
+			return 99.0;
+		return 130.0 * std::max(std::abs(tile.x - link->post.x), std::abs(tile.y - link->post.y)) / std::max(1, hero->movementPointsLimit(true));
+	};
 	// meeting another of our heroes: at the meeting point both armies stand together
 	auto ownHeroAt = [&](ObjectInstanceID object) -> const CGHeroInstance *
 	{
@@ -6626,7 +7535,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		// bringing troops to the main hero is worth the trip
 		const bool toMain = (partner && partner->id == mainHero)
 			|| (params.couriers && object.hasValue() && object == mainHero);
-		if(cautious && !scout && !toMain && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
+		// (relayChain: a link's ground is the leash around its post - see addTarget)
+		if(cautious && !scout && !toMain && !link && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
 			return true;
 		if(threats.empty())
 			return false;
@@ -6803,6 +7713,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const bool enemyHeroToday = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner) && travel < 1.0;
 			const bool townToday = heavyPart && it != known.end() && it->second.type == Obj::TOWN && travel < 1.0; // (safeParts) taken today, it is ours tonight
 			if(!ownTown && !enemyHeroToday && !townToday)
+				return;
+		}
+		const bool toSafety = description == "retreat" || description == "flee" || description == "home" || description == "aside" || description == "way out"
+			|| description == "fortress" || description == "evacuate" || description == "relocate";
+		if(link && !toSafety && description != "post" && !(object.hasValue() && object == mainHero && travel < 1.0))
+		{
+			const double back = linkBack(tile);
+			if(back > params.chainLeash + 0.05 || travel + back > linkBudget + 0.05)
 				return;
 		}
 		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery)
@@ -7772,6 +8690,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 	}
 
+	// (relayChain) the way back to the post: the last thing a link does with its day
+	if(link && heroPos != link->post && !failedToday.count({heroNum, link->post}))
+	{
+		const CGPathNode * node = paths.getPathInfo(link->post);
+		if(node && node->reachable())
+		{
+			Target t;
+			t.tile = link->post;
+			t.object = link->town;
+			t.value = 10;
+			t.travel = node->cost;
+			t.score = 1;
+			t.description = "post";
+			out.push_back(t);
+		}
+	}
+
 	return out;
 }
 
@@ -8426,6 +9361,10 @@ void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second
 		return;
 	if(isMain(b) || (!isMain(a) && b->getTotalStrength() > a->getTotalStrength()))
 		std::swap(a, b);
+	// (relayChain) at a hand-over of the chain the troops go on towards the main hero, whoever is stronger
+	const bool relay = relayTo.hasValue() && (a->id == relayTo || b->id == relayTo);
+	if(relay && b->id == relayTo)
+		std::swap(a, b);
 	const ObjectInstanceID receiver = a->id;
 	const ObjectInstanceID giver = b->id;
 	const double expected = transferGain(a, b);
@@ -8439,7 +9378,13 @@ void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second
 		return text;
 	};
 	const std::string armies = logAi->isDebugEnabled() ? describe(a) + " | " + describe(b) : std::string();
-	pickBestCreatures(a, b);
+	if(relay)
+	{
+		relayTransfer(receiver, giver);
+		relayReturn(receiver, giver);
+	}
+	else
+		pickBestCreatures(a, b);
 	if(const auto * now = ownHero(receiver); now && logAi->isDebugEnabled())
 	{
 		logAi->debug("FairAI %s: hero meeting, expected gain %.0f, army value %llu -> %llu%s", me.toString(), expected,
@@ -8447,13 +9392,18 @@ void AdventureAI::onHeroExchange(ObjectInstanceID first, ObjectInstanceID second
 			expected > 0 && now->getArmyStrength() == before ? " NOTHING MOVED [" + armies + "]" : "");
 	}
 	// the hero that got the troops leads: it gets the artifacts that make an army fight better, too
-	exchangeArtifacts(ownHero(receiver), ownHero(giver));
+	// (not from link to link of the chain: the load is only passing through)
+	if(!relay || receiver == mainHero)
+		exchangeArtifacts(ownHero(receiver), ownHero(giver));
 }
 
 void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedInstance * destination)
 {
 	if(!dwelling || !destination)
 		return;
+	const bool round = params.relayChain && dwelling->tempOwner == me && destination->ID == Obj::HERO && chainLinkOf(destination->id);
+	if(dwelling->tempOwner == me)
+		dwellingWeek[dwelling->id] = (today - 1) / 7; // (relayChain) visited this week, bought or not
 	for(int level = static_cast<int>(dwelling->creatures.size()) - 1; level >= 0; --level)
 	{
 		const auto & entry = dwelling->creatures[level];
@@ -8487,6 +9437,13 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 		}
 		if(dwelling->ID == Obj::REFUGEE_CAMP || dwelling->ID == Obj::WAR_MACHINE_FACTORY)
 			logAi->info("FairAI %s: %d %s bought at building %d %s", me.toString(), amount, type->getJsonKey(), dwelling->ID.getNum(), dwelling->visitablePos().toString());
+		if(round)
+		{
+			if(statsFile)
+				stats[phaseOf(today)]["chainRound"] += 1;
+			logAi->info("FairAI %s chain round: %s buys %d %s at own dwelling %s", me.toString(), dynamic_cast<const CGHeroInstance *>(destination)->getNameTranslated(),
+				amount, type->getJsonKey(), dwelling->visitablePos().toString());
+		}
 		cb->recruitCreatures(dwelling, destination, creature, amount, level);
 	}
 }
@@ -8528,24 +9485,9 @@ void AdventureAI::pickBestCreatures(const CArmedInstance * destination, const CA
 
 	// (fastKeeper) A hero that hands over its army keeps one creature - and marches as fast as that
 	// creature. One of its fastest kind gets a slot of its own and stays; everything else may go.
-	if(sourceIsHero && params.fastKeeper && source->id != mainHero && source->stacksCount() >= 1)
+	if(keepsKeeper(source))
 	{
-		SlotID fastSlot;
-		int fastSpeed = -1;
-		double cheapest = std::numeric_limits<double>::max();
-		for(const auto & [slot, stack] : source->Slots())
-		{
-			if(!stack || !stack->getCreature())
-				continue;
-			const int speed = stack->getInitiative();
-			const double unit = stack->getCreature()->getAIValue();
-			if(speed > fastSpeed || (speed == fastSpeed && unit < cheapest))
-			{
-				fastSpeed = speed;
-				cheapest = unit;
-				fastSlot = slot;
-			}
-		}
+		const SlotID fastSlot = keeperSlot(source);
 		if(fastSlot.validSlot())
 		{
 			if(source->getStackCount(fastSlot) == 1)
@@ -9042,6 +9984,17 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 		}
 		if(const auto * now = ownHero(hero->id))
 			townLeftover[town->id] = townTroops(town, now);
+	}
+	else if(params.relayChain && chainActive && chainLinkOf(hero->id))
+	{
+		// (relayChain) A link travels light: what it holds beyond one creature of its fastest kind -
+		// the army it was hired with, what the main hero left with it - stays in the town. (The posts
+		// are as far apart as our slower links march in a day.) Not a load on its way to the main hero.
+		const CGHeroInstance * leader = ownHero(mainHero);
+		const double least = std::max(800.0, 0.03 * (leader ? static_cast<double>(leader->getArmyStrength()) : 0.0));
+		if(!hero->isGarrisoned() && !town->getGarrisonHero() && hero->stacksCount() > 0 && hero->getArmyStrength() > 0
+			&& (chainLoad(hero) < least || chainLinkOf(hero->id)->town == town->id))
+			leaveTroops(hero->id, town);
 	}
 	else if(ownHero(mainHero) && params.collectorsTakeGarrison && !params.supplyRuns)
 	{
@@ -10190,6 +11143,9 @@ void AdventureAI::hireHeroes()
 	int wanted = (today <= 7 ? params.heroesWeek1 : (today <= 21 ? params.heroesWeek3 : params.heroesLater)) + params.scouts;
 	if(economy.rho > 2 && spendable()[GameResID::GOLD] > 8000)
 		wanted += 2;
+	// (relayChain) the links of the chain come on top of the main hero and the scouts
+	if(params.relayChain && chainActive && today > 14)
+		wanted = std::max(wanted, 1 + chainNeeded + (today < 22 ? std::max(0, params.scouts) : 0));
 	// every lost hero feeds the enemy experience: after a loss only replace the minimum
 	if(today - lastHeroLossDay < 7 && (params.heroLossPause || spendable()[GameResID::GOLD] <= 15000))
 		wanted = std::min(wanted, 2);

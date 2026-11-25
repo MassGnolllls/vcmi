@@ -310,6 +310,42 @@ private:
 	int supplyLog = -1;
 	int armyFirstLog = -1;
 	bool supplyPossible = false; ///< some town of ours has a hero that could carry (the main hero need not walk home)
+	/// hero chain (parameter relayChain): light heroes on posts between the hub and the main hero hand the towns' troops on within a day
+	struct ChainLink
+	{
+		ObjectInstanceID hero;
+		int3 post;               ///< where it stands when its day ends
+		ObjectInstanceID town;   ///< the town it stands in (the hub, a side town); none for a post on the road
+		double fromMain = 0;     ///< days of the main hero's march to the post
+		bool road = false;       ///< the hub or a post on the road (not a side town)
+	};
+	std::vector<ChainLink> chainLinks;
+	ObjectInstanceID chainHub;                  ///< the town the chain starts from
+	bool chainActive = false;                   ///< the main hero is more than one post's distance from the hub
+	int chainNeeded = 0;                        ///< links the chain asks for (hiring)
+	int chainShort = 0;                         ///< ... of which no hero holds
+	int chainLastRun = -100;                    ///< day of the last loading
+	int chainLastDelivery = -100;               ///< day the main hero last got troops by the chain
+	int chainLogDay = -1;
+	std::set<ObjectInstanceID> chainUsedToday;  ///< links that have carried today
+	ObjectInstanceID relayTo;                   ///< the hero that takes the troops at the meeting under way
+	std::map<ObjectInstanceID, int> dwellingWeek; ///< own dwellings: the week we last bought there
+	const ChainLink * chainLinkOf(ObjectInstanceID hero) const;
+	double chainLoad(const CGHeroInstance * hero) const; ///< what the main hero would take from this hero
+	void planChain(bool morning);
+	void runRelay();
+	std::vector<ObjectInstanceID> chainRoute(ObjectInstanceID start) const; ///< from this hero to the main hero over links, every hop within today's reach
+	void relayRun(const std::vector<ObjectInstanceID> & route);
+	std::map<ObjectInstanceID, int> chainTownRun; ///< town: day of its last loading
+	bool walkTo(ObjectInstanceID hero, const int3 & tile);
+	SlotID keeperSlot(const CArmedInstance * source) const; ///< the stack one creature of which stays with a hero that hands its army on
+	bool keepsKeeper(const CArmedInstance * source) const;
+	std::set<SlotID> usefulSlots(const CArmedInstance * army) const; ///< the stacks of an army the main hero could take
+	void relayTransfer(ObjectInstanceID receiver, ObjectInstanceID giver); ///< a hand-over of the chain: all that is for the main hero goes on
+	void loadChain(ObjectInstanceID hero, const CGTownInstance * town);
+	void leaveTroops(ObjectInstanceID hero, const CGTownInstance * town); ///< all but one creature into the garrison
+	void relayReturn(ObjectInstanceID receiver, ObjectInstanceID giver);   ///< ... and what is not goes back with the giver
+	bool chainComplete = false;                 ///< the hub and every post on the road has its hero
 	void planSupplyRun();
 	double supplyRoadThreat(const CGPathNode * node) const;
 	std::vector<Target> supplyTargets(const CGHeroInstance * hero, const CPathsInfo & paths);
