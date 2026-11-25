@@ -1,0 +1,141 @@
+{
+ "themes": [
+  {
+   "name": "Truppen sammeln",
+   "on": {
+    "gather": 1,
+    "muster": 1,
+    "fetchByShare": 1,
+    "supplyRuns": 2
+   },
+   "aim": "Stadttruppen kommen zum Haupthelden: was zu Hause wartet, zählt für die Entscheidungsschlacht mehr (gather), der Hauptheld holt große Bestände auch aus fernen Städten (muster), ein Kurier bringt Nachwuchs (supplyRuns 2)"
+  },
+  {
+   "name": "Zweite Armee",
+   "on": {
+    "secondArmy": 1,
+    "spareStock": 1,
+    "townHeroes": 1
+   },
+   "aim": "Truppen, die in Städten stehen, bekommen einen eigenen Helden: zweiter Anführer neben dem Haupthelden, Stadthelden an der Leine ihrer Stadt, Kreaturen ohne freien Platz werden von einem Helden im Tor gekauft"
+  },
+  {
+   "name": "Gegner suchen",
+   "on": {
+    "seekTowns": 1,
+    "breakout": 4
+   },
+   "aim": "Der Hauptheld sucht die nächste fremde Stadt, sobald zu Hause nichts mehr zu holen ist: Wachen, Tore und Monolithen mit ungesehenem Land dahinter zählen wie eine Stadt"
+  },
+  {
+   "name": "Früher angreifen",
+   "on": {
+    "campaignEdge": 2.0,
+    "boldBehind": 1,
+    "townHop": 1
+   },
+   "aim": "Der Feldzug beginnt bei doppelter statt dreifacher Überlegenheit; wer bei den Städten hinten liegt, nimmt die Schlacht bei kleinerem Vorteil; eine heute genommene Stadt gilt nachts als sicher"
+  },
+  {
+   "name": "Städte zählen",
+   "on": {
+    "townWorth": 1,
+    "lastTowns": 2,
+    "townKeep": 1
+   },
+   "aim": "Fremde Städte sind jeden Tag für jeden Helden wert, was sie einbringen; die letzten Städte eines Gegners zählen mehr; eine eigene Stadt zu halten zählt wie eine zu nehmen"
+  },
+  {
+   "name": "Sicher stehen",
+   "on": {
+    "fortress": 1,
+    "standFast": 1,
+    "nightWatch": 1,
+    "townAmbush": 1,
+    "threatSpend": 1
+   },
+   "aim": "Ein unterlegener Hauptheld beendet den Tag in einer eigenen Stadt und flieht nicht aus ihr ins Feld; wer im Tor steht, tauscht nachts die besten Truppen hinter die Mauer; bedrohte Städte geben ihr Gold für Mauern und Truppen aus"
+  },
+  {
+   "name": "Gold nutzen",
+   "on": {
+    "idleBuild": 1,
+    "sellSurplus": 1,
+    "resourcePlan": 1,
+    "buyWarMachines": 1
+   },
+   "aim": "Brachliegendes Gold wird verbaut, überzählige Rohstoffe werden gegen fehlende getauscht, Minen zählen nach dem Bedarf der Städte, der Hauptheld kauft die Kriegsmaschine der Schmiede"
+  },
+  {
+   "name": "Magie",
+   "on": {
+    "magicFocus": 1
+   },
+   "aim": "Mage Guilds werden bis Stufe 5 für das gebaut, was der Hauptheld lernen kann, und er holt die Zauber ab"
+  },
+  {
+   "name": "Held",
+   "on": {
+    "heroChoice": 1,
+    "skillChoice": 1,
+    "artifactCare": 1,
+    "primaryByArmy": 1
+   },
+   "aim": "Tavernenhelden, Fertigkeiten und Artefakte werden nach der Rolle des Helden gewählt; Attack und Defense zählen für einen Anführer nach der Armee, die er führt"
+  },
+  {
+   "name": "Wege und Ziele",
+   "on": {
+    "tour": 1,
+    "sites": 1,
+    "fastKeeper": 1,
+    "unlockDirect": 1
+   },
+   "aim": "Ein Weg wird mit seinem Anschlussziel bewertet; Hill Fort, University und ähnliche Gebäude werden genutzt; wer seine Armee abgibt, behält die schnellste Kreatur"
+  },
+  {
+   "name": "Kampf gegen Wachen",
+   "on": {
+    "kitePlan": 1,
+    "latePlan": 1,
+    "fightForecast": 2,
+    "forecastPlans": 1
+   },
+   "aim": "Zuschlagen-und-weg und Abwarten als weitere Schlachtpläne; Kämpfe gegen Wachen werden vorab mit dem Kampfsimulator durchgespielt statt nach Armeewert geschätzt"
+  },
+  {
+   "name": "Gegner einschätzen",
+   "on": {
+    "heroForecast": 1,
+    "freshHeroes": 1,
+    "spellForecast": 1
+   },
+   "aim": "Angriffe auf Helden werden mit deren geschätztem Attack und Defense simuliert; frisch angeheuerte Gegnerhelden gelten nicht als erfahren; die Prognose rechnet eigene Schadenszauber und Zauberpunkte mit"
+  },
+  {
+   "name": "Früh kämpfen",
+   "on": {
+    "armyFirst": 1,
+    "guardKillValue": 0.08
+   },
+   "aim": "Truppen gehen vor Gebäude, wenn sie pro Gold mehr wert sind; Wachen zu schlagen zählt für sich (Erfahrung, Bewegungsfreiheit)"
+  },
+  {
+   "name": "Reichweite",
+   "on": {},
+   "off": {
+    "threatReach": 0
+   },
+   "aim": "Bestätigung des neuen Standards: Reichweite je Gegnerheld statt fester 16 Felder"
+  },
+  {
+   "name": "Zauberwahl",
+   "on": {},
+   "off": {
+    "spellSearch": 0
+   },
+   "aim": "Bestätigung des neuen Standards: eigene Zauberwahl im Kampf statt der von VCMIs BattleAI"
+  }
+ ],
+ "offset": 24
+}
