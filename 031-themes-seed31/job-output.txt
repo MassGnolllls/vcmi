@@ -1,2 +1,5 @@
 12 maps in /home/alex/.local/share/vcmi/Maps/mirror-m
 /usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --pool mirror-m --client /home/alex/fairai/snap/8cbeaf9b4c/vcmiclient --ai FairAI+FairAI --opponent FairAI+FairAI --duel-plan duel_themes.json --plan-offset 0 --mods hota --max-days 300 --timeout 10800 --stall-seconds 300 --seed 31 --jobs 6 --keep-all-logs --ai-log debug --out /home/alex/fairai/runs/031-themes-seed31
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    2 FairAI+FairAI as red of 2: victory winner=red day=133 score=1.00 [748.9s]
+match    4 FairAI+FairAI as red of 2: victory winner=red day=172 score=1.00 [946.8s]
