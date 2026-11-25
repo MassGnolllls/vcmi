@@ -148,6 +148,12 @@ Duell zweier FairAI-Versionen: beide Sitze spielen FairAI aus demselben Build, d
 eigenen Parametern (`--opponent FairAI+FairAI --ai-params '{"spellSearch": 2}'`); jede Karte zweimal mit
 getauschten Plätzen, 0,5 heißt gleich stark. Geht nur für Änderungen hinter einem Schalter.
 
+Themen-Turnier (viele Schalter in einem Lauf): `--duel-plan duel_themes.json` – beide Sitze spielen FairAI, und in jeder
+Partie ist jedes Thema der Datei (ein Bündel von Schaltern, höchstens 15) bei genau einer Seite an. Der Plan hat 16 Zeilen
+(Karte k spielt Zeile `--plan-offset` + k): jedes Thema steht in der Hälfte der Zeilen bei der geprüften Seite, je zwei
+Themen stehen gleich oft auf derselben wie auf verschiedenen Seiten; jede Karte wird mit getauschten Plätzen wiederholt.
+`duel_effects.py ORDNER…` zeigt je Thema die Wertung der Seite, die es an hatte (0,5 = wirkungslos).
+
 Protokolle aller Partien: `--keep-all-logs` packt jede Partie (`won_`, `lost_`, `open_NNNN.tar.xz`), `--ai-log debug`
 schreibt dazu jede Entscheidung der KIs mit ihren Gründen ins Protokoll (etwa 2 bis 4 MB je Partie über 300 Tage).
 

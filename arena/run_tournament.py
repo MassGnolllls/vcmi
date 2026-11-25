@@ -260,6 +260,12 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     # FairAI parameters per seat: jobs come in pairs, odd match ids have the AI under test as blue
     ai_params = getattr(args, "ai_params", "") or ""
     opp_params = getattr(args, "opponent_params", "") or ""
+    # duel plan: every theme is switched on for exactly one of the two sides of this game (see cmd_play)
+    plan = (getattr(args, "plan_matches", None) or {}).get(match_id)
+    if plan and not battle_mode:
+        for i in range(last + 1):
+            cmd += ["--arena-fairai-params", json.dumps(plan["first"] if COLORS[i] in mine else plan["other"])]
+        ai_params = opp_params = ""
     if not battle_mode and (ai_params or opp_params):
         for i in range(last + 1):
             cmd += ["--arena-fairai-params", (ai_params if COLORS[i] in mine else opp_params) or "{}"]
@@ -274,6 +280,8 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     if not battle_mode:
         record["seats"] = seats
         record["mine"] = mine
+        if plan:
+            record["plan"] = {"row": plan["row"], "mineOn": plan["on"], "otherOn": plan["off"]}
     try:
         proc = subprocess.run(cmd, env=env, capture_output=True, text=True, timeout=args.timeout)
         record["returncode"] = proc.returncode
@@ -323,6 +331,39 @@ def play_match(args, match_id: int, map_name: str, ai_red, ai_blue: str, seed: i
     if not args.keep_logs and "error" not in record:
         shutil.rmtree(log_dir, ignore_errors=True)
     return record
+
+
+def hadamard16():
+    """Sylvester's 16 x 16 matrix of +1 / -1: first row and first column all +1, every two columns orthogonal."""
+    h = [[1]]
+    for _ in range(4):
+        h = [row + row for row in h] + [row + [-x for x in row] for row in h]
+    return h
+
+
+def load_duel_plan(path: str):
+    """Themes of a duel plan: [{"name": ..., "on": {parameters}, "off": {parameters}}, ...] - at most fifteen."""
+    file = Path(path)
+    if not file.exists():
+        file = Path(__file__).resolve().parent / path  # (a job names the file as it lies beside this script)
+    data = json.loads(file.read_text(encoding="utf-8"))
+    themes = data["themes"] if isinstance(data, dict) else data
+    if not 1 <= len(themes) <= 15:
+        raise SystemExit("a duel plan takes one to fifteen themes")
+    return themes
+
+
+def duel_plan_seats(themes, row: int):
+    """Row `row` of the plan: which themes the first side plays with (the other side plays with the rest).
+    Returns (parameters of the first side, parameters of the other side, names on, names off)."""
+    signs = hadamard16()[row % 16]
+    first, other, on, off = {}, {}, [], []
+    for column, theme in enumerate(themes, start=1):
+        yes = signs[column] > 0
+        (on if yes else off).append(theme["name"])
+        first.update(theme.get("on", {}) if yes else theme.get("off", {}))
+        other.update(theme.get("off", {}) if yes else theme.get("on", {}))
+    return first, other, on, off
 
 
 REFUSED_MARKS = ("cannot move from", "ended early at", "has no way to hex")
@@ -456,6 +497,17 @@ def cmd_play(args) -> int:
                         mine.append(colour)
             jobs.append((match_id, map_name, seats, mine, seed))
             match_id += 1
+
+    if getattr(args, "duel_plan", ""):
+        # Duel of two FairAI seats by themes: map k plays row (offset + k) of the plan, twice with the seats
+        # swapped - the side under test ("mine") plays with the row's themes, the other side with the rest.
+        themes = load_duel_plan(args.duel_plan)
+        args.plan_matches = {}
+        for match_id, map_name, seats, mine, seed in jobs:
+            row = (args.plan_offset + match_id // 2) % 16
+            first, other, on, off = duel_plan_seats(themes, row)
+            args.plan_matches[match_id] = {"row": row, "first": first, "other": other, "on": on, "off": off}
+        (out_dir / "duel_plan.json").write_text(json.dumps({"themes": themes, "offset": args.plan_offset}, ensure_ascii=False, indent=1), encoding="utf-8")
 
     if getattr(args, "variants", ""):
         return play_variants(args, jobs, len(maps), out_dir)
@@ -710,6 +762,8 @@ def main() -> int:
     p.add_argument("--base-port", type=int, default=3100)
     p.add_argument("--seed", type=int, default=42)
     p.add_argument("--keep-logs", action="store_true")
+    p.add_argument("--duel-plan", default="", help="JSON file of themes (name, on, off): in every game each theme is on for exactly one side, by a balanced plan of 16 rows; see duel_effects.py")
+    p.add_argument("--plan-offset", type=int, default=0, help="duel plan: the first map plays this row (map k plays row offset + k)")
     p.add_argument("--ai-log", default=None, help="log level of the AIs in the match logs, e.g. debug: every decision with its reasons (also ARENA_AI_LOG)")
     p.add_argument("--keep-all-logs", action="store_true", help="pack the log of every game: won_, lost_ or open_NNNN.tar.xz")
     p.add_argument("--keep-lost-logs", action="store_true", help="pack the log of every game that was not won: lost_NNNN.tar.xz (lost, failed), open_NNNN.tar.xz (day limit, stalled)")

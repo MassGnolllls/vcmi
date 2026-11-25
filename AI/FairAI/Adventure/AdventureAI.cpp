@@ -816,7 +816,10 @@ void AdventureAI::playTurn()
 	trail.clear();
 	abandonedToday.clear();
 	roundTrip.clear();
-	forecastCache.clear();
+	// (kept from day to day: the key holds the hero, its army and the guards; with fightForecast a turn
+	// asked the same 700 questions again every day - 3 s a turn from the second month on)
+	if(forecastCache.size() > 60000)
+		forecastCache.clear();
 	perception.refresh();
 	updateQuests();
 	// sanctuaries we know: a hero standing in one cannot be attacked
@@ -2320,6 +2323,25 @@ uint64_t AdventureAI::fightSignature(const CGHeroInstance * hero) const
 		signature = (signature ^ static_cast<uint64_t>(hero->mana + 1)) * 1099511628211ULL;
 		signature = (signature ^ static_cast<uint64_t>(hero->getSpellsInSpellbook().size())) * 1099511628211ULL;
 	}
+	// The hero itself: forecasts are kept from day to day (a guard and an army that have not changed
+	// give the same battle), so everything of the hero that goes into a battle belongs to the question -
+	// primary skills, level, secondary skills, what it wears, morale and luck, and what a spell point
+	// is worth to it where it stands.
+	auto mix = [&signature](int64_t value)
+	{
+		signature = (signature ^ static_cast<uint64_t>(value + 7919)) * 1099511628211ULL;
+	};
+	for(const auto & skill : PrimarySkill::ALL_SKILLS())
+		mix(hero->getPrimSkillLevel(skill));
+	mix(hero->level);
+	for(const auto & [skill, mastery] : hero->secSkills)
+		mix(skill.getNum() * 8 + mastery);
+	for(const auto & [slot, worn] : hero->artifactsWorn)
+		mix(slot.getNum() * 4096 + worn.getID().getNum());
+	mix(hero->moraleVal() + 16);
+	mix(hero->luckVal() + 16);
+	mix(hero->manaLimit());
+	mix(std::lround(1e6 * manaPointShare(hero)));
 	return signature;
 }
 
@@ -9892,6 +9914,10 @@ bool AdventureAI::buyResourcesFor(const CGTownInstance * town, const ResourceSet
 				cb->trade(market->getObjInstanceID(), EMarketMode::RESOURCE_RESOURCE, source, res, lots * give);
 				gateway.waitTillFree();
 				missing -= lots * get;
+				// what is given away is gone for the next resource we lack (the same six gems were offered
+				// for wood and again for ore; the server turned the second deal down)
+				have[source] -= lots * give;
+				have[res] += lots * get;
 			}
 		}
 		have = forEarmark ? cb->getResourceAmount() : spendable();
