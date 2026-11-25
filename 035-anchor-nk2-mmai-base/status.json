@@ -1,0 +1,9 @@
+{
+ "job": "035-anchor-nk2-mmai-base",
+ "state": "running",
+ "commit": "dab71ee6fea1308c53b7279fc6d1eeb687f800f0",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-25T20:39:17",
+ "note": "Anchor run before the building plan (AI/FairAI/BAUPLAN.md, owner's word of 25.11.2026 20:32: start with everything we discussed): the base version - today's defaults, threatReach 0 again, spellSearch 2 - against Nullkiller2 with MMAI as its combat AI on the twelve mirror maps, each twice with the seats swapped, guards by BattleAI, day limit 300, seed 25 as in jobs 025 and 026 (0.90 and 0.85 then). Detailed logs of all 24 games: the reasons of FairAI's defeats and unfinished games against the opponent the project is measured by (duel_reasons.py), to be compared with the same run of the new version."
+}
