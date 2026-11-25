@@ -1,9 +1,12 @@
 {
  "job": "037-anchor-nk2-mmai-chain",
- "state": "running",
+ "state": "done",
  "commit": "b7530404e0c99a272951f9995331886b98890da8",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-25T22:48:15",
- "note": "Anchor run with the hero chain (relayChain 1) against Nullkiller2 with MMAI as its combat AI: the twelve mirror maps, each twice with the seats swapped, day limit 300, seed 25 as in job 035 (base: 15 won, 0 lost, 8 at the day limit, 0.966). Does the chain change how the open games end? Detailed logs of all games."
+ "note": "Anchor run with the hero chain (relayChain 1) against Nullkiller2 with MMAI as its combat AI: the twelve mirror maps, each twice with the seats swapped, day limit 300, seed 25 as in job 035 (base: 15 won, 0 lost, 8 at the day limit, 0.966). Does the chain change how the open games end? Detailed logs of all games.",
+ "returncode": 0,
+ "finished": "2026-11-26T00:10:59",
+ "minutes": 82.7
 }
