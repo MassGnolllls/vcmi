@@ -10,3 +10,4 @@ match    1 FairAI+FairAI as blue of 2: victory winner=blue day=277 score=1.00 [1
 match    4 FairAI+FairAI as red of 2: timeout winner= day=301 score=0.90 [1585.7s]
 match    6 FairAI+FairAI as red of 2: victory winner=red day=217 score=1.00 [1000.0s]
 match    8 FairAI+FairAI as red of 2: victory winner=red day=178 score=1.00 [805.0s]
+match   12 FairAI+FairAI as red of 2: victory winner=red day=95 score=1.00 [442.4s]
