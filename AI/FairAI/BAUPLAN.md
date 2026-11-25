@@ -364,3 +364,44 @@ Stadt, die FairAI 200 Tage lang nicht fand.
 Folgerung: gegen Nullkiller2 fehlt nicht die Stärke des Haupthelden, sondern das Halten des Eroberten und das Stellen der
 mittleren Helden. Dafür sind genau die Truppen da, die der Hauptheld nicht führen kann: als Besatzung der eroberten Städte
 und als zweite und dritte Armee. Vorschlag: als eigener Teil vor Teil 2 (siehe Bericht vom 25.11.).
+
+### Teil 1b – Wardens: Helden für die Truppen, die der Hauptheld nicht führen kann (`wardens`), gebaut am 25./26.11.2026
+
+Auftrag des Besitzers vom 25.11. („passt für mich, bitte so umsetzen"): Besatzung und zweite Armeen aus den Truppen, die
+der Hauptheld nicht führen kann, vor der Offensive. Standard aus; `wardens` = Höchstzahl (Test mit 2).
+
+- **Zweite Linie** einer Stadt (`secondLine`): was dort steht und was dort zu kaufen ist, soweit der Hauptheld es nicht
+  führen kann (`usefulSlots`, `mainCanUse`). Nichts, was der Hauptheld brauchen kann: das bleibt für ihn und die Kette.
+- **Entstehung** (`formWardens`, jeden Morgen nach Kette und Hauptheld, ab Tag 29): die Stadt mit der größten zweiten Linie,
+  wenn sie mindestens 25 % der Hauptarmee wert ist (`wardenShare`, mindestens 30.000). Ein Held, der dort steht und kein
+  Kettenglied ist, übernimmt sie; steht keiner da, wird dort einer angeworben. Wo ein Warden in einer eigenen Stadt steht,
+  kauft und nimmt er jeden Morgen, was für ihn gewachsen ist (`takeSecondLine`). Er bleibt Warden bis zur Hälfte des
+  Werts, mit dem er antrat.
+- **Zwei Rollen nach Stärke:** Ein Warden, der das 1,3-fache des stärksten Gegnerhelden der letzten 60 Tage hat (gesehene
+  Armee × Heldenfaktor, 3 % Zuwachs je Tag bis zum Doppelten), ist **Jäger**: er wird wie ein Anführer gespielt, geht auf
+  Gegnerhelden und Städte, steht zwischen den Kämpfen in der zuletzt eroberten oder bedrohten Stadt ohne eigenen Helden
+  („hold"). Ein schwächerer ist **Hüter**: nachts hinter den Mauern, tagsüber Tagesausflüge, Umzug in umkämpfte Städte,
+  und er geht, bevor die Armee kommt, die ihn schlägt – in eine Stadt, die hält, sonst ins freie Feld aus dem Weg.
+- **Bedrohung nach wirklicher Reichweite:** Wardens urteilen immer nach dem Reichweitenmodell (`reachView`), auch wenn
+  `threatReach` aus ist. Erste Fassung ohne das: vier Wardens mit 180.000 bis 270.000 wurden in Städten geschlagen, die
+  der Gegner aus 20 Feldern Entfernung erreichte.
+- **Arbeitsteilung:** Eine Stadt, die der Gegner uns wieder abgenommen hat (`townLostDay`), zählt für Wardens doppelt und
+  für den Haupthelden ein Viertel, solange ein Warden in 30 Feldern Nähe ist: der Hauptheld soll weiter, zu den Städten,
+  aus denen die gegnerischen Armeen kommen.
+- **Heldenzahl:** Die Plätze der Wardens bleiben frei: die Kette nimmt dann höchstens 8 − 1 − `wardens` Helden.
+- Protokoll: `warden <hero> leads the second line of <town>: army A (needed B; …)`, `warden <hero> hunts / keeps to our
+  towns (…)`, `warden <hero> takes on troops in <town>`, `warden <hero> leads no longer`, dazu die Zeilen der Stadthelden
+  (`cannot hold`, `moves its army`), und in `troops:` am Ende `wardens N with X`. Auswertung: `arena/ward_scan.py`.
+
+Probeläufe gegen Nullkiller2 + BattleAI (lokal, einzelne Partien, 300 Tage; MMAI läuft hier nicht): Wardens entstehen ab
+Tag 39 bis 71 und werden groß – im Median 400.000 bis 720.000, das 0,5- bis 1,5-fache der Hauptarmee. Partien gegen einen
+schwachen Gegner enden früher (Factory: Tag 197 statt offen; Inferno: Tag 138), das Hin und Her der Städte bleibt aber
+(11 bis 20 verlorene Städte je Partie, keine der Rückeroberungen traf auf einen Helden von uns).
+
+**Befund aus diesen Partien: gegen Nullkiller2 mit BattleAI verliert auch die Basis.** Von vier Partien der Basis auf
+Rampart und Inferno: drei Siege, eine Niederlage (Rampart, Tag 218). In den Partien, die schlecht ausgingen, hatte der
+gegnerische Hauptheld einen Heldenfaktor von 2,8 bis 4,4 gegen 1,2 bis 2,5 bei uns, bei etwa gleicher Armee (z. B. 733.000
+× 1,76 gegen 809.000 × 3,75: wir verloren 74 %, er 28 %). Drei getrennte Armeen (Hauptheld und zwei Wardens, zusammen das
+2,7-fache der gegnerischen Armee) wurden dann einzeln geschlagen. Der Ankerlauf gegen Nullkiller2 + MMAI (0 Niederlagen)
+zeigt das nicht: MMAI kämpft deutlich schwächer als BattleAI. Der Maßstab des Projekts ist Nullkiller2 + BattleAI – dafür
+laufen jetzt eigene Ankerläufe (Basis, Wardens, und die vier Schalter des Themas „Held").

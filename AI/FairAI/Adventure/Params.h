@@ -145,6 +145,10 @@ struct Params
 	double chainShare = 0.15;          ///< hero chain: outside the first day of a week a delivery starts when this share of the main hero's army waits (not within three days of the last)
 	double chainLeash = 0.5;           ///< hero chain: a link works within this share of a day's march of its post and ends its day on it
 	int chainMaxLinks = 7;             ///< hero chain: links at most
+	int wardens = 0;                   ///< >0: second armies from the troops the main hero cannot lead (it has seven slots; our towns breed four to six kinds of armies). At most this many heroes take those troops - what stands in a town of ours and what is for sale there -, hold the towns taken lately or with enemy heroes about (garrisons with legs: behind the walls at night, out against the raider in reach and the town to take back within the day) and buy what grows for them where they stand. Nothing the main hero could use. Against Nullkiller2 seven of eight unfinished games were towns changing hands: we won every siege (16 to 57 a game), the enemy took 14 to 39 towns back, 182,000 against garrisons of 41,000, with two thirds of our troops in our own towns
+	double wardenShare = 0.25;         ///< wardens: troops for a warden are worth taking from this share of the main hero's army on ...
+	double wardenMinValue = 30000;     ///< ... and from this army value on
+	int wardenFromDay = 29;            ///< wardens: not before this day
 	double earlyGoldDays = 21;         ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full, fading out over the two weeks after. 0: off. On by default: +0.05 and +0.12 score in two tests on medium maps (town hall and city hall in week one)
 	int earlyGoldContact = 0;          ///< 1: "gold first" ends when the first enemy hero or town comes into view (then troops count, fading within a week) - on small maps that is early, on large ones late. Off until a test shows a gain
 	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)

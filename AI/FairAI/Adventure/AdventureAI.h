@@ -78,6 +78,7 @@ struct Threat
 	double strength = 0;
 	double radius = 0;
 	double reach = 0; ///< tiles it may cover in a day (radius when seen today)
+	double reachFull = 0; ///< (wardens) the same by the reach model, whatever threatReach says
 	int age = 0; ///< days since we saw it
 	ObjectInstanceID hero;
 };
@@ -255,7 +256,7 @@ private:
 	/// Cautious: weak heroes also fear enemies seen up to three days ago, in a wider radius
 	double threatAt(const int3 & tile, ObjectInstanceID ignoreHero = ObjectInstanceID(), bool cautious = false) const;
 	/// (threatReach) How far an enemy hero may come until our next turn, in tiles
-	double reachEstimate(const ObservedObject & hero) const;
+	double reachEstimate(const ObservedObject & hero, bool force = false) const;
 	std::map<int, double> learnedReach; ///< hero type -> the furthest it has been seen to come in a day (tiles, plus half a tile)
 	void learnReach(int heroType, double tiles, const char * how);
 	/// Tiles a collector may work on: close to one of our towns
@@ -346,6 +347,20 @@ private:
 	void leaveTroops(ObjectInstanceID hero, const CGTownInstance * town); ///< all but one creature into the garrison
 	void relayReturn(ObjectInstanceID receiver, ObjectInstanceID giver);   ///< ... and what is not goes back with the giver
 	bool chainComplete = false;                 ///< the hub and every post on the road has its hero
+	/// wardens (parameter wardens): heroes that lead the troops the main hero cannot use and hold our towns with them
+	std::set<ObjectInstanceID> wardenHeroes;
+	std::map<ObjectInstanceID, int> wardenModeDay; ///< the day a warden last changed between hunting and keeping
+	std::set<ObjectInstanceID> wardenHunting;   ///< ... of them those that beat the strongest enemy hero seen lately: they are played as leaders
+	std::map<ObjectInstanceID, int> townLostDay; ///< towns that were ours and are not: the day the enemy took them
+	ObjectInstanceID wardenCall;                ///< a town whose second line waits for a hero to be hired
+	mutable bool reachView = false;             ///< threats are judged by the reach model (set while a warden picks its targets)
+	int recruitOnly = 0;                        ///< recruitInTown: 1 only what the main hero can use, 2 only what it cannot
+	std::map<ObjectInstanceID, double> wardenBar; ///< what its army was to be worth when it took over (it stays a warden down to half of that)
+	bool isWarden(const CGHeroInstance * hero) const;
+	bool mainCanUse(CreatureID type, double value) const;
+	double secondLine(const CGTownInstance * town) const; ///< troops there the main hero cannot use (standing and for sale)
+	void takeSecondLine(ObjectInstanceID hero, const CGTownInstance * town);
+	void formWardens();
 	void planSupplyRun();
 	double supplyRoadThreat(const CGPathNode * node) const;
 	std::vector<Target> supplyTargets(const CGHeroInstance * hero, const CPathsInfo & paths);
