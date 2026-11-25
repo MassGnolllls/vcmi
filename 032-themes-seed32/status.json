@@ -1,0 +1,9 @@
+{
+ "job": "032-themes-seed32",
+ "state": "running",
+ "commit": "8cbeaf9b4c4e4b2566cc249a6c6538379adec409",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-25T12:53:39",
+ "note": "Themen-Turnier, Teil 2 von 4 (owner's word of 25.11.2026: 'bereite das turnier vor'; evaluation by the reason of each defeat, not only by who won). Duel of two FairAI seats from the same build on the twelve mirror maps, each map twice with the seats swapped, guards by BattleAI, day limit 300, seed 32. Fifteen themes (arena/duel_themes.json: bundles of switches that are built but off, and the two new defaults threatReach and spellSearch): in every game each theme is on for exactly one side, by a balanced plan of 16 rows (map k plays row 12 + k; over the four parts every row is played three times). Score of a theme = mean score of the side that played with it; 0.5 = no effect (arena/duel_effects.py). Detailed logs of all games (won_/lost_/open_NNNN.tar.xz, log level debug) for the reasons of the defeats and what each theme was meant to change."
+}
