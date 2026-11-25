@@ -1,0 +1,39 @@
+{
+ "note": "Anchor run before the building plan (AI/FairAI/BAUPLAN.md, owner's word of 25.11.2026 20:32: start with everything we discussed): the base version - today's defaults, threatReach 0 again, spellSearch 2 - against Nullkiller2 with MMAI as its combat AI on the twelve mirror maps, each twice with the seats swapped, guards by BattleAI, day limit 300, seed 25 as in jobs 025 and 026 (0.90 and 0.85 then). Detailed logs of all 24 games: the reasons of FairAI's defeats and unfinished games against the opponent the project is measured by (duel_reasons.py), to be compared with the same run of the new version.",
+ "script": "mirror_maps.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "play",
+  "--src",
+  "maps/mirror-m",
+  "--pool",
+  "mirror-m",
+  "--",
+  "--client",
+  "{client}",
+  "--ai",
+  "FairAI+FairAI",
+  "--opponent",
+  "Nullkiller2+MMAI",
+  "--mods",
+  "hota",
+  "--max-days",
+  "300",
+  "--timeout",
+  "7200",
+  "--stall-seconds",
+  "300",
+  "--seed",
+  "25",
+  "--jobs",
+  "{jobs}",
+  "--keep-all-logs",
+  "--ai-log",
+  "debug",
+  "--out",
+  "{out}"
+ ],
+ "jobs": 6
+}
