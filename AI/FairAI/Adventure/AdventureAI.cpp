@@ -381,6 +381,10 @@ void Params::loadOverrides(int playerIndex)
 	read("gather", gather);
 	read("gatherDays", gatherDays);
 	read("primaryByArmy", primaryByArmy);
+	read("statPlaces", statPlaces);
+	read("statHorizonArmy", statHorizonArmy);
+	read("statPlaceOther", statPlaceOther);
+	read("statDetourFree", statDetourFree);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
@@ -1623,7 +1627,27 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		// there first costs only the detour: it pays when it brings more per day of detour than the
 		// big target brings per day of its way.
 		const Target * pick = &targets.front();
-		if(params.detour && targets.size() > 1 && targets.front().travel >= 0.5 && targets.front().score > 0)
+		// (statPlaces) Without the detour rule the same holds for the places that raise a hero's
+		// attack, defence, spell power or knowledge - and those within statDetourFree days of detour
+		// are taken whatever the big target brings: the point is for the rest of the game. Not on the
+		// way to safety, to an emergency, or after an enemy hero that will not wait.
+		bool detourNow = params.detour && targets.size() > 1 && targets.front().travel >= 0.5 && targets.front().score > 0;
+		bool statDetour = false;
+		if(!detourNow && params.statPlaces && targets.size() > 1 && targets.front().travel >= 0.3 && targets.front().score > 0 && targets.front().score < 100000)
+		{
+			const std::string & d = targets.front().description;
+			const bool safety = d == "retreat" || d == "flee" || d == "home" || d == "aside" || d == "way out" || d == "fortress" || d == "evacuate"
+				|| d == "relocate" || d == "defend" || d == "hold" || d == "post";
+			bool chase = false;
+			if(targets.front().object.hasValue())
+			{
+				const auto knownNow = perception.knownObjects();
+				const auto it = knownNow.find(targets.front().object);
+				chase = it != knownNow.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner);
+			}
+			statDetour = !safety && !chase;
+		}
+		if(detourNow || statDetour)
 		{
 			const Target & far = targets.front();
 			const int3 here = hero->visitablePos();
@@ -1642,10 +1666,15 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 					continue;
 				if(near.description.rfind("monster", 0) != 0 && near.description.rfind("object", 0) != 0 && near.description.rfind("bank", 0) != 0)
 					continue;
+				const bool stat = params.statPlaces && near.description.rfind("object", 0) == 0 && statPlace(hero, it->second);
+				if(!detourNow && !stat)
+					continue;
 				// the way on from there, taken at the pace of the way to the big target
 				const double onward = far.travel * tiles(near.tile, far.tile) / direct;
 				const double extra = std::max(0.1, near.travel + onward - far.travel);
-				const double rate = (near.value - near.loss) / (extra + params.travelOffset);
+				double rate = (near.value - near.loss) / (extra + params.travelOffset);
+				if(stat && near.travel + onward - far.travel <= params.statDetourFree)
+					rate = std::max(rate, 1.001 * far.score); // beside the way
 				if(rate > bestRate)
 				{
 					bestRate = rate;
@@ -2278,6 +2307,34 @@ double AdventureAI::primaryPointValue(const CGHeroInstance * hero, int which, bo
 	// The flat 700 gold was a fair price for a hero with 30,000; the enemy's main hero counts 1.9
 	// times its army, ours 1.5 times.
 	const double flat = leader ? params.primarySkillValueMain : params.primarySkillValueOther;
+	if(params.statPlaces && hero)
+	{
+		// (statPlaces) A point is for good: it counts for every battle to the end of the game, so it is
+		// worth what it adds to the army the hero will lead - not to the handful it leads on the day it
+		// passes the place. A leader's attack and defence by that army (at least statHorizonArmy: the
+		// armies that met in the deciding battles were 600,000 to 1,200,000 strong), the lower of the
+		// two counting more (field strength goes with the root of their product). Spell power and
+		// knowledge count less the bigger the armies get, and next to nothing without a spell book.
+		// A hero that leads nothing: a fixed sum, more for spell power - small armies win by spells.
+		const double army = static_cast<double>(hero->getArmyStrength());
+		const auto step = [](int now) { return std::sqrt((1.0 + 0.05 * (now + 1)) / (1.0 + 0.05 * std::max(0, now))) - 1.0; };
+		const int attack = hero->getPrimSkillLevel(PrimarySkill::ATTACK);
+		const int defence = hero->getPrimSkillLevel(PrimarySkill::DEFENSE);
+		const bool book = hero->hasSpellbook();
+		if(leader)
+		{
+			const double basis = std::max(params.statHorizonArmy, 2.0 * army) * params.goldPerArmyValue;
+			if(which == 0)
+				return step(attack) * basis;
+			if(which == 1)
+				return step(defence) * basis;
+			const double both = 0.5 * (step(attack) + step(defence)) * basis;
+			return (which == 2 ? (book ? 0.7 : 0.25) : (book ? 0.5 : 0.2)) * both;
+		}
+		if(which <= 1)
+			return std::max(params.statPlaceOther, step(which == 0 ? attack : defence) * 2.0 * army * params.goldPerArmyValue);
+		return (which == 2 ? (book ? 1.25 : 0.5) : (book ? 1.0 : 0.4)) * params.statPlaceOther;
+	}
 	if(!params.primaryByArmy || !leader || !hero || which > 1)
 		return flat;
 	const int now = hero->getPrimSkillLevel(which == 0 ? PrimarySkill::ATTACK : PrimarySkill::DEFENSE);
@@ -2285,6 +2342,43 @@ double AdventureAI::primaryPointValue(const CGHeroInstance * hero, int which, bo
 	// the army it leads now and in the weeks to come (a leader's army doubles within a month)
 	const double army = std::max(60000.0, 2.0 * static_cast<double>(hero->getArmyStrength()));
 	return std::max(flat, step * army * params.goldPerArmyValue);
+}
+
+bool AdventureAI::statPlace(const CGHeroInstance * hero, const ObservedObject & object) const
+{
+	// a place whose visit raises attack, defence, spell power or knowledge for good
+	switch(object.type.toEnum())
+	{
+	case Obj::MARLETTO_TOWER:
+	case Obj::MERCENARY_CAMP:
+	case Obj::GARDEN_OF_REVELATION:
+	case Obj::STAR_AXIS:
+	case Obj::ARENA:
+	case Obj::SCHOOL_OF_MAGIC:
+	case Obj::SCHOOL_OF_WAR:
+	case Obj::LIBRARY_OF_ENLIGHTENMENT:
+		return true;
+	default:
+		break;
+	}
+	// any other building by the public table of its kind (Colosseum of the Magi and the like):
+	// most of what it can hold gives this hero a point
+	if(!object.table || object.table->guarded || object.table->total <= 0)
+		return false;
+	int giving = 0;
+	for(const RewardSample & sample : object.table->samples)
+	{
+		bool gives = false;
+		for(const auto & visit : sample.visits)
+		{
+			if(hero && !visit.limiter.heroAllowed(hero))
+				continue;
+			for(const int points : visit.reward.primary)
+				gives = gives || points > 0;
+		}
+		giving += gives ? sample.weight : 0;
+	}
+	return 2 * giving > object.table->total;
 }
 
 double AdventureAI::heroEdgeNow() const
@@ -7544,11 +7638,26 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		return visitedByHero() ? 0 : primaryPointValue(hero, 0, main);
 	case Obj::GARDEN_OF_REVELATION:
 	case Obj::STAR_AXIS:
+		if(params.statPlaces)
+			return visitedByHero() ? 0 : primaryPointValue(hero, object.type == Obj::STAR_AXIS ? 2 : 3, main);
 		return visitedByHero() ? 0 : primary;
 	case Obj::ARENA:
+		if(params.statPlaces) // two points, and the choice goes to the lower of the two (chooseSelection)
+			return visitedByHero() ? 0 : 2 * std::max(primaryPointValue(hero, 0, main), primaryPointValue(hero, 1, main));
 		return visitedByHero() ? 0 : 2 * primaryPointValue(hero, 0, main);
 	case Obj::SCHOOL_OF_MAGIC:
 	case Obj::SCHOOL_OF_WAR:
+		if(params.statPlaces)
+		{
+			// (statPlaces) one point for 1,000 gold: a leader pays as soon as it can, the others when
+			// gold is not what the towns wait for
+			if(visitedByHero() || spendable()[GameResID::GOLD] < (main ? 1000 : 6000))
+				return 0;
+			const double point = object.type == Obj::SCHOOL_OF_WAR
+				? std::max(primaryPointValue(hero, 0, main), primaryPointValue(hero, 1, main))
+				: std::max(primaryPointValue(hero, 2, main), primaryPointValue(hero, 3, main));
+			return std::max(0.0, point - 1000 * goldFactor);
+		}
 		if(visitedByHero() || !main || spendable()[GameResID::GOLD] < 3000)
 			return 0;
 		return (object.type == Obj::SCHOOL_OF_WAR ? primaryPointValue(hero, 0, main) + primary : 2 * primary) - 1000;
@@ -8289,7 +8398,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					const auto * town = dynamic_cast<const CGTownInstance *>(instance);
 					needed = town && townNeed(town, hero) > 0.2;
 				}
-				if(!needed && node->cost > (object.type == Obj::TOWN || object.type == Obj::HERO ? 0.3 : 0.5))
+				// (statPlaces) a point for the rest of the game is worth a day of the campaign
+				const double errandLimit = object.type == Obj::TOWN || object.type == Obj::HERO ? 0.3 : (params.statPlaces && statPlace(hero, object) ? 1.0 : 0.5);
+				if(!needed && node->cost > errandLimit)
 				{
 					++rejected["errand"];
 					continue;
@@ -9410,6 +9521,37 @@ int AdventureAI::chooseSelection(const std::vector<Component> & components) cons
 		// main hero takes experience, collectors take gold
 		bool main = activeHero.load() >= 0 && ObjectInstanceID(activeHero.load()) == mainHero;
 		return 1 + (main ? expIndex : goldIndex);
+	}
+	if(params.statPlaces && activeHero.load() >= 0)
+	{
+		// (statPlaces) Arena, schools, Colosseum of the Magi: attack or defence - the lower one (field
+		// strength goes with the root of their product; the last option, always taken so far, made
+		// heroes of attack 5 and defence 21); spell power or knowledge - knowledge up to 4 (forty
+		// spell points: without them there is nothing to cast), then spell power
+		const CGHeroInstance * hero = ownHero(ObjectInstanceID(activeHero.load()));
+		bool skills = hero != nullptr;
+		for(const Component & c : components)
+			skills = skills && c.type == ComponentType::PRIM_SKILL;
+		if(skills)
+		{
+			int best = -1;
+			double bestWorth = -1;
+			for(size_t i = 0; i < components.size(); ++i)
+			{
+				const PrimarySkill skill = components[i].subType.as<PrimarySkill>();
+				const int which = skill == PrimarySkill::ATTACK ? 0 : (skill == PrimarySkill::DEFENSE ? 1 : (skill == PrimarySkill::SPELL_POWER ? 2 : 3));
+				double worth = primaryPointValue(hero, which, leads(hero));
+				if(which == 3 && hero->hasSpellbook() && hero->getPrimSkillLevel(PrimarySkill::KNOWLEDGE) < 4)
+					worth *= 3.0;
+				if(worth > bestWorth)
+				{
+					bestWorth = worth;
+					best = static_cast<int>(i);
+				}
+			}
+			if(best >= 0)
+				return 1 + best;
+		}
 	}
 	return static_cast<int>(components.size());
 }

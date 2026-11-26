@@ -293,6 +293,7 @@ private:
 	void restoreNightWatch();           ///< (nightWatch) start of a turn: the troops pooled for the night go back to whom they belong
 	double commanderFactor(const CGHeroInstance * hero) const; ///< what the hero adds to an army it leads (field strength per army value)
 	double primaryPointValue(const CGHeroInstance * hero, int which, bool leader) const; ///< gold a point of attack (0), defence (1), power (2) or knowledge (3) is worth to this hero
+	bool statPlace(const CGHeroInstance * hero, const ObservedObject & object) const; ///< (statPlaces) a place whose visit raises attack, defence, spell power or knowledge for good
 	double ownMagicWorth(const CGHeroInstance * hero) const; ///< (magicWorth 2) what our hero's spells add to its army, by the measured values used for enemy heroes
 	double heroEdgeNow() const;         ///< (boldBehind) the edge the main hero asks for before it attacks an enemy hero
 	bool wouldLead(const CGHeroInstance * candidate) const; ///< (veterans 2) clearly the more experienced leader than the hero that leads now
