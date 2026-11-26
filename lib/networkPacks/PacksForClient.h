@@ -146,6 +146,21 @@ struct DLL_LINKAGE PlayerBlocked : public CPackForClient
 	}
 };
 
+/// (gosolo) a colour is played by a human or by an AI from now on
+struct DLL_LINKAGE PlayerControlChanged : public CPackForClient
+{
+	PlayerColor player;
+	bool human = true;
+
+	void visitTyped(ICPackVisitor & visitor) override;
+
+	template <typename Handler> void serialize(Handler & h)
+	{
+		h & player;
+		h & human;
+	}
+};
+
 struct DLL_LINKAGE PlayerCheated : public CPackForClient
 {
 	PlayerColor player;

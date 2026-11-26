@@ -19,6 +19,11 @@
 #include "queries/MapQueries.h"
 
 #include "../lib/CPlayerState.h"
+#include "../lib/StartInfo.h"
+#include "../lib/constants/StringConstants.h"
+#include "../lib/json/JsonUtils.h"
+#include "../lib/modding/ModScope.h"
+#include "../lib/networkPacks/PacksForClient.h"
 #include "../lib/mapObjects/CGTownInstance.h"
 #include "../lib/mapObjects/CGHeroInstance.h"
 #include "../lib/gameState/CGameState.h"
@@ -47,6 +52,54 @@ void ApplyGhNetPackVisitor::visitEndTurn(EndTurn & pack)
 	gh.throwIfWrongPlayer(connection, &pack);
 	gh.throwIfPlayerNotActive(connection, &pack);
 	result = gh.turnOrder->onPlayerEndsTurn(pack.player);
+}
+
+void ApplyGhNetPackVisitor::visitSetPlayerControl(SetPlayerControl & pack)
+{
+	gh.throwIfWrongPlayer(connection, &pack);
+	// (gosolo) only where every human player sits at the computer that asks: single player, hot seat
+	for(const auto & [colour, state] : gh.gameState().players)
+		if(colour.isValidPlayer() && state.human && state.status == EPlayerStatus::INGAME && !gh.hasPlayerAt(colour, connection))
+			gh.throwAndComplain(connection, "Handing a colour to the AI needs every human player at this computer");
+
+	const PlayerState * state = gh.gameInfo().getPlayerState(pack.player);
+	if(!state || state->status != EPlayerStatus::INGAME)
+		gh.throwAndComplain(connection, "No such player in the game");
+
+	// on the first day: what an AI seat starts with instead of a human's (config/difficulty.json, as
+	// CGameState::initDifficulty) - the difference, so that what was got or spent since stays counted
+	if(pack.ai && pack.aiStart && state->human && gh.gameInfo().getDate(Date::DAY) == 1)
+	{
+		JsonNode config = JsonUtils::assembleFromFiles("config/difficulty.json");
+		config.setModScope(ModScope::scopeGame());
+		const std::string & difficulty = GameConstants::DIFFICULTY_NAMES[gh.gameInfo().getStartInfo()->difficulty];
+		const auto & handicap = gh.gameInfo().getStartInfo()->getIthPlayersSettings(pack.player).handicap.startBonus;
+		ResourceSet humanStart;
+		ResourceSet aiStart;
+		humanStart.resolveFromJson(config["human"][difficulty]["resources"]);
+		aiStart.resolveFromJson(config["ai"][difficulty]["resources"]);
+		humanStart += handicap;
+		aiStart += handicap;
+		if(!(humanStart == aiStart))
+		{
+			ResourceSet now = state->resources;
+			now += aiStart;
+			now -= humanStart;
+			now.positive();
+			SetResources sr;
+			sr.player = pack.player;
+			sr.mode = ChangeValueMode::ABSOLUTE;
+			sr.res = now;
+			gh.sendAndApply(sr);
+		}
+	}
+
+	PlayerControlChanged changed;
+	changed.player = pack.player;
+	changed.human = !pack.ai;
+	gh.sendAndApply(changed);
+	logGlobal->info("Player %s is played by %s from now on", pack.player.toString(), pack.ai ? "an AI" : "a human");
+	result = true;
 }
 
 void ApplyGhNetPackVisitor::visitDismissHero(DismissHero & pack)

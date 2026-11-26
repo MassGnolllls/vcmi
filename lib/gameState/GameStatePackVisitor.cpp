@@ -1559,6 +1559,12 @@ void GameStatePackVisitor::visitBattleSetStackProperty(BattleSetStackProperty & 
 	}
 }
 
+void GameStatePackVisitor::visitPlayerControlChanged(PlayerControlChanged & pack)
+{
+	assert(pack.player.isValidPlayer());
+	gs.getPlayerState(pack.player)->human = pack.human;
+}
+
 void GameStatePackVisitor::visitPlayerCheated(PlayerCheated & pack)
 {
 	assert(pack.player.isValidPlayer());

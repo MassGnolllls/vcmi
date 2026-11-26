@@ -28,6 +28,24 @@ struct DLL_LINKAGE EndTurn : public CPackForServer
 	void visitTyped(ICPackVisitor & visitor) override;
 };
 
+/// (gosolo) The player at this computer hands its colour to an AI, or takes it back: on the server the
+/// colour is played as an AI's from then on (turn order, income, battle results), so that the game is
+/// one between AIs. aiStart: untouched on the first day, the colour gets the resources an AI starts with.
+struct DLL_LINKAGE SetPlayerControl : public CPackForServer
+{
+	bool ai = true;
+	bool aiStart = false;
+
+	void visitTyped(ICPackVisitor & visitor) override;
+
+	template <typename Handler> void serialize(Handler & h)
+	{
+		h & static_cast<CPackForServer &>(*this);
+		h & ai;
+		h & aiStart;
+	}
+};
+
 struct DLL_LINKAGE DismissHero : public CPackForServer
 {
 	DismissHero() = default;

@@ -41,6 +41,7 @@
 #include "../lib/mapping/CMapService.h"
 #include "../lib/pathfinder/CGPathNode.h"
 #include "../lib/serializer/GameConnection.h"
+#include "../lib/networkPacks/PacksForServer.h"
 
 #include <memory>
 #include <vcmi/events/EventBus.h>
@@ -594,6 +595,9 @@ bool CClient::returnFromSolo(PlayerColor color)
 	for(const PlayerColor & human : soloColors)
 	{
 		logGlobal->info("gosolo: player %s is lead by the human again", human.toString());
+		SetPlayerControl control;
+		control.ai = false;
+		sendRequest(control, human, false);
 		installNewPlayerInterface(std::make_shared<CPlayerInterface>(human), human);
 	}
 	soloColors.clear();

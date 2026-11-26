@@ -411,6 +411,8 @@ void ApplyClientNetPackVisitor::visitPlayerEndsGame(PlayerEndsGame & pack)
 		cl.soloColors.erase(pack.player);
 		lastHumanEndsGame = lastHumanEndsGame || cl.soloColors.empty();
 	}
+	if(cl.soloColors.count(pack.player) && pack.victoryLossCheckResult.victory())
+		localHumanWinsGame = true;
 
 	if(lastHumanEndsGame || localHumanWinsGame || pack.silentEnd)
 	{
