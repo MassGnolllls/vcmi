@@ -17,3 +17,20 @@ match   13 FairAI+FairAI as blue of 2: victory winner=blue day=118 score=1.00 [2
 match    1 FairAI+FairAI as blue of 2: timeout winner= day=301 score=0.39 [1013.4s]
 match   14 FairAI+FairAI as red of 2: victory winner=red day=101 score=1.00 [332.9s]
 match   19 FairAI+FairAI as blue of 2: victory winner=blue day=65 score=1.00 [142.9s]
+match   15 FairAI+FairAI as blue of 2: victory winner=blue day=167 score=1.00 [587.7s]
+match   18 FairAI+FairAI as red of 2: victory winner=red day=119 score=1.00 [367.9s]
+match   20 FairAI+FairAI as red of 2: victory winner=red day=143 score=1.00 [465.2s]
+match   22 FairAI+FairAI as red of 2: victory winner=red day=79 score=1.00 [184.7s]
+match   17 FairAI+FairAI as blue of 2: victory winner=blue day=161 score=1.00 [537.7s]
+match   21 FairAI+FairAI as blue of 2: victory winner=red day=150 score=0.00 [393.5s]
+match   16 FairAI+FairAI as red of 2: victory winner=red day=199 score=1.00 [704.2s]
+match   23 FairAI+FairAI as blue of 2: victory winner=blue day=105 score=1.00 [319.9s]
+
+# Arena: FairAI+FairAI vs Nullkiller2+BattleAI
+
+- matches: 24 (runner errors: 0)
+- decided: 23 -> FairAI+FairAI won 21, lost 2  (win rate 91%, 95% CI 73%-98%)
+- day limit reached: 1 (material lead for FairAI+FairAI in 0)
+- stalled games (AI stopped responding), by AI on turn: none
+- average length of decided games: 126 days
+- cheat flags raised: 0

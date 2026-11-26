@@ -1,9 +1,12 @@
 {
  "job": "042-twin-nk2-battleai-statplaces",
- "state": "running",
+ "state": "done",
  "commit": "2bd77269f710ce05b138b8c2bebcc44c40572e4b",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T09:46:36",
- "note": "Package 1 alone on the four-town maps (owner's word of 26.11.2026 09:32): statPlaces - places that raise attack, defence, spell power or knowledge count what the point adds to the army for the rest of the game, for the main hero and for the others; taken on the way. Same games as job 038d (base against Nullkiller2 + BattleAI: 15 won, 6 lost, 3 at the day limit)."
+ "note": "Package 1 alone on the four-town maps (owner's word of 26.11.2026 09:32): statPlaces - places that raise attack, defence, spell power or knowledge count what the point adds to the army for the rest of the game, for the main hero and for the others; taken on the way. Same games as job 038d (base against Nullkiller2 + BattleAI: 15 won, 6 lost, 3 at the day limit).",
+ "returncode": 0,
+ "finished": "2026-11-26T10:14:33",
+ "minutes": 27.9
 }
