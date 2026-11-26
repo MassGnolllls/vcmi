@@ -1,0 +1,8 @@
+12 maps in /home/alex/.local/share/vcmi/Maps/mirror-m2
+/usr/bin/python3 /home/alex/fairai/vcmi/arena/run_tournament.py play --pool mirror-m2 --client /home/alex/fairai/snap/0a11b942a3/vcmiclient --ai FairAI+FairAI --opponent Nullkiller2+BattleAI --ai-params {"statPlaces": 1, "race": 1, "townPortal": 1, "townGuards": 1, "lastChance": 1, "raceFree": 2.0, "raceLastTown": 0, "scoutAll": 1, "homeRing": 1, "raceTrack": 1} --mods hota --max-days 300 --timeout 7200 --stall-seconds 300 --seed 26 --jobs 6 --keep-all-logs --ai-log debug --out /home/alex/fairai/runs/062-twin-nk2-battleai-all4-s26
+playing 24 matches on 12 maps with 6 parallel job(s)
+match    5 FairAI+FairAI as blue of 2: victory winner=blue day=74 score=1.00 [221.3s]
+match    2 FairAI+FairAI as red of 2: victory winner=red day=81 score=1.00 [257.0s]
+match    1 FairAI+FairAI as blue of 2: victory winner=blue day=102 score=1.00 [445.2s]
+match    4 FairAI+FairAI as red of 2: victory winner=red day=138 score=1.00 [514.2s]
+match    3 FairAI+FairAI as blue of 2: victory winner=blue day=133 score=1.00 [538.7s]
