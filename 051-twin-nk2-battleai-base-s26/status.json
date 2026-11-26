@@ -1,9 +1,12 @@
 {
  "job": "051-twin-nk2-battleai-base-s26",
- "state": "running",
+ "state": "done",
  "commit": "9525661ab39ac170af16448dd549d088bae1457b",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T15:12:48",
- "note": "base, seed 26. 24 games do not tell the variants apart (against Nullkiller2 + BattleAI: base 15/6/3, statPlaces 21/2/1, all 19/3/2 and 15/3/6; against MMAI: base 18/4/1, statPlaces 14/6/4, all 17/4/2). More games of each on the four-town maps, against Nullkiller2 + BattleAI."
+ "note": "base, seed 26. 24 games do not tell the variants apart (against Nullkiller2 + BattleAI: base 15/6/3, statPlaces 21/2/1, all 19/3/2 and 15/3/6; against MMAI: base 18/4/1, statPlaces 14/6/4, all 17/4/2). More games of each on the four-town maps, against Nullkiller2 + BattleAI.",
+ "returncode": 0,
+ "finished": "2026-11-26T15:51:55",
+ "minutes": 39.1
 }
