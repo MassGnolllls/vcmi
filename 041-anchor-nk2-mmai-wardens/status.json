@@ -1,0 +1,9 @@
+{
+ "job": "041-anchor-nk2-mmai-wardens",
+ "state": "running",
+ "commit": "0d7265a77b1fe3b58b52636b95a61662a13d7830",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T05:48:57",
+ "note": "Wardens (wardens 2) against Nullkiller2 + MMAI, same games as job 035 (base: 15 won, 0 lost, 8 at the day limit with towns changing hands)."
+}
