@@ -1,0 +1,9 @@
+{
+ "job": "044-twin-nk2-battleai-all",
+ "state": "running",
+ "commit": "16de97a300c5ef4faa67c05d2eb850fbaca76177",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T11:01:04",
+ "note": "Packages 1 to 3 together (statPlaces, race, townPortal, townGuards, lastChance) against Nullkiller2 + BattleAI on the four-town maps. Same games as jobs 038d, 042 and 043."
+}
