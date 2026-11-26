@@ -96,6 +96,7 @@ public:
 	void visitNewArtifact(NewArtifact & pack) override;
 	void visitBattleUpdateGateState(BattleUpdateGateState & pack) override;
 	void visitPlayerCheated(PlayerCheated & pack) override;
+	void visitPlayerControlChanged(PlayerControlChanged & pack) override;
 	void visitDaysWithoutTown(DaysWithoutTown & pack) override;
 	void visitStartAction(StartAction & pack) override;
 	void visitSetRewardableConfiguration(SetRewardableConfiguration & pack) override;

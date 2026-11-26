@@ -122,6 +122,8 @@ public:
 	virtual void visitAdvmapSpellCast(AdvmapSpellCast & pack) {}
 	virtual void visitShowWorldViewEx(ShowWorldViewEx & pack) {}
 	virtual void visitEndTurn(EndTurn & pack) {}
+	virtual void visitSetPlayerControl(SetPlayerControl & pack) {}
+	virtual void visitPlayerControlChanged(PlayerControlChanged & pack) {}
 	virtual void visitDismissHero(DismissHero & pack) {}
 	virtual void visitMoveHero(MoveHero & pack) {}
 	virtual void visitCastleTeleportHero(CastleTeleportHero & pack) {}

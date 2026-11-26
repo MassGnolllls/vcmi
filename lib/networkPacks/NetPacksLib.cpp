@@ -89,6 +89,16 @@ void PlayerBlocked::visitTyped(ICPackVisitor & visitor)
 	visitor.visitPlayerBlocked(*this);
 }
 
+void SetPlayerControl::visitTyped(ICPackVisitor & visitor)
+{
+	visitor.visitSetPlayerControl(*this);
+}
+
+void PlayerControlChanged::visitTyped(ICPackVisitor & visitor)
+{
+	visitor.visitPlayerControlChanged(*this);
+}
+
 void PlayerCheated::visitTyped(ICPackVisitor & visitor)
 {
 	visitor.visitPlayerCheated(*this);

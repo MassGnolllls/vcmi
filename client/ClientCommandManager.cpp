@@ -34,6 +34,11 @@
 #include "windows/CCastleInterface.h"
 #include "../lib/mapObjects/CGHeroInstance.h"
 #include "../lib/mapObjects/CGTownInstance.h"
+#include "../lib/StartInfo.h"
+#include "../lib/json/JsonUtils.h"
+#include "../lib/modding/ModScope.h"
+#include "../lib/networkPacks/PacksForServer.h"
+#include "../lib/ResourceSet.h"
 #include "adventureMap/AdventureMapInterface.h"
 #include "render/CAnimation.h"
 #include "../lib/texts/CGeneralTextHandler.h"
@@ -191,6 +196,35 @@ void ClientCommandManager::handleGoSolo(const std::string & argument, const std:
 	session["spectate"].Bool() = true;
 	session["spectate-skip-battle-result"].Bool() = true; // nothing to click away
 	client.installSpectator();
+
+	// On the server too the colours are an AI's from now on, so that the game is one between AIs: the
+	// order of the turns (a human's turn comes before the AIs'), the AIs' income on the hard levels,
+	// the battle results. What they start with was decided by the difficulty when the game began: on an
+	// untouched first day the server gives the colour what an AI seat starts with.
+	JsonNode difficulties = JsonUtils::assembleFromFiles("config/difficulty.json");
+	difficulties.setModScope(ModScope::scopeGame());
+	const std::string & difficulty = GameConstants::DIFFICULTY_NAMES[startInfo.difficulty];
+	for(const PlayerColor & color : humans)
+	{
+		const auto & handicap = startInfo.getIthPlayersSettings(color).handicap.startBonus;
+		ResourceSet humanStart;
+		ResourceSet aiStart;
+		humanStart.resolveFromJson(difficulties["human"][difficulty]["resources"]);
+		aiStart.resolveFromJson(difficulties["ai"][difficulty]["resources"]);
+		humanStart += handicap;
+		aiStart += handicap;
+		if(!(humanStart == aiStart))
+		{
+			const bool firstDay = client.gameState().getDate(Date::DAY) == 1;
+			messages.push_back(firstDay
+				? "gosolo: " + color.toString() + " bekommt die Startressourcen eines KI-Sitzes statt die eines Menschen (" + std::to_string(aiStart[EGameResID::GOLD]) + " statt " + std::to_string(humanStart[EGameResID::GOLD]) + " Gold zu Beginn)"
+				: "gosolo: Achtung - " + color.toString() + " hat mit den Startressourcen eines Menschen begonnen (" + std::to_string(humanStart[EGameResID::GOLD]) + " Gold, ein KI-Sitz " + std::to_string(aiStart[EGameResID::GOLD]) + "). Gleich wie unter KIs: /gosolo am ersten Tag oder Schwierigkeit Normal");
+		}
+		SetPlayerControl control;
+		control.ai = true;
+		control.aiStart = true;
+		client.sendRequest(control, color, false);
+	}
 
 	// the map at once, in our colours, where our heroes are
 	adventureInt->onCurrentPlayerChanged(humans.front());
