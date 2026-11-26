@@ -1,0 +1,9 @@
+{
+ "job": "049-twin-nk2-mmai-all2",
+ "state": "running",
+ "commit": "986359106db7a4565dc83aebafd0c7a6f6632f54",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T13:49:37",
+ "note": "Packages 1 to 3 together against Nullkiller2 + MMAI after the corrections of 26.11. (one town is held, not two; the last town; the way to a town is known however far; a desperate siege; bound unless three times as strong). Same games as jobs 038a (base 18/4/1) and 046 (statPlaces alone)."
+}
