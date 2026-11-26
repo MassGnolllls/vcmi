@@ -293,6 +293,12 @@ private:
 	void restoreNightWatch();           ///< (nightWatch) start of a turn: the troops pooled for the night go back to whom they belong
 	double commanderFactor(const CGHeroInstance * hero) const; ///< what the hero adds to an army it leads (field strength per army value)
 	double primaryPointValue(const CGHeroInstance * hero, int which, bool leader) const; ///< gold a point of attack (0), defence (1), power (2) or knowledge (3) is worth to this hero
+	// (scoutAll) unseen land: a summed-area table of the tiles we cannot see, made once a step
+	mutable std::vector<float> unseenSums;
+	void refreshUnseen() const;
+	double unseenBox(const int3 & centre, int radius, double * share = nullptr) const; ///< unseen tiles in the square of side 2r+1 around a tile, and their share of it
+	double teleporterWorth(const CGHeroInstance * hero, const ObservedObject & object, double * shareOut = nullptr) const; ///< (scoutAll) what going through a gate or monolith we have not used shows us
+	bool doorToUnseen(const ObservedObject & object) const; ///< (scoutAll) a gate or monolith with unseen land behind it
 	bool statPlace(const CGHeroInstance * hero, const ObservedObject & object) const; ///< (statPlaces) a place whose visit raises attack, defence, spell power or knowledge for good
 	// (race) an enemy army and our main hero, and which of them is at a town of ours first
 	struct TownRace

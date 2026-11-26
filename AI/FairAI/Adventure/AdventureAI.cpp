@@ -396,6 +396,9 @@ void Params::loadOverrides(int playerIndex)
 	read("townPortal", townPortal);
 	read("townGuards", townGuards);
 	read("lastChance", lastChance);
+	read("scoutAll", scoutAll);
+	read("scoutHorizon", scoutHorizon);
+	read("scoutSearchShare", scoutSearchShare);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
 	read("earlyGoldContact", earlyGoldContact);
@@ -819,6 +822,9 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 		return std::max(params.maxTravelTurns, 6); // (wardens) the town to hold next may lie a week behind the front
 	if(supply && supply->courier == hero->id)
 		return std::max(params.maxTravelTurns, params.supplyDays + 1);
+	// (scoutAll) a scout goes as far as there is land to see
+	if(params.scoutAll && scoutsToday.count(hero->id))
+		return std::max(params.maxTravelTurns, params.scoutHorizon);
 	return params.couriers && !isMain(hero) ? std::max(params.maxTravelTurns, 8) : params.maxTravelTurns;
 }
 
@@ -2415,6 +2421,124 @@ double AdventureAI::primaryPointValue(const CGHeroInstance * hero, int which, bo
 	// the army it leads now and in the weeks to come (a leader's army doubles within a month)
 	const double army = std::max(60000.0, 2.0 * static_cast<double>(hero->getArmyStrength()));
 	return std::max(flat, step * army * params.goldPerArmyValue);
+}
+
+void AdventureAI::refreshUnseen() const
+{
+	const int3 size = cb->getMapSize();
+	const size_t w = static_cast<size_t>(size.x) + 1;
+	const size_t h = static_cast<size_t>(size.y) + 1;
+	unseenSums.assign(w * h * size.z, 0.f);
+	auto at = [&](int x, int y, int z) -> float & { return unseenSums[(static_cast<size_t>(z) * h + y) * w + x]; };
+	for(int z = 0; z < size.z; ++z)
+		for(int y = 0; y < size.y; ++y)
+			for(int x = 0; x < size.x; ++x)
+				at(x + 1, y + 1, z) = (cb->isVisible(int3(x, y, z)) ? 0.f : 1.f) + at(x, y + 1, z) + at(x + 1, y, z) - at(x, y, z);
+}
+
+double AdventureAI::unseenBox(const int3 & c, int r, double * share) const
+{
+	const int3 size = cb->getMapSize();
+	if(unseenSums.empty())
+		refreshUnseen();
+	const size_t w = static_cast<size_t>(size.x) + 1;
+	const size_t h = static_cast<size_t>(size.y) + 1;
+	auto at = [&](int x, int y) { return static_cast<double>(unseenSums[(static_cast<size_t>(c.z) * h + y) * w + x]); };
+	const int x0 = std::clamp(c.x - r, 0, size.x);
+	const int y0 = std::clamp(c.y - r, 0, size.y);
+	const int x1 = std::clamp(c.x + r + 1, 0, size.x);
+	const int y1 = std::clamp(c.y + r + 1, 0, size.y);
+	if(c.z < 0 || c.z >= size.z || x1 <= x0 || y1 <= y0)
+	{
+		if(share)
+			*share = 0;
+		return 0;
+	}
+	const double count = at(x1, y1) - at(x0, y1) - at(x1, y0) + at(x0, y0);
+	if(share)
+		*share = count / std::max(1, (x1 - x0) * (y1 - y0));
+	return count;
+}
+
+double AdventureAI::teleporterWorth(const CGHeroInstance * hero, const ObservedObject & object, double * shareOut) const
+{
+	// (scoutAll) What lies behind a gate or monolith: the land around the exits we have seen, or -
+	// where we have seen none - for a subterranean gate the other level around the same place (a
+	// gate leads there; that much the rules tell everybody), for a monolith the map as a whole.
+	// (On the four-town maps one pair of gates joins the two levels, 14 to 32 tiles from the
+	// nearest town, and the enemy's towns are always on the other level. In 18 of 144 games no
+	// hero of ours ever went through; none of them was won.)
+	const int3 size = cb->getMapSize();
+	constexpr int radius = 16;
+	double tiles = 0;
+	double share = 0;
+	bool exitSeen = false;
+	if(auto channel = teleportChannels.find(object.id); channel != teleportChannels.end())
+	{
+		for(ObjectInstanceID exitId : cb->getTeleportChannelExits(channel->second, me))
+		{
+			if(exitId == object.id)
+				continue;
+			const CGObjectInstance * exit = perception.visibleObject(exitId);
+			if(!exit)
+				continue;
+			exitSeen = true;
+			double s = 0;
+			const double t = unseenBox(exit->visitablePos(), radius, &s);
+			if(t > tiles)
+			{
+				tiles = t;
+				share = s;
+			}
+		}
+	}
+	if(!exitSeen)
+	{
+		if(object.type == Obj::SUBTERRANEAN_GATE)
+		{
+			for(int z = 0; z < size.z; ++z)
+			{
+				if(z == object.visitablePos.z)
+					continue;
+				double s = 0;
+				const double t = unseenBox(int3(object.visitablePos.x, object.visitablePos.y, z), radius, &s);
+				if(t > tiles)
+				{
+					tiles = t;
+					share = s;
+				}
+			}
+		}
+		else
+		{
+			double all = 0;
+			for(int z = 0; z < size.z; ++z)
+				all += unseenBox(int3(size.x / 2, size.y / 2, z), std::max(size.x, size.y));
+			share = all / std::max(1, size.x * size.y * size.z);
+			tiles = share * (2 * radius + 1) * (2 * radius + 1);
+		}
+	}
+	if(shareOut)
+		*shareOut = share;
+	if(share < 0.1 || tiles < 30)
+		return 0; // nothing new behind it
+	const bool scout = scoutsToday.count(hero->id) > 0;
+	// a quarter of the unseen land around the far side, at the value of a tile we have never seen
+	double worth = 0.25 * tiles * params.explorationTileValue * std::max(0.6, 1.0 - today / 56.0);
+	// ... and while an enemy still has towns we have not found, finding them
+	if(huntWanted && (scout || campaign(hero)))
+		worth += (scout ? params.scoutSearchShare : 1.0) * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0) * share;
+	return worth;
+}
+
+bool AdventureAI::doorToUnseen(const ObservedObject & object) const
+{
+	if(object.type != Obj::SUBTERRANEAN_GATE && object.type != Obj::MONOLITH_TWO_WAY && object.type != Obj::MONOLITH_ONE_WAY_ENTRANCE)
+		return false;
+	if(usedTeleporters.count(object.id))
+		return false;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	return leader && teleporterWorth(leader, object) > 0;
 }
 
 bool AdventureAI::statPlace(const CGHeroInstance * hero, const ObservedObject & object) const
@@ -7773,6 +7897,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		// stepping in reveals a new region; afterwards the pathfinder knows the way
 		if(usedTeleporters.count(object.id))
 			return 0;
+		// (scoutAll) by the unseen land behind it - for scouts and the main hero; the collectors stay with their work
+		if(params.scoutAll && (scoutsToday.count(hero->id) || isMain(hero)))
+			return teleporterWorth(hero, object);
 		return 40 * params.explorationTileValue * std::max(0.5, 1.0 - today / 56.0);
 	case Obj::TOWN:
 	{
@@ -8017,7 +8144,10 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	const int3 heroPos = hero->visitablePos();
 	const int heroNum = hero->id.getNum();
 	const int horizon = travelHorizon(hero);
-	const int exploreHorizon = campaign(hero) || (isMain(hero) && params.mainHorizon > params.exploreMaxTurns) ? horizon : params.exploreMaxTurns;
+	const int exploreHorizon = campaign(hero) || (isMain(hero) && params.mainHorizon > params.exploreMaxTurns) ? horizon
+		: (params.scoutAll && scoutsToday.count(hero->id) ? std::max(params.exploreMaxTurns, params.scoutHorizon) : params.exploreMaxTurns);
+	if(params.scoutAll)
+		refreshUnseen(); // (what this hero and the others have uncovered since the last step)
 
 	// (muster) the town whose troops the main hero is to fetch counts however far it is
 	int3 musterTile(-1, -1, -1);
@@ -8638,7 +8768,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 				// (statPlaces) a point for the rest of the game is worth a day of the campaign
 				const double errandLimit = object.type == Obj::TOWN || object.type == Obj::HERO ? 0.3 : (params.statPlaces && statPlace(hero, object) ? 1.0 : 0.5);
-				if(!needed && node->cost > errandLimit)
+				// (scoutAll) the way into land we have not seen, while an enemy has towns we have not found, is the campaign itself
+				const bool wayOn = params.scoutAll && huntWanted && doorToUnseen(object);
+				if(!needed && !wayOn && node->cost > errandLimit)
 				{
 					++rejected["errand"];
 					continue;
@@ -8863,9 +8995,20 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const GuardOnPath g = firstGuard(free);
 			if(g.guard.hasValue())
 			{
-				unlockValue[g.guard] += value * unlockShare(g, free);
-				if(object.type == Obj::TOWN && object.owner != me)
-					strategicUnlock[g.guard] += value * unlockShare(g, free);
+				// (scoutAll) A guard before a door into land we have not seen, while an enemy still has
+				// towns we have not found: beaten, it lets our scouts through to them. To a hero that
+				// leads it counts half of what finding a town is worth. (On Stronghold efreets guard the
+				// only gate between the levels: "not worth it" on day 21, and nobody looked again.)
+				double door = 0;
+				if(params.scoutAll && huntWanted && leads(hero) && today >= 14 && doorToUnseen(object))
+				{
+					double share = 0;
+					teleporterWorth(hero, object, &share);
+					door = 0.5 * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0) * share;
+				}
+				unlockValue[g.guard] += value * unlockShare(g, free) + door;
+				if((object.type == Obj::TOWN && object.owner != me) || door > 0)
+					strategicUnlock[g.guard] += value * unlockShare(g, free) + door;
 				if(door)
 					doorBehind[g.guard] = unseenShare;
 			}
@@ -8916,6 +9059,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			decay = std::max(0.6, 1.0 - today / 56.0) * params.huntFactor * (huntWanted ? 3.0 : 1.5); // looking for the enemy's towns
 		else if(!enemyTownKnown && isMain(hero) && today > 14)
 			decay *= params.huntFactor;
+		// (scoutAll) to a scout the land it has not seen is worth looking at on any day
+		if(params.scoutAll && scoutsToday.count(hero->id))
+			decay = std::max(decay, 0.6);
 		tileValue = params.explorationTileValue * decay;
 		const int3 size = cb->getMapSize();
 		Target bestExplore;
