@@ -1,9 +1,12 @@
 {
  "job": "061-twin-nk2-battleai-all3scout-s26",
- "state": "running",
+ "state": "done",
  "commit": "0a11b942a37a6b2738ad609c864fb7b93a07cb8e",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T22:41:12",
- "note": "all3 with scoutAll (owner's word of 26.11.2026 16:22: land we have not seen and can get to is always explored by scouts). Same games as job 054 (all3, seed 26)."
+ "note": "all3 with scoutAll (owner's word of 26.11.2026 16:22: land we have not seen and can get to is always explored by scouts). Same games as job 054 (all3, seed 26).",
+ "returncode": 0,
+ "finished": "2026-11-26T23:25:42",
+ "minutes": 44.5
 }
