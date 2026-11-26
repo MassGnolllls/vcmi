@@ -1,0 +1,9 @@
+{
+ "job": "050-twin-nk2-battleai-all3-s25",
+ "state": "running",
+ "commit": "9525661ab39ac170af16448dd549d088bae1457b",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T14:39:12",
+ "note": "All packages with the two rules that bind the main hero more set back to the first version (raceFree 2.0, raceLastTown 0); the corrections of the bugs stay. Same games as jobs 038d, 042, 044 and 048 (seed 25)."
+}
