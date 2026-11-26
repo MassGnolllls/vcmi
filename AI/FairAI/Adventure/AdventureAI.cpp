@@ -402,6 +402,12 @@ void Params::loadOverrides(int playerIndex)
 	read("homeRing", homeRing);
 	read("homeRingDays", homeRingDays);
 	read("homeRingLoss", homeRingLoss);
+	read("raceBind", raceBind);
+	read("raceBindDays", raceBindDays);
+	read("raceBindRest", raceBindRest);
+	read("trade", trade);
+	read("tradeMargin", tradeMargin);
+	read("tradeBoost", tradeBoost);
 	read("scoutSearchShare", scoutSearchShare);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
@@ -8292,7 +8298,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	// standing in a town that cannot hold on its own: only trips that end back home today,
 	// except to attack an enemy hero (the threat itself)
 	double roundTripBudget = -1;
-	if(params.townGuard && isMain(hero))
+	if(params.townGuard && isMain(hero) && !bindFree()) // (raceBind: not on the days out)
 	{
 		if(const auto * home = hero->getVisitedTown(); home && home->visitablePos() == heroPos && townNeed(home, hero) > 0.2)
 			roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
@@ -8316,6 +8322,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			// ours holds the town and it is there today)
 			const bool raider = race.plan == 1 && !race.guarded;
 			if(race.plan != 2 && race.plan != 3 && !raider)
+				continue;
+			// (raceBind) the days out: the enemy that waits before the town does not hold the main hero
+			if(bindFree() && !raider)
 				continue;
 			// (Three times its strength: let it come - an army that sits in our town cannot get away.
 			// Not at twice: behind our walls it counts half as much again and buys what the town
@@ -8396,6 +8405,84 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hero->getNameTranslated(), fieldStrength(hero), outmatched, params.lastStand && !params.fortress ? "lately, and we are down to our last town" : "near us lately",
 				fortressOutside ? "heading for a town of ours" : "day trips from the town only");
 		fortressLog = today;
+	}
+	// (trade) The enemy's main army is in the race for a town of ours that our main hero cannot meet in
+	// the field (behind the walls, or not to be held): a town of that enemy which the main hero reaches
+	// tradeMargin days before any army of it that could hold the town (half our strength or more), and
+	// can take, is taken instead. On the way there it has only to be first. Not while outmatched (with
+	// one town left: lastStand).
+	std::set<ObjectInstanceID> tradeTowns;
+	bool tradeAdded = false;
+	if(params.trade && params.race && isMain(hero) && outmatched <= 0)
+	{
+		bool pressed = false;
+		for(const TownRace & race : races)
+			pressed = pressed || race.plan >= 3;
+		const double ours = fieldStrength(hero);
+		for(const auto & [id, object] : known)
+		{
+			if(object.type != Obj::TOWN || !isEnemy(object.owner))
+				continue;
+			// (on our way: the town to take yesterday is still where the main hero is going)
+			auto went = tradeDay.find(id.getNum());
+			auto goal = currentGoal.find(hero->id);
+			const bool going = went != tradeDay.end() && went->second >= today - 1 && goal != currentGoal.end() && goal->second == object.visitablePos;
+			if(!pressed && !going)
+				continue;
+			const CGPathNode * node = reachable(paths, object.visitablePos);
+			if(!node)
+				continue;
+			const double margin = going ? 0.0 : params.tradeMargin;
+			// the nearest army of that enemy that could hold the town against us
+			double theirs = 1e9;
+			std::string by = "none in reach";
+			for(const auto & [otherId, other] : known)
+			{
+				if(other.type != Obj::HERO || other.owner != object.owner || !other.army || today - other.lastSeenDay > 5 || other.visitablePos == object.visitablePos)
+					continue;
+				if(auto beaten = defeatedDay.find(other.subtype.getNum()); beaten != defeatedDay.end() && beaten->second >= other.lastSeenDay && !other.visibleNow)
+					continue;
+				const double strength = observedDanger(other) * heroFactor(other);
+				if(strength < 0.5 * ours)
+					continue;
+				const int age = today - other.lastSeenDay;
+				const double reach = std::max(8.0, reachEstimate(other, true));
+				const double tiles = enemyDistance(otherId, other.visitablePos, strength, object.visitablePos, (node->cost + margin + age + 1.0) * reach);
+				if(!std::isfinite(tiles))
+					continue;
+				const double days = std::max(0.0, tiles / reach - age);
+				if(days < theirs)
+				{
+					theirs = days;
+					const HeroTypeID type(other.subtype.getNum());
+					by = boost::str(boost::format("%s (%.0f)") % (type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?")) % strength);
+				}
+			}
+			// what holds it: the heroes in it and the town, walls counted
+			double defenders = 0;
+			for(const auto & [otherId, other] : known)
+			{
+				if(other.visitablePos != object.visitablePos || other.owner == me)
+					continue;
+				if(other.type == Obj::HERO)
+					defenders += observedDanger(other) * heroFactor(other);
+				else if(other.type == Obj::TOWN)
+					defenders += observedDanger(other);
+			}
+			const double danger = guardDanger(object.visitablePos) + defenders * params.wallsFactor;
+			const bool first = theirs >= node->cost + margin;
+			const bool takes = expectedLoss(hero, danger, false, true) >= 0;
+			if(first && takes)
+			{
+				tradeTowns.insert(id);
+				tradeDay[id.getNum()] = today;
+			}
+			if(tradeLogged.insert({today, id.getNum()}).second)
+				logAi->info("FairAI %s day %d: trade - the town at %s%s: we are there in %.1f days, the nearest army of theirs that could hold it: %s%s; held by %.0f (walls counted) against our %.0f - %s",
+					me.toString(), today, object.visitablePos.toString(), going ? " (on our way)" : "", node->cost, by,
+					theirs < 1e8 ? boost::str(boost::format(", %.1f days away") % theirs) : std::string(), danger, ours,
+					!takes ? "too strong" : (!first ? "they are there first" : "the town to take"));
+		}
 	}
 	// (safeParts) A real army in the hands of a hero that is not our main hero does not spend the
 	// night in the open: whatever attacks it there wins, and it is attacked only by what wins. From
@@ -8557,13 +8644,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool town = it != known.end() && it->second.type == Obj::TOWN && (it->second.owner == me || (params.lastChance && perception.ownTowns().empty()));
-			if(!town)
+			if(!town && !tradeTowns.count(object))
 				return;
 		}
 		// (race) only what leaves the main hero time to be in the town before the enemy's army: the
 		// way there and from there to the gate - back the way it came, or straight across at a
 		// marching pace on the same level, or by Town Portal the morning after
-		if(!raceLeashes.empty() && !toSafety && description != "race")
+		if(!raceLeashes.empty() && !toSafety && description != "race" && !tradeTowns.count(object)) // (trade: the town to take instead)
 		{
 			for(const RaceLeash & leash : raceLeashes)
 			{
@@ -8603,7 +8690,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		// (wardens) a warden that cannot hold its town and finds none to go to gets out of the way: its
 		// army is worth more than the walls it would die behind
-		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery && !(warden && toSafety))
+		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery && !(warden && toSafety) && !tradeTowns.count(object)) // (trade: never while outmatched)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner);
@@ -8632,6 +8719,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		auto goal = currentGoal.find(hero->id);
 		if(goal != currentGoal.end() && goal->second == tile)
 			t.score *= params.stickiness;
+		if(object.hasValue() && tradeTowns.count(object))
+			tradeAdded = true;
 		out.push_back(t);
 	};
 	if(evacuating)
@@ -8708,6 +8797,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			continue;
 		const CGObjectInstance * instance = perception.visibleObject(id);
 		double value = objectValue(hero, object, instance);
+		// (trade) the town taken instead of ours counts what a town counts on campaign
+		if(tradeTowns.count(id))
+			value = std::max(value, params.tradeBoost * 2.0 * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0));
 		if(params.couriers && id == mainHero && !isMain(hero) && logAi->isDebugEnabled() && courierLog.insert(today * 1000 + heroNum % 1000).second)
 		{
 			// once a day per hero: why a hero does or does not bring its troops to the leader (diagnostics)
@@ -9758,6 +9850,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	for(const RaceLeash & leash : raceLeashes)
 	{
 		if(leash.own > 1e8 || leash.gate == heroPos || failedToday.count({heroNum, leash.gate}))
+			continue;
+		// (trade) behind walls we would be held in: the main hero takes a town of theirs instead
+		if(tradeAdded && leash.race->plan >= 3)
 			continue;
 		Target t;
 		t.tile = leash.gate;
@@ -12087,7 +12182,47 @@ void AdventureAI::planRace()
 			}
 		}
 	}
+	// (raceBind) The days a race has held the main hero at home in a row: behind the walls, or to meet
+	// an army it does not outweigh by raceFree. After raceBindDays of them without the enemy coming it
+	// goes out for raceBindRest days, then the count starts again. Not with one town left (lastStand).
+	if(params.raceBind && leader)
+	{
+		const TownRace * holding = nullptr;
+		for(const TownRace & race : races)
+			if(race.plan == 3 || (race.plan == 2 && own < params.raceFree * race.threat))
+				holding = &race;
+		if(towns.size() < 2 && bindFreeUntil >= today)
+		{
+			bindFreeUntil = today - 1;
+			logAi->info("FairAI %s day %d: %s is down to one town - the days out are over", me.toString(), today, leader->getNameTranslated());
+		}
+		if(holding)
+		{
+			if(bindLastDay < today - 1)
+				bindSince = today;
+			bindLastDay = today;
+			if(today > bindFreeUntil)
+			{
+				// (the days out do not count: after them the hold starts anew)
+				bindSince = std::max(bindSince, bindFreeUntil + 1);
+				const int held = today - bindSince;
+				if(held >= params.raceBindDays && towns.size() >= 2)
+				{
+					bindFreeUntil = today + static_cast<int>(std::lround(params.raceBindRest)) - 1;
+					const auto * town = ownTownById(holding->town);
+					const HeroTypeID type(holding->enemyType);
+					logAi->info("FairAI %s day %d: the race for %s has held %s at home for %d days and %s (%.0f against our %.0f) has not come - it goes out until day %d",
+						me.toString(), today, town ? town->getNameTranslated() : std::string("?"), leader->getNameTranslated(), held,
+						type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("the enemy's army"), holding->threat, own, bindFreeUntil);
+				}
+			}
+		}
+	}
+}
 
+bool AdventureAI::bindFree() const
+{
+	return params.raceBind && today <= bindFreeUntil;
 }
 
 void AdventureAI::planHomeRing()

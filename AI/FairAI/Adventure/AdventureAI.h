@@ -318,6 +318,12 @@ private:
 	std::set<std::pair<int, int>> raceLogged;   ///< (day, town): the plan was written down
 	mutable int raceBoundDay = -1;              ///< the day the main hero last left a target aside for a race
 	mutable int raceBoundCount = 0;
+	int bindSince = -1;          ///< (raceBind) the first day of the main hero's present spell of being held at home by a race
+	int bindLastDay = -1;        ///< (raceBind) the last day of it
+	int bindFreeUntil = -1;      ///< (raceBind) the main hero goes out until this day
+	bool bindFree() const;       ///< (raceBind) today the main hero is not held at home by a race
+	mutable std::map<int, int> tradeDay;          ///< (trade) enemy town -> the last day it was the town to take in trade
+	mutable std::set<std::pair<int, int>> tradeLogged; ///< (trade) (day, town): the reasons were written down
 	void planRace();
 	// (homeRing) the land within homeRingDays of our towns
 	std::vector<uint8_t> homeTiles;
