@@ -1,0 +1,9 @@
+{
+ "job": "046-twin-nk2-mmai-statplaces",
+ "state": "running",
+ "commit": "0a9400551a61e981bc0f1401f8ae0a4c88ff1e82",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T11:38:45",
+ "note": "Package 1 alone (statPlaces) against Nullkiller2 + MMAI on the four-town maps, as the reference for job 045. Same games as job 038a."
+}
