@@ -1,0 +1,9 @@
+{
+ "job": "052-twin-nk2-battleai-statplaces-s26",
+ "state": "running",
+ "commit": "2d2b5db5d7221d0a57c536eb8300f42b9e1a7202",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T15:52:07",
+ "note": "statplaces, seed 26. 24 games do not tell the variants apart (against Nullkiller2 + BattleAI: base 15/6/3, statPlaces 21/2/1, all 19/3/2 and 15/3/6; against MMAI: base 18/4/1, statPlaces 14/6/4, all 17/4/2). More games of each on the four-town maps, against Nullkiller2 + BattleAI."
+}
