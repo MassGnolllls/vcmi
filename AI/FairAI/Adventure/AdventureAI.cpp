@@ -804,6 +804,13 @@ int AdventureAI::travelHorizon(const CGHeroInstance * hero) const
 	// away (everything else counts only as far as before - see collectTargets)
 	if(isMain(hero) && params.townWorth)
 		return std::max(params.maxTravelTurns, 30);
+	// (race, lastChance) The way to a town of ours - and, without a town, to any town - is known
+	// however far it is: with four days of sight a main hero five days from home had "no way" to
+	// either of its towns, did not come back when they fell, and without a town went exploring for
+	// the seven days it had left (job 044, game 17; job 038d, game 16). Everything else counts only
+	// as far as before (collectTargets).
+	if(isMain(hero) && (params.race || (params.lastChance && perception.ownTowns().empty())))
+		return std::max(params.maxTravelTurns, 30);
 	if(isMain(hero) && params.mainHorizon > params.maxTravelTurns)
 		return params.mainHorizon;
 	if(isWarden(hero))
@@ -8172,9 +8179,11 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const bool raider = race.plan == 1 && !race.guarded;
 			if(race.plan != 2 && race.plan != 3 && !raider)
 				continue;
-			// (twice its strength: let it come - an army that sits in our town cannot get away, and
-			// the walls do not save it; the main hero is free)
-			if(race.plan == 2 && fieldStrength(hero) >= 2.0 * race.threat)
+			// (Three times its strength: let it come - an army that sits in our town cannot get away.
+			// Not at twice: behind our walls it counts half as much again and buys what the town
+			// sells; a main hero of 946,000 stood before its own town held by 290,000 and found it
+			// too strong.)
+			if(race.plan == 2 && fieldStrength(hero) >= 3.0 * race.threat)
 				continue;
 			const auto * town = ownTownById(race.town);
 			if(!town || town->tempOwner != me)
@@ -8182,8 +8191,6 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			const double allowed = raceAllowed(race);
 			if(town->visitablePos() == heroPos)
 			{
-				if(allowed <= 1.0)
-					roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
 				raceLeashes.push_back({&race, heroPos, allowed, 0.0});
 				continue;
 			}
@@ -8196,6 +8203,25 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				continue;
 			raceLeashes.push_back({&race, town->visitablePos(), allowed, own});
 		}
+		// One hero holds one town: the one the enemy's main army runs for before the one a raider runs
+		// for, and of two the one it can be at first. (With a target for each of two towns the main
+		// hero stepped out of the town it had to hold and back in until its movement points were
+		// gone, and ended the day one tile outside the gate - job 043, game 3.)
+		if(raceLeashes.size() > 1)
+		{
+			auto primary = std::min_element(raceLeashes.begin(), raceLeashes.end(), [](const RaceLeash & x, const RaceLeash & y)
+			{
+				if(x.race->mainArmy != y.race->mainArmy)
+					return x.race->mainArmy;
+				if(x.race->arrival != y.race->arrival)
+					return x.race->arrival < y.race->arrival;
+				return x.own < y.own;
+			});
+			const RaceLeash keep = *primary;
+			raceLeashes.assign(1, keep);
+		}
+		if(!raceLeashes.empty() && raceLeashes.front().gate == heroPos && raceLeashes.front().allowed <= 1.0)
+			roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
 	}
 	// (townGuards) a town's guard: from its town only what ends back there today (and the raider
 	// itself, today); outside the town, the way to it
@@ -8387,6 +8413,15 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			|| description == "fortress" || description == "evacuate" || description == "relocate";
 		if(guardOutside && description != "guard")
 			return;
+		// (race, lastChance) the long view is for towns: ours, and any town when we have none
+		if(isMain(hero) && !campaign(hero) && !params.townWorth && (params.race || params.lastChance) && description != "race"
+			&& travel > std::max(params.maxTravelTurns, params.mainHorizon) + 0.01)
+		{
+			auto it = object.hasValue() ? known.find(object) : known.end();
+			const bool town = it != known.end() && it->second.type == Obj::TOWN && (it->second.owner == me || (params.lastChance && perception.ownTowns().empty()));
+			if(!town)
+				return;
+		}
 		// (race) only what leaves the main hero time to be in the town before the enemy's army: the
 		// way there and from there to the gate - back the way it came, or straight across at a
 		// marching pace on the same level, or by Town Portal the morning after
@@ -8514,25 +8549,23 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	if(auto seen = seenTilesOn.find(today); seen != seenTilesOn.end() && mapTiles > 0)
 		unseenShare = 1.0 - static_cast<double>(seen->second) / mapTiles;
 
-	if(params.lastChance && isMain(hero) && perception.ownTowns().empty() && lastChanceLogDay != today)
-	{
-		lastChanceLogDay = today;
-		for(const auto & [id, object] : known)
-		{
-			if(object.type != Obj::TOWN || object.owner == me)
-				continue;
-			if(!reachable(paths, object.visitablePos))
-				logAi->info("FairAI %s day %d: no town of ours - the town at %s: %s", me.toString(), today, object.visitablePos.toString(),
-					reachable(freePaths, object.visitablePos) ? "the way is guarded" : "no way known");
-		}
-	}
 	// ---- objects other than monsters
 	for(const auto & [id, object] : known)
 	{
 		if(object.type == Obj::MONSTER || object.visitablePos == heroPos)
 			continue;
+		// (lastChance) without a town: why a town is no target, written down once a day
+		const bool townless = params.lastChance && isMain(hero) && object.type == Obj::TOWN && object.owner != me && perception.ownTowns().empty();
+		const auto noTarget = [&](const std::string & reason)
+		{
+			if(townless && raceLogged.insert({today, -200000 - id.getNum()}).second)
+				logAi->info("FairAI %s day %d: no town of ours - the town at %s is no target: %s", me.toString(), today, object.visitablePos.toString(), reason);
+		};
 		if(failedToday.count({heroNum, object.visitablePos}))
+		{
+			noTarget("the way there failed today");
 			continue;
+		}
 		if(auto f = fruitless.find({heroNum, id}); f != fruitless.end() && today < f->second + 7)
 			continue;
 		const CGObjectInstance * instance = perception.visibleObject(id);
@@ -8551,7 +8584,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				way && unsafe(way, id) ? ", unsafe" : "");
 		}
 		if(value <= 0 || reservedByOther(id))
+		{
+			noTarget(value <= 0 ? "it counts for nothing" : "another hero of ours is on its way");
 			continue;
+		}
+		if(townless)
+		{
+			const CGPathNode * way = paths.getPathInfo(object.visitablePos);
+			if(!way || !way->reachable())
+				noTarget(reachable(freePaths, object.visitablePos) ? "the way is guarded" : "no way known");
+			else if(way->turns > horizon)
+				noTarget((boost::format("%.1f days away, further than we look (%d days)") % way->cost % horizon).str());
+		}
 		const bool door = params.breakout >= 3 && leads(hero) && !usedTeleporters.count(id)
 			&& (object.type == Obj::MONOLITH_TWO_WAY || object.type == Obj::SUBTERRANEAN_GATE);
 
@@ -8636,7 +8680,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 					if(std::isfinite(tiles))
 						theirDays = std::max(0.0, tiles / std::max(8.0, raceMainReach) - raceMainAge);
 				}
-				first = std::ceil(node->cost - 0.01) <= std::ceil(theirDays - 0.05);
+				// (their hero steps into whichever town we come to: a day to spare, or there today)
+				first = (node->cost <= 1.0 && theirDays > 1.0) || theirDays >= node->cost + 1.5;
 				value *= (first ? 3.0 : 1.0) * (id == lastChanceTown ? 1.5 : 1.0);
 			}
 			const bool versusHero = (object.type == Obj::HERO || object.type == Obj::TOWN) && isEnemy(object.owner);
@@ -8651,6 +8696,12 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				const double simulated = heroFightLoss(hero, object);
 				loss = simulated < 0 ? -1 : std::max(loss, simulated);
 			}
+			// (lastChance) Without a town the army is lost in seven days anyway: what a siege costs can
+			// never weigh more than the town. (A town held by 770,000 behind the walls against our
+			// 946,000 was "a target" worth 100,000 at a loss of more than that - and the main hero
+			// picked up a rally flag instead.)
+			if(params.lastChance && desperate && isMain(hero) && loss > 0.5 * value)
+				loss = 0.5 * value;
 			if(params.lastChance && desperate && isMain(hero) && raceLogged.insert({today, -100000 - id.getNum()}).second)
 				logAi->info("FairAI %s day %d: no town of ours - the town at %s: %.1f days away, defended by %.0f (walls counted) against our %.0f, the enemy's main army there in %.1f days - %s",
 					me.toString(), today, object.visitablePos.toString(), node->cost, danger, fieldStrength(hero), std::min(theirDays, 99.0),
@@ -9533,7 +9584,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		t.value = now ? stake : 0.15 * stake;
 		t.travel = leash.own;
 		// (of two towns the same army runs for, the one it can be at first: the other is a day further for it too)
-		t.score = now ? 90000 + 1000.0 * (5.0 - std::min(5.0, leash.race->arrival)) : t.value / (leash.own + params.travelOffset);
+		t.score = now ? 90000 + 1000.0 * (5.0 - std::min(5.0, leash.race->arrival)) : std::min(60000.0, t.value / (leash.own + params.travelOffset));
 		t.description = "race";
 		out.push_back(t);
 	}
@@ -11740,8 +11791,6 @@ void AdventureAI::planRace()
 		runners.push_back({id, object.subtype.getNum(), object.visitablePos, army * heroFactor(object), army, reachEstimate(object, true), age});
 		biggest = std::max(biggest, army);
 	}
-	if(runners.empty())
-		return;
 	const double own = leader ? fieldStrength(leader) : 0.0;
 	const double edge = heroEdgeNow();
 	for(const auto * town : towns)
@@ -11794,6 +11843,45 @@ void AdventureAI::planRace()
 				race.threat, race.mainArmy ? "main army" : "raider", race.arrival, local, own, plans[race.plan], race.guarded ? " (a guard of ours in the town)" : "");
 		}
 	}
+	// The last town: without it the game is over in seven days. While an army about as strong as our
+	// main hero's (0.77 of it or more) has been seen in the last ten days - wherever - the main hero
+	// keeps within a day of the town, behind whose walls it holds; it is in the town when that army
+	// can be there by tomorrow (the race above). (Job 043, game 16: the main hero left its last town
+	// for a few objects the day the rule for an outmatched hero let go of it, and the town fell.)
+	if(leader && towns.size() == 1 && townsPeak >= 2 && races.empty())
+	{
+		const CGTownInstance * town = towns.front();
+		double worst = 0;
+		int worstType = -1;
+		for(const auto & [type, seen] : enemySightings)
+		{
+			if(today - seen.day > 10 || seen.strength < 0.77 * own || seen.strength <= worst)
+				continue;
+			if(auto beaten = defeatedDay.find(type); beaten != defeatedDay.end() && beaten->second >= seen.day)
+				continue;
+			worst = seen.strength;
+			worstType = type;
+		}
+		if(worst > townLocal(town) && own * defenceWalls(town) >= worst)
+		{
+			TownRace race;
+			race.town = town->id;
+			race.enemyType = worstType;
+			race.threat = worst;
+			race.arrival = 2.0;
+			race.local = townLocal(town);
+			race.mainArmy = true;
+			race.plan = 3;
+			races.push_back(race);
+			if(raceLogged.insert({today, town->id.getNum()}).second)
+			{
+				const HeroTypeID type(worstType);
+				logAi->info("FairAI %s day %d: race for %s, our last town: %s (%.0f) was seen in the last ten days; the main hero %.0f keeps within a day of it",
+					me.toString(), today, town->getNameTranslated(), type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?"), worst, own);
+			}
+		}
+	}
+
 }
 
 bool AdventureAI::portalTo(const CGHeroInstance * hero, const CGTownInstance * town, const int3 & from, bool now) const
