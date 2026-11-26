@@ -3,3 +3,7 @@
 playing 24 matches on 12 maps with 6 parallel job(s)
 match    1 FairAI+FairAI as blue of 2: victory winner=blue day=163 score=1.00 [792.0s]
 match    4 FairAI+FairAI as red of 2: victory winner=red day=243 score=1.00 [1095.2s]
+match    3 FairAI+FairAI as blue of 2: victory winner=blue day=235 score=1.00 [1226.4s]
+match    2 FairAI+FairAI as red of 2: victory winner=red day=202 score=1.00 [1331.0s]
+match    0 FairAI+FairAI as red of 2: timeout winner= day=301 score=0.98 [1456.4s]
+match    5 FairAI+FairAI as blue of 2: timeout winner= day=301 score=0.90 [1578.0s]
