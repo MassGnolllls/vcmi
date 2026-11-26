@@ -294,6 +294,41 @@ private:
 	double commanderFactor(const CGHeroInstance * hero) const; ///< what the hero adds to an army it leads (field strength per army value)
 	double primaryPointValue(const CGHeroInstance * hero, int which, bool leader) const; ///< gold a point of attack (0), defence (1), power (2) or knowledge (3) is worth to this hero
 	bool statPlace(const CGHeroInstance * hero, const ObservedObject & object) const; ///< (statPlaces) a place whose visit raises attack, defence, spell power or knowledge for good
+	// (race) an enemy army and our main hero, and which of them is at a town of ours first
+	struct TownRace
+	{
+		ObjectInstanceID town;
+		ObjectInstanceID enemy;      ///< the army that comes
+		int enemyType = -1;          ///< its hero
+		double threat = 0;           ///< its strength in the field
+		double arrival = 1e9;        ///< days until it can stand at the gate
+		double local = 0;            ///< what the town puts up without the main hero, walls counted
+		bool mainArmy = false;       ///< the enemy's main army (a raider otherwise)
+		bool guarded = false;        ///< (townGuards) a hero of ours holds the town against the raider
+		int plan = 0;                ///< 1 the town's own means (a raider), 2 the main hero meets it, 3 the main hero behind the walls, 4 the town cannot be held
+	};
+	std::vector<TownRace> races;
+	std::set<std::pair<int, int>> raceLogged;   ///< (day, town): the plan was written down
+	mutable int raceBoundDay = -1;              ///< the day the main hero last left a target aside for a race
+	mutable int raceBoundCount = 0;
+	void planRace();
+	const CGTownInstance * ownTownById(ObjectInstanceID id) const; ///< a town of ours by its id (nullptr once it is not ours)
+	// the strongest enemy army we have seen in the last days, wherever it stands (lastChance)
+	ObjectInstanceID raceMainId;
+	int3 raceMainPos{-1, -1, -1};
+	double raceMainStrength = 0;
+	double raceMainReach = 24;
+	int raceMainAge = 0;
+	// (townGuards) heroes that hold a town against a raider: hero -> (town, the last day a raider was in the race for it)
+	std::map<ObjectInstanceID, std::pair<ObjectInstanceID, int>> townGuards;
+	void guardTowns();
+	// (lastChance) without a town: the town the main hero has set out for, and the day the reasons were written down
+	ObjectInstanceID lastChanceTown;
+	int lastChanceLogDay = -1;
+	double townLocal(const CGTownInstance * town) const;                ///< what a town puts up without the main hero: garrison, heroes there, troops for sale - walls counted
+	double raceAllowed(const TownRace & race) const;                    ///< days our main hero has to be in the town
+	bool portalTo(const CGHeroInstance * hero, const CGTownInstance * town, const int3 & from, bool now) const; ///< (townPortal) the spell would take this hero into that town - cast now where it stands, or tomorrow morning from that tile
+	bool castPortal(const CGHeroInstance * hero, const CGTownInstance * town, const char * why);
 	double ownMagicWorth(const CGHeroInstance * hero) const; ///< (magicWorth 2) what our hero's spells add to its army, by the measured values used for enemy heroes
 	double heroEdgeNow() const;         ///< (boldBehind) the edge the main hero asks for before it attacks an enemy hero
 	bool wouldLead(const CGHeroInstance * candidate) const; ///< (veterans 2) clearly the more experienced leader than the hero that leads now

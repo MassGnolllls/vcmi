@@ -1,0 +1,41 @@
+{
+ "note": "Packages 1 to 3 together (statPlaces, race, townPortal, townGuards, lastChance) against Nullkiller2 + MMAI on the four-town maps. Same games as job 038a (base: 18 won, 4 lost, 1 at the day limit, 1 crash in the opponent's turn).",
+ "script": "mirror_maps.py",
+ "mods": [
+  "mmai"
+ ],
+ "args": [
+  "play",
+  "--src",
+  "maps/mirror-m2",
+  "--pool",
+  "mirror-m2",
+  "--",
+  "--client",
+  "{client}",
+  "--ai",
+  "FairAI+FairAI",
+  "--opponent",
+  "Nullkiller2+MMAI",
+  "--ai-params",
+  "{\"statPlaces\": 1, \"race\": 1, \"townPortal\": 1, \"townGuards\": 1, \"lastChance\": 1}",
+  "--mods",
+  "hota",
+  "--max-days",
+  "300",
+  "--timeout",
+  "7200",
+  "--stall-seconds",
+  "300",
+  "--seed",
+  "25",
+  "--jobs",
+  "{jobs}",
+  "--keep-all-logs",
+  "--ai-log",
+  "debug",
+  "--out",
+  "{out}"
+ ],
+ "jobs": 6
+}
