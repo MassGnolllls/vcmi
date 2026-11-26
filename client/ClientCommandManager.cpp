@@ -218,7 +218,7 @@ void ClientCommandManager::handleGoSolo(const std::string & argument, const std:
 			const bool firstDay = client.gameState().getDate(Date::DAY) == 1;
 			messages.push_back(firstDay
 				? "gosolo: " + color.toString() + " bekommt die Startressourcen eines KI-Sitzes statt die eines Menschen (" + std::to_string(aiStart[EGameResID::GOLD]) + " statt " + std::to_string(humanStart[EGameResID::GOLD]) + " Gold zu Beginn)"
-				: "gosolo: Achtung - " + color.toString() + " hat mit den Startressourcen eines Menschen begonnen (" + std::to_string(humanStart[EGameResID::GOLD]) + " Gold, ein KI-Sitz " + std::to_string(aiStart[EGameResID::GOLD]) + "). Gleich wie unter KIs: /gosolo am ersten Tag oder Schwierigkeit Normal");
+				: "gosolo: Achtung - " + color.toString() + " hat mit den Startressourcen eines Menschen begonnen (" + std::to_string(humanStart[EGameResID::GOLD]) + " Gold, ein KI-Sitz " + std::to_string(aiStart[EGameResID::GOLD]) + "). Gleich wie unter KIs: /gosolo am ersten Tag oder die mittlere Schwierigkeit (Turm)");
 		}
 		SetPlayerControl control;
 		control.ai = true;
