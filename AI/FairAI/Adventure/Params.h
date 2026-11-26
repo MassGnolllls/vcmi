@@ -57,6 +57,8 @@ struct Params
 	int raceMemory = 2;                ///< see race: days a sighting counts
 	double raceMainShare = 0.5;        ///< see race
 	double interceptEdge = 1.1;        ///< see race
+	double raceFree = 3.0;             ///< see race: from this many times the strength of the army that comes nothing binds the main hero (2.0 in the first runs: jobs 043 and 044)
+	int raceLastTown = 1;              ///< see race: 1: while an army about as strong as ours has been seen in the last ten days the main hero keeps within a day of our last town (0 in the first runs)
 	int townPortal = 0;                ///< 1: the main hero casts Town Portal when it has the spell: into a town it must stand in tonight and cannot walk to (race); the race counts the way back by the spell
 	int townGuards = 0;                ///< 1: a small army before a town is met by the town's own means - troops bought, a hero of ours in the town (hired there if none is near) that leads them behind the walls, learns the guild's spells and stays while the intruder is about; it goes out against the intruder as soon as it is the stronger (heroEdge). The main hero comes back for a small army only when nothing else holds the town and the way is short
 	int lastChance = 0;                ///< 1: without a town the main hero goes for the town the enemy's main army cannot reach before it (on any level) instead of the nearest one, and the log says why a town is no target

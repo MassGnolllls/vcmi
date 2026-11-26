@@ -391,6 +391,8 @@ void Params::loadOverrides(int playerIndex)
 	read("raceMemory", raceMemory);
 	read("raceMainShare", raceMainShare);
 	read("interceptEdge", interceptEdge);
+	read("raceFree", raceFree);
+	read("raceLastTown", raceLastTown);
 	read("townPortal", townPortal);
 	read("townGuards", townGuards);
 	read("lastChance", lastChance);
@@ -8183,7 +8185,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			// Not at twice: behind our walls it counts half as much again and buys what the town
 			// sells; a main hero of 946,000 stood before its own town held by 290,000 and found it
 			// too strong.)
-			if(race.plan == 2 && fieldStrength(hero) >= 3.0 * race.threat)
+			if(race.plan == 2 && fieldStrength(hero) >= params.raceFree * race.threat)
 				continue;
 			const auto * town = ownTownById(race.town);
 			if(!town || town->tempOwner != me)
@@ -11848,7 +11850,7 @@ void AdventureAI::planRace()
 	// keeps within a day of the town, behind whose walls it holds; it is in the town when that army
 	// can be there by tomorrow (the race above). (Job 043, game 16: the main hero left its last town
 	// for a few objects the day the rule for an outmatched hero let go of it, and the town fell.)
-	if(leader && towns.size() == 1 && townsPeak >= 2 && races.empty())
+	if(params.raceLastTown && leader && towns.size() == 1 && townsPeak >= 2 && races.empty())
 	{
 		const CGTownInstance * town = towns.front();
 		double worst = 0;
