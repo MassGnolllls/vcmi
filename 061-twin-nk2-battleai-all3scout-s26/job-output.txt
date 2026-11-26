@@ -17,3 +17,8 @@ match   13 FairAI+FairAI as blue of 2: victory winner=blue day=165 score=1.00 [5
 match   12 FairAI+FairAI as red of 2: victory winner=red day=190 score=1.00 [607.9s]
 match   14 FairAI+FairAI as red of 2: victory winner=red day=136 score=1.00 [489.5s]
 match   18 FairAI+FairAI as red of 2: victory winner=red day=62 score=1.00 [143.0s]
+match   16 FairAI+FairAI as red of 2: victory winner=red day=167 score=1.00 [628.5s]
+match   20 FairAI+FairAI as red of 2: victory winner=red day=97 score=1.00 [296.6s]
+match   21 FairAI+FairAI as blue of 2: victory winner=blue day=100 score=1.00 [274.7s]
+match   15 FairAI+FairAI as blue of 2: victory winner=red day=233 score=0.00 [921.2s]
+match   19 FairAI+FairAI as blue of 2: victory winner=red day=220 score=0.00 [677.1s]
