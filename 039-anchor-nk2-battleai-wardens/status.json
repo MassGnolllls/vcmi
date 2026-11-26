@@ -1,9 +1,12 @@
 {
  "job": "039-anchor-nk2-battleai-wardens",
- "state": "running",
+ "state": "done",
  "commit": "0d7265a77b1fe3b58b52636b95a61662a13d7830",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T03:41:34",
- "note": "Wardens (BAUPLAN part 1b, wardens 2: heroes for the troops the main hero cannot lead) against Nullkiller2 + BattleAI, same games as job 038."
+ "note": "Wardens (BAUPLAN part 1b, wardens 2: heroes for the troops the main hero cannot lead) against Nullkiller2 + BattleAI, same games as job 038.",
+ "returncode": 0,
+ "finished": "2026-11-26T04:40:35",
+ "minutes": 59.0
 }
