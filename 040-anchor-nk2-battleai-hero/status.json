@@ -1,0 +1,9 @@
+{
+ "job": "040-anchor-nk2-battleai-hero",
+ "state": "running",
+ "commit": "0d7265a77b1fe3b58b52636b95a61662a13d7830",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T04:40:42",
+ "note": "The four switches of the theme 'Held' (heroChoice, skillChoice, artifactCare, primaryByArmy; +0.16 in the duel tournament) against Nullkiller2 + BattleAI, same games as job 038: does a better main hero close the gap in hero factor?"
+}
