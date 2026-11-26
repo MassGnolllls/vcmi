@@ -1,9 +1,12 @@
 {
  "job": "038c-twin-duel-chain-seed36",
- "state": "running",
+ "state": "done",
  "commit": "0d7265a77b1fe3b58b52636b95a61662a13d7830",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T02:31:55",
- "note": "New mirror maps with fewer towns (arena/maps/mirror-m2, owner's word of 26.11.2026 00:47: beside the start town only one more town of the same type on each level; template arena/templates/arenaTwin.json): four towns a map instead of twelve. The duel of job 036 (hero chain on against off: 10 won, 11 lost, 3 open) on these maps."
+ "note": "New mirror maps with fewer towns (arena/maps/mirror-m2, owner's word of 26.11.2026 00:47: beside the start town only one more town of the same type on each level; template arena/templates/arenaTwin.json): four towns a map instead of twelve. The duel of job 036 (hero chain on against off: 10 won, 11 lost, 3 open) on these maps.",
+ "returncode": 0,
+ "finished": "2026-11-26T03:04:42",
+ "minutes": 32.7
 }
