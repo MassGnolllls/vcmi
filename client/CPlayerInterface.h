@@ -70,6 +70,10 @@ class CPlayerInterface : public CGameInterface
 
 	std::unique_ptr<HeroMovementController> movementController;
 	std::unique_ptr<PathfinderCache> pathfinderCache;
+
+	/// (spectator) what each player has built in its turn so far: "building (town)"
+	std::map<PlayerColor, std::vector<std::string>> spectatorBuilt;
+	void spectatorTurnSummary(PlayerColor player);
 public: // TODO: make private
 	std::unique_ptr<ArtifactsUIController> artifactController;
 	std::shared_ptr<Environment> env;

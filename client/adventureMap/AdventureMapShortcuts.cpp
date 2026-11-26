@@ -623,7 +623,8 @@ void AdventureMapShortcuts::moveHeroDirectional(const Point & direction)
 
 bool AdventureMapShortcuts::optionCanViewQuests()
 {
-	return optionInMapView() && !GAME->interface()->cb->getPlayerState(GAME->interface()->playerID)->quests.empty();
+	const auto * playerState = GAME->interface()->cb->getPlayerState(GAME->interface()->playerID); // (the spectator has none)
+	return optionInMapView() && playerState && !playerState->quests.empty();
 }
 
 bool AdventureMapShortcuts::optionCanToggleLevel()

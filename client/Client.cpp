@@ -186,6 +186,18 @@ void CClient::endGame()
 	logNetwork->info("Ending current game!");
 	removeGUI();
 
+	// gosolo: the next game starts as it was set up, with nobody watching in its place
+	if(soloSpectator || !soloColors.empty())
+	{
+		Settings session = settings.write["session"];
+		session["aiSolo"].Bool() = false;
+		session["spectate"].Bool() = false;
+		session["gosolo-all"].Bool() = false;
+		soloSpectator = false;
+		soloReturnPending = false;
+		soloColors.clear();
+	}
+
 	GAME->setMapInstance(nullptr);
 
 	logNetwork->info("Deleted mapHandler and gameState.");
@@ -426,7 +438,10 @@ void CClient::battleStarted(const BattleID & battleID)
 	callBattleStart(leftSide.color, BattleSide::LEFT_SIDE);
 	callBattleStart(rightSide.color, BattleSide::RIGHT_SIDE);
 	callBattleStart(PlayerColor::UNFLAGGABLE, BattleSide::RIGHT_SIDE);
-	if(settings["session"]["spectate"].Bool() && !settings["session"]["spectate-skip-battle"].Bool())
+	// (gosolo) the screen shows the battles of the colours an AI plays for us - all of them with "gosolo all"
+	const bool spectatorWatches = settings["session"]["spectate"].Bool() && !settings["session"]["spectate-skip-battle"].Bool()
+		&& (soloColors.empty() || settings["session"]["gosolo-all"].Bool() || soloColors.count(leftSide.color) || soloColors.count(rightSide.color));
+	if(spectatorWatches)
 		callBattleStart(PlayerColor::SPECTATOR, BattleSide::RIGHT_SIDE);
 	
 	if(vstd::contains(playerint, leftSide.color) && playerint[leftSide.color]->human)
@@ -467,11 +482,13 @@ void CClient::battleStarted(const BattleID & battleID)
 		{
 			CPlayerInterface::battleInt = std::make_shared<BattleInterface>(info->getBattleID(), leftSide.getArmy(), rightSide.getArmy(), leftSide.getHero(), rightSide.getHero(), att, def);
 		}
-		else if(settings["session"]["spectate"].Bool() && !settings["session"]["spectate-skip-battle"].Bool())
+		else if(spectatorWatches)
 		{
 			//TODO: This certainly need improvement
 			auto spectratorInt = std::dynamic_pointer_cast<CPlayerInterface>(playerint[PlayerColor::SPECTATOR]);
 			spectratorInt->cb->onBattleStarted(info);
+			// (a battle interface left over clears the static pointer in its destructor - the new one with it)
+			CPlayerInterface::battleInt.reset();
 			CPlayerInterface::battleInt = std::make_shared<BattleInterface>(info->getBattleID(), leftSide.getArmy(), rightSide.getArmy(), leftSide.getHero(), rightSide.getHero(), att, def, spectratorInt);
 		}
 	}
@@ -493,8 +510,16 @@ void CClient::battleFinished(const BattleID & battleID)
 			battleCallbacks[gameState().getBattle(battleID)->getSide(side).color]->onBattleEnded(battleID);
 	}
 
-	if(settings["session"]["spectate"].Bool() && !settings["session"]["spectate-skip-battle"].Bool())
-		battleCallbacks[PlayerColor::SPECTATOR]->onBattleEnded(battleID);
+	// The spectator's callbacks learn of every battle (see battleStarted - also with the battles skipped):
+	// the ones that are over go, or the adventure map keeps asking a battle that is gone (gosolo crashed
+	// on the first monster beaten after a battle shown to the spectator)
+	if(auto spectatorCb = battleCallbacks.find(PlayerColor::SPECTATOR); spectatorCb != battleCallbacks.end() && spectatorCb->second->getActiveBattles().count(battleID))
+		spectatorCb->second->onBattleEnded(battleID);
+	if(auto spectator = playerint.find(PlayerColor::SPECTATOR); spectator != playerint.end())
+	{
+		if(auto spectatorInt = std::dynamic_pointer_cast<CPlayerInterface>(spectator->second); spectatorInt && spectatorInt->cb && spectatorInt->cb->getActiveBattles().count(battleID))
+			spectatorInt->cb->onBattleEnded(battleID);
+	}
 }
 
 void CClient::startPlayerBattleAction(const BattleID & battleID, PlayerColor color)
@@ -533,6 +558,48 @@ void CClient::removeGUI() const
 	logGlobal->info("Removed GUI.");
 
 	GAME->setInterfaceInstance(nullptr);
+}
+
+void CClient::installSpectator()
+{
+	// as for a game of AIs only (initPlayerEnvironments, initPlayerInterfaces): the spectator sees the whole map
+	if(!playerEnvironments.count(PlayerColor::SPECTATOR))
+		playerEnvironments[PlayerColor::SPECTATOR] = std::make_shared<CPlayerEnvironment>(PlayerColor::SPECTATOR, this, std::make_shared<CCallback>(gamestate, std::nullopt, this));
+	installNewPlayerInterface(std::make_shared<CPlayerInterface>(PlayerColor::SPECTATOR), PlayerColor::SPECTATOR, true);
+	soloSpectator = true;
+	logGlobal->info("gosolo: spectator installed");
+}
+
+void CClient::removeSpectator()
+{
+	playerint.erase(PlayerColor::SPECTATOR);
+	battleints.erase(PlayerColor::SPECTATOR);
+	battleCallbacks.erase(PlayerColor::SPECTATOR);
+	playerEnvironments.erase(PlayerColor::SPECTATOR);
+	logGlobal->info("gosolo: spectator removed");
+}
+
+bool CClient::returnFromSolo(PlayerColor color)
+{
+	if(!soloReturnPending || !soloColors.count(color))
+		return false;
+	// the AI's turn has not begun: the screen and the colours go back to the human, whose turn this is
+	removeGUI();
+	removeSpectator();
+	{
+		Settings session = settings.write["session"];
+		session["spectate"].Bool() = false;
+		session["aiSolo"].Bool() = false;
+	}
+	for(const PlayerColor & human : soloColors)
+	{
+		logGlobal->info("gosolo: player %s is lead by the human again", human.toString());
+		installNewPlayerInterface(std::make_shared<CPlayerInterface>(human), human);
+	}
+	soloColors.clear();
+	soloReturnPending = false;
+	soloSpectator = false;
+	return true;
 }
 
 void CClient::registerBattleInterface(std::shared_ptr<IBattleEventsReceiver> battleEvents, PlayerColor color)

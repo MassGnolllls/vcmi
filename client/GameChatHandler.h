@@ -44,4 +44,7 @@ public:
 
 	/// Must be called when client receives new message from "System" sender
 	void onNewSystemMessageReceived(const std::string & messageText);
+
+	/// A note of this client (the spectator's: what was built): kept in the history, shown without the chat sound
+	void onNewNoteReceived(const std::string & senderName, const std::string & messageText);
 };
