@@ -10,6 +10,7 @@
 
 #include "StdInc.h"
 #include "CGPandoraBox.h"
+#include "../CPlayerState.h"
 
 #include <vcmi/spells/Spell.h>
 #include <vcmi/spells/Service.h>
@@ -316,7 +317,9 @@ void CGEvent::onHeroVisit(IGameEventCallback & gameEvents, const CGHeroInstance 
 	if(availableFor.count(h->tempOwner) == 0)
 		return;
 
-	if(cb->getPlayerSettings(h->tempOwner)->isControlledByHuman())
+	// (the seat as it is played now: an AI may play a human's colour - gosolo - and the game is then one between AIs)
+	const auto * ownerState = cb->getPlayerState(h->tempOwner, false);
+	if(ownerState ? ownerState->isHuman() : cb->getPlayerSettings(h->tempOwner)->isControlledByHuman())
 	{
 		if(humanActivate)
 			activated(gameEvents, h);
