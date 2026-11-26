@@ -1,0 +1,9 @@
+{
+ "job": "043-twin-nk2-battleai-race",
+ "state": "running",
+ "commit": "b809892afba75cf26a6b3d059a9408859d3bb7bf",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T10:27:37",
+ "note": "Packages 2 and 3 alone on the four-town maps (owner's word of 26.11.2026 09:32): race (who is at our town first, meeting the army that comes, the walls), townPortal, townGuards (a raider is the town's own business), lastChance (without a town). Same games as job 038d (base against Nullkiller2 + BattleAI: 15 won, 6 lost, 3 at the day limit) and job 042 (statPlaces alone: 21 won, 2 lost, 1 at the day limit)."
+}
