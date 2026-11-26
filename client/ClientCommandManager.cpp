@@ -33,6 +33,8 @@
 #include "../lib/mapping/CMap.h"
 #include "windows/CCastleInterface.h"
 #include "../lib/mapObjects/CGHeroInstance.h"
+#include "../lib/mapObjects/CGTownInstance.h"
+#include "adventureMap/AdventureMapInterface.h"
 #include "render/CAnimation.h"
 #include "../lib/texts/CGeneralTextHandler.h"
 #include "../lib/filesystem/Filesystem.h"
@@ -74,49 +76,139 @@ void ClientCommandManager::handleLoadCommand(std::istringstream& singleWordBuffe
 	//GAME->server().client->loadGame(fname);
 }
 
-void ClientCommandManager::handleGoSoloCommand()
+void ClientCommandManager::handleGoSoloCommand(std::istringstream & singleWordBuffer)
 {
-	Settings session = settings.write["session"];
+	std::string argument;
+	singleWordBuffer >> argument;
+	std::string lowered = boost::algorithm::to_lower_copy(argument);
 
-	std::scoped_lock interfaceLock(engineInterfaceMutex());
+	// (printCommandMessage takes the interface lock for the in-game console: the messages are written
+	// once it is free again - written under the lock, the game froze for good)
+	std::vector<std::string> messages;
+	{
+		std::scoped_lock interfaceLock(engineInterfaceMutex());
+		handleGoSolo(argument, lowered, messages);
+	}
+	for(const auto & message : messages)
+		printCommandMessage(message, ELogLevel::INFO);
+}
 
+void ClientCommandManager::handleGoSolo(const std::string & argument, const std::string & lowered, std::vector<std::string> & messages)
+{
 	if(!GAME->server().client)
 	{
-		printCommandMessage("Game is not in playing state");
+		messages.push_back("Game is not in playing state");
 		return;
 	}
+	CClient & client = *GAME->server().client;
+	Settings session = settings.write["session"];
 
 	if(session["aiSolo"].Bool())
 	{
-		// unlikely it will work but just in case to be consistent
-		for(auto & color : GAME->server().getAllClientPlayers(GAME->server().logicConnection->connectionID))
+		// while the AI plays: the spectator's switches, or the way back to the human
+		if(lowered == "battles" || lowered == "battle" || lowered == "kampf" || lowered == "kaempfe" || lowered == "kämpfe")
 		{
-			if(color.isValidPlayer() && GAME->server().client->gameInfo().getStartInfo()->playerInfos.count(color) && GAME->server().client->gameInfo().getStartInfo()->playerInfos.at(color).isControlledByHuman())
-			{
-				GAME->server().client->installNewPlayerInterface(std::make_shared<CPlayerInterface>(color), color);
-			}
+			session["spectate-skip-battle"].Bool() = !session["spectate-skip-battle"].Bool();
+			messages.push_back(session["spectate-skip-battle"].Bool() ? "gosolo: Kaempfe werden uebersprungen (ab dem naechsten Kampf)" : "gosolo: Kaempfe werden gezeigt (ab dem naechsten Kampf)");
+			return;
 		}
+		if(lowered == "all" || lowered == "alle")
+		{
+			session["gosolo-all"].Bool() = !session["gosolo-all"].Bool();
+			messages.push_back(session["gosolo-all"].Bool() ? "gosolo: auch die Kaempfe und Helden der anderen Spieler werden gezeigt" : "gosolo: nur die Kaempfe und Helden der KI, die fuer dich spielt, werden gezeigt");
+			return;
+		}
+		if(lowered == "follow" || lowered == "folgen")
+		{
+			session["spectate-ignore-hero"].Bool() = !session["spectate-ignore-hero"].Bool();
+			messages.push_back(session["spectate-ignore-hero"].Bool() ? "gosolo: die Ansicht folgt den Helden nicht mehr" : "gosolo: die Ansicht folgt den Helden");
+			return;
+		}
+		if(client.soloReturnPending)
+		{
+			client.soloReturnPending = false;
+			messages.push_back("gosolo: die KI spielt weiter");
+			return;
+		}
+		client.soloReturnPending = true;
+		messages.push_back("gosolo: du uebernimmst wieder zu Beginn deines naechsten Zuges (nochmal /gosolo: die KI spielt weiter)");
+		return;
 	}
-	else
+
+	if(GAME->interface() && GAME->interface()->battleInt)
 	{
-		PlayerColor currentColor = GAME->interface()->playerID;
-		GAME->server().client->removeGUI();
-		
-		for(auto & color : GAME->server().getAllClientPlayers(GAME->server().logicConnection->connectionID))
-		{
-			if(color.isValidPlayer() && GAME->server().client->gameInfo().getStartInfo()->playerInfos.at(color).isControlledByHuman())
-			{
-				auto AiToGive = GAME->server().client->aiNameForPlayer(*GAME->server().client->gameInfo().getPlayerSettings(color), false, false);
-				printCommandMessage("Player " + color.toString() + " will be lead by " + AiToGive, ELogLevel::INFO);
-				GAME->server().client->installNewPlayerInterface(CDynLibHandler::getNewAI(AiToGive), color);
-			}
-		}
-
-		ENGINE->windows().totalRedraw();
-		giveTurn(currentColor);
+		messages.push_back("gosolo: nicht waehrend eines Kampfes");
+		return;
 	}
 
-	session["aiSolo"].Bool() = !session["aiSolo"].Bool();
+	// a spectator sees the whole map: only where every human player sits at this computer
+	const auto & startInfo = *client.gameInfo().getStartInfo();
+	const auto ours = GAME->server().getAllClientPlayers(GAME->server().logicConnection->connectionID);
+	for(const auto & [color, info] : startInfo.playerInfos)
+	{
+		if(info.isControlledByHuman() && !ours.count(color))
+		{
+			messages.push_back("gosolo: nur in Spielen ohne menschliche Mitspieler an anderen Rechnern");
+			return;
+		}
+	}
+	// the colours played on this screen
+	std::vector<PlayerColor> humans;
+	for(const auto & [color, playerInterface] : client.playerint)
+	{
+		if(!color.isValidPlayer() || !std::dynamic_pointer_cast<CPlayerInterface>(playerInterface))
+			continue;
+		if(client.gameState().players.count(color) && client.gameState().players.at(color).status == EPlayerStatus::INGAME)
+			humans.push_back(color);
+	}
+	if(humans.empty())
+	{
+		messages.push_back("gosolo: kein menschlicher Spieler, den eine KI uebernehmen koennte");
+		return;
+	}
+
+	// the AI: the one named, else FairAI, else the one the game's settings give the enemies
+	std::string ai = argument.empty() ? std::string("FairAI") : argument;
+	if(!boost::filesystem::exists(VCMIDirs::get().fullLibraryPath("AI", ai)))
+	{
+		const std::string fallback = client.aiNameForPlayer(false, false);
+		messages.push_back("gosolo: keine KI namens " + ai + " gefunden - es spielt " + fallback);
+		ai = fallback;
+	}
+
+	const PlayerColor current = GAME->interface() ? GAME->interface()->playerID : PlayerColor::CANNOT_DETERMINE;
+	const bool humanTurn = GAME->interface() && GAME->interface()->makingTurn && vstd::contains(humans, current);
+
+	client.removeGUI();
+	for(const PlayerColor & color : humans)
+	{
+		messages.push_back("gosolo: " + color.toString() + " spielt jetzt " + ai + " (nochmal /gosolo: du uebernimmst wieder; /gosolo kampf: ihre Kaempfe zeigen oder nicht; /gosolo alle: auch die anderen Spieler zeigen; /gosolo folgen: Helden folgen oder nicht)");
+		logGlobal->info("gosolo: player %s will be lead by %s", color.toString(), ai);
+		client.installNewPlayerInterface(CDynLibHandler::getNewAI(ai), color);
+		client.soloColors.insert(color);
+	}
+	session["aiSolo"].Bool() = true;
+	session["spectate"].Bool() = true;
+	session["spectate-skip-battle-result"].Bool() = true; // nothing to click away
+	client.installSpectator();
+
+	// the map at once, in our colours, where our heroes are
+	adventureInt->onCurrentPlayerChanged(humans.front());
+	ENGINE->windows().pushWindow(adventureInt);
+	const CGObjectInstance * focus = nullptr;
+	for(const auto & hero : client.gameState().players.at(humans.front()).getHeroes())
+		if(!focus && !hero->isGarrisoned())
+			focus = hero;
+	for(const auto & town : client.gameState().players.at(humans.front()).getTowns())
+		if(!focus)
+			focus = town;
+	if(focus)
+		adventureInt->centerOnObject(focus);
+	ENGINE->windows().totalRedraw();
+
+	// the turn in progress is the AI's from here on
+	if(humanTurn)
+		giveTurn(current);
 }
 
 void ClientCommandManager::handleAutoskipCommand()
@@ -618,7 +710,7 @@ void ClientCommandManager::processCommand(const std::string & message, bool call
 		handleLoadCommand(singleWordBuffer); // not implemented
 
 	else if(commandName == "gosolo")
-		handleGoSoloCommand();
+		handleGoSoloCommand(singleWordBuffer);
 
 	else if(commandName == "autoskip")
 		handleAutoskipCommand();

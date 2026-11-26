@@ -405,6 +405,12 @@ void ApplyClientNetPackVisitor::visitPlayerEndsGame(PlayerEndsGame & pack)
 
 	bool localHumanWinsGame = vstd::contains(cl.playerint, pack.player) && cl.gameInfo().getPlayerState(pack.player)->human && pack.victoryLossCheckResult.victory();
 	bool lastHumanEndsGame = GAME->server().howManyPlayerInterfaces() == 1 && vstd::contains(cl.playerint, pack.player) && cl.gameInfo().getPlayerState(pack.player)->human && !settings["session"]["spectate"].Bool();
+	// (gosolo) the game the AI played for us is over when it is over for our last colour - as it would be for us
+	if(cl.soloColors.count(pack.player) && pack.victoryLossCheckResult.loss())
+	{
+		cl.soloColors.erase(pack.player);
+		lastHumanEndsGame = lastHumanEndsGame || cl.soloColors.empty();
+	}
 
 	if(lastHumanEndsGame || localHumanWinsGame || pack.silentEnd)
 	{
@@ -559,6 +565,9 @@ void ApplyClientNetPackVisitor::visitNewStructures(NewStructures & pack)
 	for(const auto & id : pack.bid)
 	{
 		callInterfaceIfPresent(cl, town->getOwner(), &IGameEventsReceiver::buildChanged, town, id, 1);
+		// the spectator writes down what is built (gosolo: which buildings the AIs build each day)
+		if(town->getOwner() != PlayerColor::SPECTATOR)
+			callInterfaceIfPresent(cl, PlayerColor::SPECTATOR, &IGameEventsReceiver::buildChanged, town, id, 1);
 	}
 
 	// invalidate section of map view with our object and force an update
@@ -932,6 +941,9 @@ void ApplyClientNetPackVisitor::visitPlayerStartsTurn(PlayerStartsTurn & pack)
 {
 	logNetwork->debug("Server gives turn to %s", pack.player.toString());
 	Arena::onPlayerStartsTurn(cl, pack.player);
+
+	// (gosolo typed again) the human takes over before the AI's turn begins
+	cl.returnFromSolo(pack.player);
 
 	callAllInterfaces(cl, &IGameEventsReceiver::playerStartsTurn, pack.player);
 	callOnlyThatInterface(cl, pack.player, &CGameInterface::yourTurn, pack.queryID);

@@ -100,6 +100,15 @@ void GameChatHandler::onNewGameMessageReceived(PlayerColor sender, const std::st
 	GAME->interface()->cingconsole->addMessage(timeFormatted, playerName, messageText);
 }
 
+void GameChatHandler::onNewNoteReceived(const std::string & senderName, const std::string & messageText)
+{
+	const std::string timeFormatted = TextOperations::getCurrentFormattedTimeLocal();
+	chatHistory.push_back({senderName, messageText, timeFormatted});
+
+	if(GAME->interface() && GAME->interface()->cingconsole)
+		GAME->interface()->cingconsole->addNote(timeFormatted, senderName, messageText);
+}
+
 void GameChatHandler::onNewSystemMessageReceived(const std::string & messageText)
 {
 	chatHistory.push_back({"System", messageText, TextOperations::getCurrentFormattedTimeLocal()});

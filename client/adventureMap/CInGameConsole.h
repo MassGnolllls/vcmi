@@ -45,6 +45,8 @@ private:
 	void addMessageSilent(const std::string & timeFormatted, const std::string & senderName, const std::string & messageText);
 public:
 	void addMessage(const std::string & timeFormatted, const std::string & senderName, const std::string & messageText);
+	/// as addMessage, without the chat sound
+	void addNote(const std::string & timeFormatted, const std::string & senderName, const std::string & messageText);
 
 	void tick(uint32_t msPassed) override;
 	void show(Canvas & to) override;

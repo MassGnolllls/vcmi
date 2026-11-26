@@ -28,8 +28,11 @@ class ClientCommandManager //take mantis #2292 issue about account if thinking a
 	// Loads a game with the given filename
 	void handleLoadCommand(std::istringstream & singleWordBuffer);
 
-	// AI takes over until the end of turn (unlike original H3 currently causes AI to take over until typed again)
-	void handleGoSoloCommand();
+	// An AI (FairAI, or the one named) takes over our human colours and the screen watches the game as a
+	// spectator, without a key to press; typed again, the human takes over at the start of its next turn.
+	// While it runs: "gosolo battles" shows or skips the battles, "gosolo follow" follows the heroes or not.
+	void handleGoSoloCommand(std::istringstream & singleWordBuffer);
+	void handleGoSolo(const std::string & argument, const std::string & lowered, std::vector<std::string> & messages); // the work, under the interface lock
 
 	// Toggles autoskip mode on and off. In this mode, player turns are automatically skipped and only AI moves.
 	// However, GUI is still present and allows to observe AI moves. After this option is activated, you need to end first turn manually.

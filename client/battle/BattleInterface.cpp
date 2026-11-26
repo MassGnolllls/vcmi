@@ -356,6 +356,9 @@ void BattleInterface::battleFinished(const BattleResult& br, QueryID queryID)
 	{
 		curInt->cb->selectionMade(0, queryID);
 		windowObject->close();
+		// as below: the battle is over for the screen too - left alive, the next battle's interface took
+		// its place and its destructor cleared that new one, whose window was then drawn without it (gosolo)
+		CPlayerInterface::battleInt.reset();
 		return;
 	}
 

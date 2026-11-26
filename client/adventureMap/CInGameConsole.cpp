@@ -106,6 +106,12 @@ void CInGameConsole::addMessageSilent(const std::string & timeFormatted, const s
 		texts.erase(texts.begin());
 }
 
+void CInGameConsole::addNote(const std::string & timeFormatted, const std::string & senderName, const std::string & messageText)
+{
+	addMessageSilent(timeFormatted, senderName, messageText);
+	ENGINE->windows().totalRedraw(); // FIXME: ingame console has no parent widget set
+}
+
 void CInGameConsole::addMessage(const std::string & timeFormatted, const std::string & senderName, const std::string & messageText)
 {
 	addMessageSilent(timeFormatted, senderName, messageText);

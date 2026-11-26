@@ -102,6 +102,7 @@
 #include "../lib/mapping/CMapHeader.h"
 
 #include "../lib/networkPacks/PacksForClient.h"
+#include "../lib/entities/building/CBuilding.h"
 #include "../lib/networkPacks/PacksForClientBattle.h"
 #include "../lib/networkPacks/PacksForServer.h"
 
@@ -211,9 +212,37 @@ void CPlayerInterface::closeAllDialogs()
 	}
 }
 
+void CPlayerInterface::spectatorTurnSummary(PlayerColor player)
+{
+	// one line a turn: what the player built today - for the colours an AI plays for us (gosolo) also
+	// when it built nothing
+	if(!player.isValidPlayer() || !cb)
+		return;
+	auto built = spectatorBuilt.find(player);
+	const bool any = built != spectatorBuilt.end() && !built->second.empty();
+	const bool ours = GAME->server().client && GAME->server().client->soloColors.count(player);
+	if(!any && !ours)
+		return;
+	std::string text;
+	if(any)
+	{
+		for(const auto & entry : built->second)
+			text += (text.empty() ? "" : ", ") + entry;
+		built->second.clear();
+	}
+	else
+		text = "nichts gebaut";
+	const std::string colour = LIBRARY->generaltexth->capColors[player.getNum()];
+	const std::string sender = boost::str(boost::format("%s, Tag %d") % colour % cb->getDate(Date::DAY));
+	logGlobal->info("Spectator: %s: %s", sender, text);
+	GAME->server().getGameChat().onNewNoteReceived(sender, text);
+}
+
 void CPlayerInterface::playerEndsTurn(PlayerColor player)
 {
 	EVENT_HANDLER_CALLED_BY_CLIENT;
+	if(playerID == PlayerColor::SPECTATOR)
+		spectatorTurnSummary(player);
 	if (player == playerID)
 	{
 		makingTurn = false;
@@ -410,6 +439,11 @@ void CPlayerInterface::heroMoved(const TryMoveHero & details, bool verbose)
 	const CGHeroInstance * hero = cb->getHero(details.id); //object representing this hero
 
 	if (!hero)
+		return;
+
+	// (gosolo) the view follows the heroes of the colours an AI plays for us - all heroes with "gosolo all"
+	if(playerID == PlayerColor::SPECTATOR && !settings["session"]["gosolo-all"].Bool() && GAME->server().client
+		&& !GAME->server().client->soloColors.empty() && !GAME->server().client->soloColors.count(hero->getOwner()))
 		return;
 
 	movementController->onTryMoveHero(hero, details);
@@ -640,6 +674,18 @@ void CPlayerInterface::garrisonsChanged(std::vector<const CArmedInstance *> objs
 void CPlayerInterface::buildChanged(const CGTownInstance *town, BuildingID buildingID, int what) //what: 1 - built, 2 - demolished
 {
 	EVENT_HANDLER_CALLED_BY_CLIENT;
+	// (spectator) not our town: written down for the summary at the end of its owner's turn
+	if(playerID == PlayerColor::SPECTATOR)
+	{
+		if(what == 1 && town && town->getOwner().isValidPlayer())
+		{
+			std::string name = "?";
+			if(town->getTown()->buildings.count(buildingID))
+				name = town->getTown()->buildings.at(buildingID)->getNameTranslated();
+			spectatorBuilt[town->getOwner()].push_back(name + " (" + town->getNameTranslated() + ")");
+		}
+		return;
+	}
 	adventureInt->onTownChanged(town);
 
 	if (castleInt)
@@ -1362,6 +1408,14 @@ void CPlayerInterface::objectPropertyChanged(const SetObjectProperty * sop)
 
 void CPlayerInterface::initializeHeroTownList()
 {
+	// (spectator) no heroes, towns or local settings of its own
+	if(playerID == PlayerColor::SPECTATOR)
+	{
+		if(adventureInt)
+			adventureInt->onHeroChanged(nullptr);
+		return;
+	}
+
 	if(localState->getWanderingHeroes().empty())
 	{
 		for(auto & hero : cb->getHeroesInfo())

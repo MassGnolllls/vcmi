@@ -16,6 +16,8 @@
 #include "../render/EFont.h"
 #include "../GameEngine.h"
 #include "../GameInstance.h"
+#include "../CServerHandler.h"
+#include "../Client.h"
 #include "../gui/TextAlignment.h"
 #include "../widgets/Images.h"
 #include "../widgets/CComponent.h"
@@ -83,9 +85,16 @@ void CResDataBar::showAll(Canvas & to)
 	CIntObject::showAll(to);
 
 	//TODO: all this should be labels, but they require proper text update on change
+	// (spectator) the resources of the colour an AI plays for us (gosolo); a spectator has none of its own
+	PlayerColor shown = GAME->interface()->playerID;
+	if(shown == PlayerColor::SPECTATOR)
+		shown = GAME->server().client && !GAME->server().client->soloColors.empty() ? *GAME->server().client->soloColors.begin() : PlayerColor::CANNOT_DETERMINE;
+
 	for (auto & entry : resourcePositions)
 	{
-		std::string text = std::to_string(GAME->interface()->cb->getResourceAmount(entry.first));
+		if(!shown.isValidPlayer())
+			break;
+		std::string text = std::to_string(shown == GAME->interface()->playerID ? GAME->interface()->cb->getResourceAmount(entry.first) : GAME->interface()->cb->getResource(shown, entry.first));
 
 		to.drawText(pos.topLeft() + entry.second, FONT_SMALL, Colors::WHITE, ETextAlignment::TOPLEFT, text);
 	}
@@ -106,6 +115,8 @@ void CResDataBar::showPopupWindow(const Point & cursorPosition)
 
 	// only daily income
 	ResourceSet income;
+	if(GAME->interface()->playerID == PlayerColor::SPECTATOR)
+		return; // (no income of its own)
 	auto playerState = GAME->interface()->cb->getPlayerState(GAME->interface()->playerID);
 	auto playerSettings = GAME->interface()->cb->getPlayerSettings(GAME->interface()->playerID);
 	for(auto & k : LIBRARY->resourceTypeHandler->getAllObjects())

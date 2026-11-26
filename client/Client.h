@@ -184,6 +184,14 @@ public:
 
 	void removeGUI() const;
 
+	/// gosolo: an AI plays our human colours and the screen watches the game as a spectator
+	std::set<PlayerColor> soloColors;    ///< our human colours an AI plays now
+	bool soloReturnPending = false;      ///< gosolo again: the human takes over at the start of its next turn
+	bool soloSpectator = false;          ///< the spectator was installed by gosolo (session flags to reset at the end)
+	void installSpectator();             ///< a spectator interface for the screen, mid-game
+	void removeSpectator();
+	bool returnFromSolo(PlayerColor color); ///< at the start of a turn of that colour: the human takes over again (true if it did)
+
 private:
 	std::map<PlayerColor, std::shared_ptr<CBattleCallback>> battleCallbacks; //callbacks given to player interfaces
 	std::map<PlayerColor, std::shared_ptr<CPlayerEnvironment>> playerEnvironments;
