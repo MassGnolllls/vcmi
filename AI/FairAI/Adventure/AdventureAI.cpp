@@ -398,6 +398,10 @@ void Params::loadOverrides(int playerIndex)
 	read("lastChance", lastChance);
 	read("scoutAll", scoutAll);
 	read("scoutHorizon", scoutHorizon);
+	read("raceTrack", raceTrack);
+	read("homeRing", homeRing);
+	read("homeRingDays", homeRingDays);
+	read("homeRingLoss", homeRingLoss);
 	read("scoutSearchShare", scoutSearchShare);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
@@ -860,6 +864,8 @@ void AdventureAI::playTurn()
 	pocketExits.clear();
 	trail.clear();
 	abandonedToday.clear();
+	if(params.homeRing)
+		planHomeRing();
 	if(params.race)
 	{
 		updateThreats();
@@ -9066,6 +9072,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		const int3 size = cb->getMapSize();
 		Target bestExplore;
 		bestExplore.score = 0;
+		// (homeRing) accessible unseen land in the ring, as the last step of this hero found it
+		int ringSeen = 0;
+		const int ringOpenTiles = ringOpenBefore;
 		// (breakout 4) The leader's standing task while no foreign town is among its targets: find the
 		// next one. Levels 1 to 3 wait for a standstill - two weeks without new land, or three days
 		// without a target worth the army - and the standstill ends with the first step that shows new
@@ -9203,6 +9212,19 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 								bestOpenEnd = std::max(bestOpenEnd, open);
 							}
 						}
+						// (homeRing) the land around our towns first: scouts count it twice; the main hero
+						// goes on into unseen land beyond the ring at half its worth while the ring is
+						// open (accessible land in it unseen, or a guard of it to beat)
+						if(params.homeRing && homeTilesDay == today)
+						{
+							const bool ring = inHomeRing(tile);
+							if(ring && scoutsToday.count(hero->id))
+								value *= 2.0;
+							else if(!ring && isMain(hero) && !campaign(hero) && (ringOpenTiles > 0 || homeGuardDay >= today - 1))
+								value *= 0.5;
+							if(ring)
+								++ringSeen;
+						}
 						double score = value / (node->cost + params.travelOffset);
 						if(score > bestExplore.score)
 						{
@@ -9233,6 +9255,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				}
 			}
 		}
+		if(params.homeRing && isMain(hero))
+			ringOpenBefore = ringSeen;
 		if(bestExplore.score > 0)
 			addTarget(bestExplore.tile, ObjectInstanceID(), bestExplore.value, 0, bestExplore.travel, "explore");
 		if(lookingBehind && bestOpenEnd > 0 && lookBehindLogDay != today)
@@ -9458,6 +9482,18 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		const auto unlock = opened.find(id);
 		const double opens = unlock != opened.end() ? params.unlockFactor * unlock->second : 0.0;
 		value += opens;
+		// (homeRing) A guard within the ring around our towns with unseen land beside it bars a way in:
+		// the main hero beats it while that costs at most homeRingLoss of its army, and the scouts look
+		// at what lies behind. Whoever comes from there is seen from then on.
+		if(params.homeRing && isMain(hero) && inHomeRing(object.visitablePos)
+			&& revealGrid.count(object.visitablePos, std::max(3, hero->getSightRadius())) >= 15
+			&& loss <= params.homeRingLoss * static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue)
+		{
+			value += 0.5 * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0);
+			homeGuardDay = today;
+			if(guardLog)
+				guardLines += boost::str(boost::format(" [ring guard at %s]") % object.visitablePos.toString());
+		}
 		if(guardLog && object.army->units.size() == 1 && object.army->units.front().creature.hasValue())
 		{
 			// once a day: how the main hero judges every guard in reach (diagnostics)
@@ -11939,6 +11975,26 @@ void AdventureAI::planRace()
 		runners.push_back({id, object.subtype.getNum(), object.visitablePos, army * heroFactor(object), army, reachEstimate(object, true), age});
 		biggest = std::max(biggest, army);
 	}
+	// (raceTrack) an army we have lost sight of: from where we saw it last, at the pace it has shown
+	if(params.raceTrack)
+	{
+		std::set<int> listed;
+		for(const Runner & r : runners)
+			listed.insert(r.type);
+		for(const auto & [type, seen] : enemySightings)
+		{
+			const int age = today - seen.day;
+			if(age <= 0 || age > params.raceMemory || listed.count(type) || seen.pos.x < 0 || seen.strength <= 0)
+				continue;
+			if(auto beaten = defeatedDay.find(type); beaten != defeatedDay.end() && beaten->second >= seen.day)
+				continue;
+			double reach = 28.0;
+			if(auto learned = learnedReach.find(type); learned != learnedReach.end())
+				reach = std::max(reach, learned->second);
+			runners.push_back({ObjectInstanceID(-1000 - type), type, seen.pos, seen.strength, seen.army > 0 ? seen.army : seen.strength / 1.5, reach, age});
+			biggest = std::max(biggest, seen.army);
+		}
+	}
 	const double own = leader ? fieldStrength(leader) : 0.0;
 	const double edge = heroEdgeNow();
 	for(const auto * town : towns)
@@ -11965,6 +12021,7 @@ void AdventureAI::planRace()
 				race.threat = r.strength;
 				race.enemy = r.id;
 				race.enemyType = r.type;
+				race.age = r.age;
 				race.mainArmy = r.army >= params.raceMainShare * biggest || (own > 0 && r.strength >= 0.5 * own);
 			}
 			race.arrival = std::min(race.arrival, days);
@@ -11986,9 +12043,10 @@ void AdventureAI::planRace()
 		{
 			static const char * plans[] = {"-", "the town's own means", "the main hero meets it", "the main hero behind the walls", "cannot be held"};
 			const HeroTypeID type(race.enemyType);
-			logAi->info("FairAI %s day %d: race for %s: %s (%.0f, %s) can be there in %.1f days; the town puts up %.0f, the main hero %.0f - %s%s",
+			logAi->info("FairAI %s day %d: race for %s: %s (%.0f, %s%s) can be there in %.1f days; the town puts up %.0f, the main hero %.0f - %s%s",
 				me.toString(), today, town->getNameTranslated(), type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?"),
-				race.threat, race.mainArmy ? "main army" : "raider", race.arrival, local, own, plans[race.plan], race.guarded ? " (a guard of ours in the town)" : "");
+				race.threat, race.mainArmy ? "main army" : "raider", race.age > 0 ? boost::str(boost::format(", out of sight for %d day(s)") % race.age) : std::string(),
+				race.arrival, local, own, plans[race.plan], race.guarded ? " (a guard of ours in the town)" : "");
 		}
 	}
 	// The last town: without it the game is over in seven days. While an army about as strong as our
@@ -12030,6 +12088,50 @@ void AdventureAI::planRace()
 		}
 	}
 
+}
+
+void AdventureAI::planHomeRing()
+{
+	// (homeRing) the land within homeRingDays of march of our towns, over the land we know (unseen
+	// land counts as open: that is the land to look at), guards left out of the way
+	homeTilesDay = today;
+	const int3 size = cb->getMapSize();
+	homeTiles.assign(static_cast<size_t>(size.x) * size.y * size.z, 0);
+	homeUnseen = 0;
+	const CGHeroInstance * leader = ownHero(mainHero);
+	const double dayTiles = std::max(12.0, (leader ? leader->movementPointsLimit(true) : 1500) / 100.0);
+	const double maxTiles = params.homeRingDays * dayTiles;
+	for(const auto * town : perception.ownTowns())
+	{
+		ReachMap reach;
+		computeReach(reach, town->visitablePos(), 1e18, maxTiles);
+		for(size_t i = 0; i < reach.tiles.size() && i < homeTiles.size(); ++i)
+			if(reach.tiles[i] >= 0 && reach.tiles[i] <= maxTiles)
+				homeTiles[i] = 1;
+	}
+	int inside = 0;
+	for(int z = 0; z < size.z; ++z)
+		for(int y = 0; y < size.y; ++y)
+			for(int x = 0; x < size.x; ++x)
+			{
+				const size_t i = (static_cast<size_t>(z) * size.y + y) * size.x + x;
+				if(!homeTiles[i])
+					continue;
+				++inside;
+				homeUnseen += cb->isVisible(int3(x, y, z)) ? 0 : 1;
+			}
+	if(today % 7 == 1 || today <= 2)
+		logAi->info("FairAI %s day %d: home ring - %d tiles within %.0f days of our towns, %d of them unseen", me.toString(), today, inside, params.homeRingDays, homeUnseen);
+}
+
+bool AdventureAI::inHomeRing(const int3 & tile) const
+{
+	if(!params.homeRing || homeTilesDay != today || homeTiles.empty())
+		return false;
+	const int3 size = cb->getMapSize();
+	if(!cb->isInTheMap(tile))
+		return false;
+	return homeTiles[(static_cast<size_t>(tile.z) * size.y + tile.y) * size.x + tile.x] != 0;
 }
 
 bool AdventureAI::portalTo(const CGHeroInstance * hero, const CGTownInstance * town, const int3 & from, bool now) const

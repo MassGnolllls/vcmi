@@ -1,5 +1,5 @@
 {
- "note": "scoutAll (owner's word of 26.11.2026 16:22: land we have not seen and can get to is always explored by scouts): scouts plan ten days ahead, a gate or monolith counts the unseen land behind it and - while enemy towns are unfound - what finding them is worth, a guard before it too. In 18 of 144 games no hero of ours ever set foot on the other level; none was won. Alone; same games as job 038d (base, seed 25).",
+ "note": "all3 with scoutAll (owner's word of 26.11.2026 16:22: land we have not seen and can get to is always explored by scouts). Same games as job 054 (all3, seed 26).",
  "script": "mirror_maps.py",
  "args": [
   "play",
@@ -15,7 +15,7 @@
   "--opponent",
   "Nullkiller2+BattleAI",
   "--ai-params",
-  "{\"scoutAll\": 1}",
+  "{\"statPlaces\": 1, \"race\": 1, \"townPortal\": 1, \"townGuards\": 1, \"lastChance\": 1, \"raceFree\": 2.0, \"raceLastTown\": 0, \"scoutAll\": 1}",
   "--mods",
   "hota",
   "--max-days",
@@ -25,7 +25,7 @@
   "--stall-seconds",
   "300",
   "--seed",
-  "25",
+  "26",
   "--jobs",
   "{jobs}",
   "--keep-all-logs",

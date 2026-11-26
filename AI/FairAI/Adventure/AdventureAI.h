@@ -311,6 +311,7 @@ private:
 		double local = 0;            ///< what the town puts up without the main hero, walls counted
 		bool mainArmy = false;       ///< the enemy's main army (a raider otherwise)
 		bool guarded = false;        ///< (townGuards) a hero of ours holds the town against the raider
+		int age = 0;                 ///< (raceTrack) days since we saw that army
 		int plan = 0;                ///< 1 the town's own means (a raider), 2 the main hero meets it, 3 the main hero behind the walls, 4 the town cannot be held
 	};
 	std::vector<TownRace> races;
@@ -318,6 +319,14 @@ private:
 	mutable int raceBoundDay = -1;              ///< the day the main hero last left a target aside for a race
 	mutable int raceBoundCount = 0;
 	void planRace();
+	// (homeRing) the land within homeRingDays of our towns
+	std::vector<uint8_t> homeTiles;
+	int homeTilesDay = -1;
+	int homeUnseen = 0;
+	int homeGuardDay = -1;       ///< the last day a guard of the ring stood to be beaten
+	int ringOpenBefore = 0;      ///< (homeRing) accessible unseen tiles in the ring the main hero found on its last step
+	void planHomeRing();
+	bool inHomeRing(const int3 & tile) const;
 	const CGTownInstance * ownTownById(ObjectInstanceID id) const; ///< a town of ours by its id (nullptr once it is not ours)
 	// the strongest enemy army we have seen in the last days, wherever it stands (lastChance)
 	ObjectInstanceID raceMainId;

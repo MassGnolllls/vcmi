@@ -1,5 +1,5 @@
 {
- "note": "scoutAll (owner's word of 26.11.2026 16:22: land we have not seen and can get to is always explored by scouts): scouts plan ten days ahead, a gate or monolith counts the unseen land behind it and - while enemy towns are unfound - what finding them is worth, a guard before it too. In 18 of 144 games no hero of ours ever set foot on the other level; none was won. On top of all3; same games as job 050 (all3, seed 25).",
+ "note": "all3 with scoutAll (owner's word of 26.11.2026 16:22: land we have not seen and can get to is always explored by scouts). Same games as job 050 (all3, seed 25).",
  "script": "mirror_maps.py",
  "args": [
   "play",
