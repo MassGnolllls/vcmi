@@ -1,9 +1,12 @@
 {
  "job": "047-twin-nk2-battleai-race2",
- "state": "running",
+ "state": "done",
  "commit": "986359106db7a4565dc83aebafd0c7a6f6632f54",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T12:30:11",
- "note": "Packages 2 and 3 alone after the corrections of 26.11. (one town is held, not two; the last town; the way to a town is known however far; a desperate siege; bound unless three times as strong). Same games as jobs 038d (base 15/6/3), 042 (statPlaces 21/2/1) and 043 (first version 20/3/1)."
+ "note": "Packages 2 and 3 alone after the corrections of 26.11. (one town is held, not two; the last town; the way to a town is known however far; a desperate siege; bound unless three times as strong). Same games as jobs 038d (base 15/6/3), 042 (statPlaces 21/2/1) and 043 (first version 20/3/1).",
+ "returncode": 0,
+ "finished": "2026-11-26T13:10:32",
+ "minutes": 40.3
 }
