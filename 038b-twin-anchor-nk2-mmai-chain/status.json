@@ -1,9 +1,12 @@
 {
  "job": "038b-twin-anchor-nk2-mmai-chain",
- "state": "running",
+ "state": "done",
  "commit": "0d7265a77b1fe3b58b52636b95a61662a13d7830",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-26T01:53:10",
- "note": "New mirror maps with fewer towns (arena/maps/mirror-m2, owner's word of 26.11.2026 00:47: beside the start town only one more town of the same type on each level; template arena/templates/arenaTwin.json): four towns a map instead of twelve. The run of job 037 (hero chain against Nullkiller2 + MMAI: 18 won, 1 lost, 4 at the day limit) on these maps."
+ "note": "New mirror maps with fewer towns (arena/maps/mirror-m2, owner's word of 26.11.2026 00:47: beside the start town only one more town of the same type on each level; template arena/templates/arenaTwin.json): four towns a map instead of twelve. The run of job 037 (hero chain against Nullkiller2 + MMAI: 18 won, 1 lost, 4 at the day limit) on these maps.",
+ "returncode": 0,
+ "finished": "2026-11-26T02:31:49",
+ "minutes": 38.6
 }
