@@ -1,0 +1,9 @@
+{
+ "job": "048-twin-nk2-battleai-all2",
+ "state": "running",
+ "commit": "986359106db7a4565dc83aebafd0c7a6f6632f54",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-26T13:10:41",
+ "note": "Packages 1 to 3 together after the corrections of 26.11. (one town is held, not two; the last town; the way to a town is known however far; a desperate siege; bound unless three times as strong). Same games as jobs 038d, 042, 043 and 044 (first version 19/3/2)."
+}
