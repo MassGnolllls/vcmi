@@ -41,6 +41,7 @@
 #include "../../../lib/mapObjects/FlaggableMapObject.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
+#include "../../../lib/mapObjects/TownBuildingInstance.h"
 #include "../../../lib/mapObjects/IMarket.h"
 #include "../../../lib/mapObjects/IOwnableObject.h"
 #include "../../../lib/mapObjects/MiscObjects.h"
@@ -418,6 +419,8 @@ void Params::loadOverrides(int playerIndex)
 	read("supplyWeek", supplyWeek);
 	read("formation", formation);
 	read("useTactics", useTactics);
+	read("townLearning", townLearning);
+	read("townSpellValue", townSpellValue);
 	read("cheapClearShare", cheapClearShare);
 	read("raceBindDays", raceBindDays);
 	read("raceBindRest", raceBindRest);
@@ -8268,6 +8271,49 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			// (magicFocus) spells waiting in the guild for a hero that can learn them
 			if(params.magicFocus)
 				value += 600.0 * unlearnedGuildLevels(hero, town);
+			// (townLearning) Owner's question of 27.11.2026: the main hero comes back for what a town of ours
+			// teaches it - spells of the guild it does not know yet, and the buildings that give a visiting
+			// hero something once (Order of Fire, Hall of Valhalla, Wall of Knowledge, Academy of Battle
+			// Scholars and the like)
+			if(params.townLearning && leads(hero))
+			{
+				if(hero->hasSpellbook())
+				{
+					const int limit = std::min(hero->maxSpellLevel(), town->mageGuildLevel());
+					for(int level = 0; level < limit && level < static_cast<int>(town->spells.size()); ++level)
+					{
+						const int shown = std::min<int>(town->spellsAtLevel(level + 1, true), town->spells[level].size());
+						for(int i = 0; i < shown; ++i)
+							if(!hero->spellbookContainsSpell(town->spells[level][i]))
+								value += params.townSpellValue * (level + 1);
+					}
+				}
+				// (what such a building gives is a rule of the game: the building's own definition, read as
+				// the rules write it - primary skills and experience, once per hero)
+				for(const auto & [building, instance] : town->rewardableBuildings)
+				{
+					if(!instance || instance->wasVisited(hero))
+						continue;
+					auto it = town->getTown()->buildings.find(building);
+					if(it == town->getTown()->buildings.end() || !it->second)
+						continue;
+					const JsonNode & rules = it->second->rewardableObjectInfo.getParameters();
+					if(rules["visitMode"].String() != "hero")
+						continue; // once per hero only: the weekly ones (Stables and the like) stay as they were
+					for(const JsonNode & reward : rules["rewards"].Vector())
+					{
+						static const std::array<std::string, 4> names = {"attack", "defence", "spellpower", "knowledge"};
+						for(int k = 0; k < 4; ++k)
+						{
+							const JsonNode & points = reward["primary"][names[k]];
+							if(points.isNumber() && points.Float() > 0)
+								value += points.Float() * primaryPointValue(hero, k, true);
+						}
+						if(reward["heroExperience"].isNumber())
+							value += reward["heroExperience"].Float() * expValue(hero);
+					}
+				}
+			}
 			auto trip = roundTrip.find(hero->id);
 			const bool onTrip = trip != roundTrip.end() && trip->second.town == town->id;
 			if(params.townGuard && !onTrip)
