@@ -31,6 +31,33 @@
 #include "../../lib/mapObjects/MiscObjects.h"
 #include "../../lib/pathfinder/CGPathNode.h"
 #include "../../lib/spells/ViewSpellInt.h"
+#include "../CServerHandler.h"
+#include "../Client.h"
+
+namespace
+{
+/// The colour the screen shows as its own: the player's - and, with gosolo, the colours an AI plays for
+/// us (the screen is then the spectator's, whose own colour no hero has): their heroes move at the hero
+/// speed of the options, every other hero at the enemy speed, as in a game the player plays himself.
+bool shownAsOwn(const PlayerColor & colour)
+{
+	if(colour == GAME->interface()->playerID)
+		return true;
+	return GAME->interface()->playerID == PlayerColor::SPECTATOR && GAME->server().client && GAME->server().client->soloColors.count(colour);
+}
+
+/// (gosolo, the other players not shown in full - "gosolo all" off) the others' moves are shown where
+/// the colours the AI plays for us can see them, as the player would see them in his own game
+bool shownToOurColours(const int3 & tile)
+{
+	if(GAME->interface()->playerID != PlayerColor::SPECTATOR || !GAME->server().client || GAME->server().client->soloColors.empty() || settings["session"]["gosolo-all"].Bool())
+		return true;
+	for(const auto & colour : GAME->server().client->soloColors)
+		if(GAME->interface()->cb->isVisibleFor(tile, colour))
+			return true;
+	return false;
+}
+}
 
 void MapViewController::setViewCenter(const int3 & position)
 {
@@ -184,7 +211,7 @@ void MapViewController::tick(uint32_t timeDelta)
 		if(!hero)
 			hero = boat->getBoardedHero();
 
-		double heroMoveTime = GAME->interface()->playerID == hero->getOwner() ?
+		double heroMoveTime = shownAsOwn(hero->getOwner()) ?
 			settings["adventure"]["heroMoveTime"].Float() :
 			settings["adventure"]["enemyMoveTime"].Float();
 
@@ -196,7 +223,9 @@ void MapViewController::tick(uint32_t timeDelta)
 
 		Point positionCurr = vstd::lerp(positionFrom, positionDest, movementContext->progress);
 
-		setViewCenter(positionCurr, movementContext->tileDest.z);
+		// (spectator: "gosolo folgen" - the view stays where it is)
+		if(!(settings["session"]["spectate"].Bool() && settings["session"]["spectate-ignore-hero"].Bool()))
+			setViewCenter(positionCurr, movementContext->tileDest.z);
 	}
 
 	if(teleportContext)
@@ -295,10 +324,10 @@ bool MapViewController::isEventInstant(const CGObjectInstance * obj, const Playe
 	if (!initiator.isValidPlayer())
 		return true; // skip effects such as new monsters on new month
 
-	if(initiator != GAME->interface()->playerID && settings["adventure"]["enemyMoveTime"].Float() <= 0)
+	if(!shownAsOwn(initiator) && settings["adventure"]["enemyMoveTime"].Float() <= 0)
 		return true; // instant movement speed
 
-	if(initiator == GAME->interface()->playerID && settings["adventure"]["heroMoveTime"].Float() <= 0)
+	if(shownAsOwn(initiator) && settings["adventure"]["heroMoveTime"].Float() <= 0)
 		return true; // instant movement speed
 
 	return false;
@@ -309,14 +338,14 @@ bool MapViewController::isEventVisible(const CGObjectInstance * obj, const Playe
 	if(adventureContext == nullptr)
 		return false;
 
-	if(initiator != GAME->interface()->playerID && settings["adventure"]["enemyMoveTime"].Float() < 0)
+	if(!shownAsOwn(initiator) && settings["adventure"]["enemyMoveTime"].Float() < 0)
 		return false; // enemy move speed set to "hidden/none"
 
 	if(!ENGINE->windows().isTopWindow(adventureInt))
 		return false;
 
 	// do not focus on actions of other players except for AI with simturns off
-	if (initiator != GAME->interface()->playerID && initiator.isValidPlayer())
+	if (!shownAsOwn(initiator) && initiator.isValidPlayer())
 	{
 		if (GAME->interface()->makingTurn)
 			return false;
@@ -324,10 +353,10 @@ bool MapViewController::isEventVisible(const CGObjectInstance * obj, const Playe
 			return false;
 	}
 
-	if(obj->isVisitable())
-		return context->isVisible(obj->visitablePos());
-	else
-		return context->isVisible(obj->anchorPos());
+	const int3 tile = obj->isVisitable() ? obj->visitablePos() : obj->anchorPos();
+	if(initiator.isValidPlayer() && !shownAsOwn(initiator) && !shownToOurColours(tile))
+		return false;
+	return context->isVisible(tile);
 }
 
 bool MapViewController::isEventVisible(const CGHeroInstance * obj, const int3 & from, const int3 & dest)
@@ -335,18 +364,20 @@ bool MapViewController::isEventVisible(const CGHeroInstance * obj, const int3 & 
 	if(adventureContext == nullptr)
 		return false;
 
-	if(obj->getOwner() != GAME->interface()->playerID && settings["adventure"]["enemyMoveTime"].Float() < 0)
+	if(!shownAsOwn(obj->getOwner()) && settings["adventure"]["enemyMoveTime"].Float() < 0)
 		return false; // enemy move speed set to "hidden/none"
 
 	if(!ENGINE->windows().isTopWindow(adventureInt))
 		return false;
 
 	// do not focus on actions of other players except for AI with simturns off
-	if (obj->getOwner() != GAME->interface()->playerID)
+	if (!shownAsOwn(obj->getOwner()))
 	{
 		if (GAME->interface()->makingTurn)
 			return false;
 		if (GAME->interface()->cb->getStartInfo()->playerInfos.at(obj->getOwner()).isControlledByHuman() && !settings["session"]["adventureTrackHero"].Bool())
+			return false;
+		if (!shownToOurColours(obj->convertToVisitablePos(from)) && !shownToOurColours(obj->convertToVisitablePos(dest)))
 			return false;
 	}
 
@@ -552,7 +583,7 @@ void MapViewController::onHeroMoved(const CGHeroInstance * obj, const int3 & fro
 		return;
 	}
 
-	double movementTime = GAME->interface()->playerID == obj->tempOwner ?
+	double movementTime = shownAsOwn(obj->tempOwner) ?
 		settings["adventure"]["heroMoveTime"].Float() :
 		settings["adventure"]["enemyMoveTime"].Float();
 
