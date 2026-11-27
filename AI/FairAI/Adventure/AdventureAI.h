@@ -232,8 +232,12 @@ private:
 	/// A hero with nothing left to do on its landmass: buy a boat (own town with a shipyard, or the
 	/// shipyard the hero stands at - where a human could do the same) or head for a shipyard.
 	/// Returns true if a boat was bought (paths must be recomputed).
-	bool seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets, const CPathsInfo * freePaths = nullptr);
+	bool seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets, const CPathsInfo * freePaths = nullptr, bool enemyOverSea = false);
 	int boatGuardLog = -1;
+	int seaLog = -1; ///< (seaAccess) the day the reason was written down
+	ObjectInstanceID homeKeeper() const; ///< (collectorRing 2) the secondary hero that stays near home
+	mutable int keeperDay = -1;
+	mutable ObjectInstanceID keeperId;
 	std::map<ObjectInstanceID, double> townLeftover;         ///< own town -> troop value the main hero left behind on its last visit (not a reason to come back)
 	/// Troops the main hero could pick up in an own town: garrison, a garrison hero's army, creatures for sale
 	double townTroops(const CGTownInstance * town, const CGHeroInstance * hero) const;
@@ -765,6 +769,7 @@ private:
 	std::map<ObjectInstanceID, std::vector<ArtifactID>> marketOffers; ///< black market -> what it had on offer when we stood there (guarded by intelMutex)
 	std::map<ObjectInstanceID, int> siteWeek;  ///< building -> week we last used it (a refugee camp has new guests every week)
 	std::set<ObjectInstanceID> sitesDone;      ///< buildings that have nothing more for us (a hut of the magi shows the same again)
+	std::atomic<int> monsterTarget{-1};   ///< (armyFit) wandering monster the moving hero is heading for (for an offer to join)
 	std::atomic<int> guardedTarget{-1};   ///< guarded building the moving hero is heading for (for the game's question at its door)
 	std::atomic<int> guardAnswer{-1};     ///< what we answered there: 1 fight, 0 turn back, -1 not asked
 	std::atomic<int> guardForecast{0};    ///< loss forecast for that fight, in thousandths of our army
@@ -800,6 +805,8 @@ private:
 	bool makeRoom(const CGTownInstance * town, const CArmedInstance * army, CreatureID creature, double batchValue);
 	/// stacks of one kind in one army become one stack
 	void mergeDuplicates(const CArmedInstance * army);
+	/// (armyFit) the main hero lets go of stacks that cost the rest of its army more in morale than they add
+	void shedMisfits(const CGHeroInstance * hero);
 	/// single creatures split off the cheapest stacks into free slots: they take retaliations and block
 	/// in battle (the combat search knows how to use them); merged back before troops are exchanged
 	void arrangeBaits(const CGHeroInstance * hero);
