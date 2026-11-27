@@ -1,0 +1,9 @@
+{
+ "job": "070-twin-nk2-battleai-all3scoutring-s27",
+ "state": "running",
+ "commit": "f62b85cd240e811591f9704e01ab9d9bf9d70cf1",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-27T13:27:03",
+ "note": "all3scout with homeRing only: which of the two parts of all4 (homeRing, raceTrack) cost all4 its games (all4 -0.09 against all3 over 72 games; seed 26: 13 won, 9 lost, against 18/4 of all3scout - long games in which the main hero stayed at home). Seed 27, the same games as the all3scout job of that seed."
+}
