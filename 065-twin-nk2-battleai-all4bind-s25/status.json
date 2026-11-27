@@ -1,0 +1,9 @@
+{
+ "job": "065-twin-nk2-battleai-all4bind-s25",
+ "state": "running",
+ "commit": "145cd68578398eaa6216df11e443e169d4c4d3fe",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-27T01:37:48",
+ "note": "all4 with raceBind (owner's word of 26.11.2026 21:23): after three days in a row in which a race held the main hero at home and the enemy did not come, it goes out for four days as if no race were on, then the count starts again; not with one town left. Same games as job 060 (all4), seed 25."
+}
