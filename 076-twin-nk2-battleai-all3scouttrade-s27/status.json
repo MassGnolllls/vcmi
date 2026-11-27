@@ -1,0 +1,9 @@
+{
+ "job": "076-twin-nk2-battleai-all3scouttrade-s27",
+ "state": "running",
+ "commit": "201c38b9aedaf7fb820cb5030978443820dcf0aa",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-27T17:30:19",
+ "note": "all3scout with trade (owner's word of 26.11.2026 21:23): on all4, seed 25, it gave 16 won, 2 lost, 6 open against 18/3/3 - measured on the better base and three seeds. Seed 27, the same games as the all3scout job of that seed."
+}
