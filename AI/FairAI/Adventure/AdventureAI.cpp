@@ -11324,6 +11324,11 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 	}
 }
 
+int AdventureAI::townSignature(const CGTownInstance * town) const
+{
+	return town ? town->mageGuildLevel() * 1000 + static_cast<int>(town->getBuildings().size()) : 0;
+}
+
 double AdventureAI::townLearningValue(const CGHeroInstance * hero, const CGTownInstance * town) const
 {
 	// (townLearning) The guild's spells the hero does not know yet, and the buildings that give a visiting
@@ -11331,6 +11336,13 @@ double AdventureAI::townLearningValue(const CGHeroInstance * hero, const CGTownI
 	// and the like) - what such a building gives is a rule of the game, read from its definition
 	double value = 0;
 	if(!hero || !town)
+		return 0;
+	// what the hero could take there it took when it was last inside: only a new guild level or a new
+	// building makes the town worth the way again (owner's test of 27.11.2026 21:19: in and out of the
+	// castle all day long)
+	if(hero->getVisitedTown() == town)
+		return 0;
+	if(auto seen = townLearnSeen.find({hero->id, town->id}); seen != townLearnSeen.end() && seen->second == townSignature(town))
 		return 0;
 	{
 				if(hero->hasSpellbook())
@@ -11348,7 +11360,7 @@ double AdventureAI::townLearningValue(const CGHeroInstance * hero, const CGTownI
 				// the rules write it - primary skills and experience, once per hero)
 				for(const auto & [building, instance] : town->rewardableBuildings)
 				{
-					if(!instance || instance->wasVisited(hero))
+					if(!instance || !town->hasBuilt(building) || instance->wasVisited(hero))
 						continue;
 					auto it = town->getTown()->buildings.find(building);
 					if(it == town->getTown()->buildings.end() || !it->second)
@@ -11382,6 +11394,8 @@ void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target
 	// more waits until it does not. Retreats, flight and enemy heroes go as before.
 	if(!params.ownerPlan || !hero || !leads(hero))
 		return;
+	if(const auto * here = hero->getVisitedTown(); here && here->tempOwner == me)
+		townLearnSeen[{hero->id, here->id}] = townSignature(here); // (what it can take there it has taken)
 	const CGTownInstance * castle = nullptr;
 	for(const auto * town : perception.ownTowns())
 		if(!castle || town->getBuildings().size() > castle->getBuildings().size())

@@ -239,6 +239,8 @@ private:
 	/// (ownerPlan) the owner's order of things for the main hero
 	void applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets);
 	double townLearningValue(const CGHeroInstance * hero, const CGTownInstance * town) const;
+	int townSignature(const CGTownInstance * town) const; ///< guild level and buildings: what a town can teach changes with them
+	std::map<std::pair<ObjectInstanceID, ObjectInstanceID>, int> townLearnSeen; ///< (hero, town) -> the town's signature when the hero was last inside
 	ReachMap castleReach;
 	int castleReachDay = -1;
 	ObjectInstanceID castleReachTown;
