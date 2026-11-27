@@ -237,7 +237,7 @@ private:
 	int seaLog = -1; ///< (seaAccess) the day the reason was written down
 	ObjectInstanceID homeKeeper() const; ///< (collectorRing 2) the secondary hero that stays near home
 	/// (ownerPlan) the owner's order of things for the main hero
-	void applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets);
+	void applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets, const CPathsInfo & paths);
 	double townLearningValue(const CGHeroInstance * hero, const CGTownInstance * town) const;
 	int townSignature(const CGTownInstance * town) const; ///< guild level and buildings: what a town can teach changes with them
 	std::map<std::pair<ObjectInstanceID, ObjectInstanceID>, int> townLearnSeen; ///< (hero, town) -> the town's signature when the hero was last inside

@@ -1569,7 +1569,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		auto paths = computePaths(hero, false);
 		auto freePaths = computePaths(hero, true);
 		auto targets = supply && supply->courier == heroId ? supplyTargets(hero, *paths) : collectTargets(hero, *paths, *freePaths);
-		applyOwnerPlan(hero, targets);
+		applyOwnerPlan(hero, targets, *paths);
 		// (muster) More waits in the town than the main hero leads: while that town is among its
 		// targets, nothing else is worth more than half a day - a town next door that changed hands
 		// every other day kept a leader of 130,000 from the 380,000 waiting four days away.
@@ -11385,7 +11385,7 @@ double AdventureAI::townLearningValue(const CGHeroInstance * hero, const CGTownI
 	return value;
 }
 
-void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets)
+void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets, const CPathsInfo & paths)
 {
 	// (ownerPlan) Owner's word of 27.11.2026 19:27: the main hero beats everything it beats losing at
 	// most 2 % of its army - monsters, banks, garrisons, towns - and visits everything on the map once
@@ -11439,6 +11439,50 @@ void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target
 		frontierLog = today;
 	}
 	const double armyGold = std::max(1.0, fieldStrength(hero) * params.goldPerArmyValue);
+	// Everything the hero can deal with counts, whatever FairAI makes of it otherwise (a Magic Well with
+	// the mana full, a building that gives nothing today): what is not on the list yet - unguarded, in
+	// reach, not yet visited by us - goes on it (owner's word of 27.11.2026 21:41: wood, then ore, then
+	// the well ...). Fights stay with FairAI's own list and its loss forecast.
+	{
+		std::set<ObjectInstanceID> present;
+		for(const auto & t : targets)
+			if(t.object.hasValue())
+				present.insert(t.object);
+		for(const auto & [id, object] : known)
+		{
+			if(present.count(id) || ownerVisited.count(id) || object.visitablePos == hero->visitablePos())
+				continue;
+			switch(object.type.toEnum())
+			{
+				case Obj::MONSTER: case Obj::HERO: case Obj::TOWN: case Obj::GARRISON: case Obj::GARRISON2:
+				case Obj::MONOLITH_ONE_WAY_ENTRANCE: case Obj::MONOLITH_ONE_WAY_EXIT: case Obj::MONOLITH_TWO_WAY:
+				case Obj::SUBTERRANEAN_GATE: case Obj::WHIRLPOOL: case Obj::BOAT: case Obj::SIGN: case Obj::EVENT:
+				case Obj::BORDERGUARD: case Obj::BORDER_GATE: case Obj::QUEST_GUARD: case Obj::SHIPYARD: case Obj::SIRENS:
+				case Obj::CREATURE_BANK: case Obj::DRAGON_UTOPIA: case Obj::CRYPT: case Obj::DERELICT_SHIP: case Obj::SHIPWRECK:
+				case Obj::HERO_PLACEHOLDER: case Obj::GRAIL:
+					continue;
+				default:
+					break;
+			}
+			if(object.owner == me || isAlly(object.owner))
+				continue; // ours already (a mine, a dwelling)
+			const CGObjectInstance * instance = perception.visibleObject(id);
+			if(!instance || !instance->isVisitable() || instance->wasVisited(hero) || instance->wasVisited(me))
+				continue;
+			if(!cb->getGuardingCreatures(object.visitablePos).empty())
+				continue; // its guard is a fight: FairAI's list and the loss rule
+			const CGPathNode * node = paths.getPathInfo(object.visitablePos);
+			if(!node || !node->reachable() || node->turns > params.maxTravelTurns)
+				continue;
+			Target t;
+			t.tile = object.visitablePos;
+			t.object = id;
+			t.value = 1;
+			t.travel = node->cost;
+			t.description = "visit";
+			targets.push_back(t);
+		}
+	}
 	for(auto & t : targets)
 	{
 		const std::string & d = t.description;
