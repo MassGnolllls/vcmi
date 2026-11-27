@@ -14,12 +14,12 @@
 namespace FAI
 {
 
-// PLAY BUILD (branch fairai-play). Owner's word of 26.11.2026 20:27: statPlaces, race (raceFree 2.0, raceLastTown 0),
-// townPortal, townGuards, lastChance (40 won, 4 lost, 4 open in 48 games against Nullkiller2 + BattleAI on the four-town
-// maps), scoutAll, homeRing, raceTrack. Owner's word of 27.11.2026 14:56 - the fixes for the faults he found in his
-// game Back For Revenge: areaAim, heroMerge, armyFit, collectorRing 2, dwellingRounds, supplyRuns, sites,
-// buyWarMachines, seaAccess, scouts -2 (on his map, four seats against four of the play build before, two games of 60
-// days: land seen 0.63/0.72 against 0.31/0.27, towns 11/10 against 6/6, mines 28/27 against 14/15).
+// PLAY BUILD (branch fairai-play). Owner's word of 26.11.2026 20:27: statPlaces, race (raceLastTown 0), townPortal,
+// townGuards, lastChance, scoutAll, homeRing, raceTrack. Owner's word of 27.11.2026 14:56 (Back For Revenge, first game):
+// areaAim, heroMerge, armyFit, collectorRing 2, dwellingRounds, sites, buyWarMachines, seaAccess, scouts -2.
+// Owner's word of 27.11.2026 16:30 (second game): fillSlots, cheapClear, garrisonBehind, coverDark, dwellingTownGrowth,
+// dwellingEarly, earlyDetour, supplyWeek, formation, useTactics, raceFree 1.5, supplyRuns 2 (supplyShare 0.1),
+// two heroes at the start (heroesWeek1 1, heroesWeek3 2, heroesLater 3 - plus the scouts).
 // Everything else as on branch fairai (the tests run there).
 struct Params
 {
@@ -64,7 +64,7 @@ struct Params
 	int raceMemory = 2;                ///< see race: days a sighting counts
 	double raceMainShare = 0.5;        ///< see race
 	double interceptEdge = 1.1;        ///< see race
-	double raceFree = 2.0;             ///< see race: from this many times the strength of the army that comes nothing binds the main hero (2.0 in the first runs: jobs 043 and 044)
+	double raceFree = 1.5;             ///< see race: from this many times the strength of the army that comes nothing binds the main hero (2.0 in the first runs: jobs 043 and 044)
 	int raceLastTown = 0;              ///< see race: 1: while an army about as strong as ours has been seen in the last ten days the main hero keeps within a day of our last town (0 in the first runs)
 	int townPortal = 1;                ///< 1: the main hero casts Town Portal when it has the spell: into a town it must stand in tonight and cannot walk to (race); the race counts the way back by the spell
 	int townGuards = 1;                ///< 1: a small army before a town is met by the town's own means - troops bought, a hero of ours in the town (hired there if none is near) that leads them behind the walls, learns the guild's spells and stays while the intruder is about; it goes out against the intruder as soon as it is the stronger (heroEdge). The main hero comes back for a small army only when nothing else holds the town and the way is short
@@ -80,6 +80,17 @@ struct Params
 	int collectorRing = 2;             ///< 1: secondary heroes work the land within homeRingDays of march of our towns, not only collectorRadius tiles as the crow flies; 2: they work all the land we have uncovered (owner's word of 27.11.2026 14:28), but for the one nearest home, who keeps to the ring for the supply runs, and no secondary hero sits in a garrison (all beyond collectorsRoam + scouts collect too) - where a seen enemy can reach them is judged as before (owner's game of 27.11.2026: a secondary hero stood for weeks while treasures lay further out - 14 to 26 targets a day were "unsafe" with no enemy near)
 	int dwellingRounds = 1;            ///< 1: our own creature dwellings are worth what has grown there: the main hero buys it when it is near, a secondary hero (with couriers or supplyRuns) buys it for the main hero (owner's game of 27.11.2026: no dwelling was visited a second time)
 	int seaAccess = 1;                 ///< 1: when no enemy town has been found on our land and exploring has stalled, the main hero goes to sea although treasures lie about: it buys a boat, or fights the guard before the shipyard (as boatGuards), the way counted like finding a town (owner's game of 27.11.2026: 160 days on one island, the scorpicores before the shipyard never attacked)
+	int fillSlots = 1;                 ///< 1: owner's rule of 27.11.2026 for the main hero, 2: for every hero: before a fight - and at the end of the turn - every slot that would stay empty holds a single creature of the weakest kind; after the fight everything goes back into one stack, and at the start of the turn, so that troops can be taken; a slot stays free for creatures to come (Necromancy, a bank, wandering creatures that may join)
+	int cheapClear = 1;                ///< 1: a guard the main hero beats losing at most cheapClearShare of its army, or one in the ring around our towns (homeRing), counts what it holds back on campaign too - not only towns and the way on (owner's game of 27.11.2026: master gremlins before a War Machine Factory and nagas before the shipyard "opened 0" all game long)
+	double cheapClearShare = 0.02;     ///< see cheapClear
+	int garrisonBehind = 1;            ///< 1: a garrison the main hero can walk up to is worth what lies behind it - the objects on its far side no way of ours reaches now and the unseen land there (owner's game of 27.11.2026: an extremely valuable artifact and many treasures waited behind one)
+	int coverDark = 1;                 ///< 1: a Cover of Darkness is worth a visit a week while towns of ours lie in its circle: it hides our land from everybody else again (owner's game of 27.11.2026: never visited)
+	int dwellingTownGrowth = 1;        ///< 1: a creature dwelling to take counts the +1 a week it adds to every town of ours that grows its creature
+	int dwellingEarly = 1;             ///< 1: a dwelling to take counts more by its tier and the earlier in the game it is (owner's word of 27.11.2026: the earlier one has it, the more it is worth)
+	int earlyDetour = 1;               ///< 1: in the first three weeks a short detour (a third of a day) of the main hero to something of use that costs no troops counts twice (owner's word of 27.11.2026)
+	int supplyWeek = 1;                ///< 1: the secondary hero that keeps near home (collectorRing 2) is in a town of ours when the week begins: it buys what has grown there and brings it to the main hero (owner's word of 27.11.2026)
+	int formation = 1;                 ///< 1: before a fight the shooters stand at the two ends of the army, the single creatures beside them as their shell, the rest in the middle (owner's word of 27.11.2026)
+	int useTactics = 1;                ///< 1: in the tactics phase the shooters go to the corners on our side and single creatures (then weak stacks) take the hexes beside them (owner's word of 27.11.2026: the AI ended the phase at once)
 	int raceBind = 0;                  ///< 1: a race holds the main hero at home for raceBindDays at most (owner's word of 26.11.2026 21:23): when the enemy's main army has been in the race for a town of ours that many days in a row - the main hero behind the walls, or meeting it short of raceFree - and has not come, the main hero goes out for raceBindRest days as if no race were on (no leash, no round trips from a needy town), then the count starts again. Not while we hold only one town (the last town is not left - lastStand). Before: in a game on the Castle map the main hero sat at home on 35 of the 38 days from day 41 to 78 while the enemy's army waited a day or two away, stayed at level 7 (the enemy's hero reached 23), lost the second town all the same and the game on day 114
 	double raceBindDays = 3;           ///< see raceBind
 	double raceBindRest = 4;           ///< see raceBind
@@ -176,8 +187,8 @@ struct Params
 	int boats = 1;                     ///< heroes board boats, buy one when they run out of land (town shipyard, or a shipyard they stand at) and sail
 	int concentrate = 0;               ///< heroes meeting to hand over troops count each other's army as protection; collectors may leave our territory to reach the main hero. Off until a test shows a gain: the first A/B leaned against it (-0.046 +- 0.051)
 	int couriers = 0;                  ///< secondary heroes fetch troops waiting in our towns and bring them to the main hero (trips of up to 8 days, also beyond our territory); the main hero keeps its role unless another army is three times as strong, and walks home for troops only at 35 % of their worth. Off until a test shows a gain
-	int supplyRuns = 1;                ///< 1: one hero at a time, standing in a town of ours, brings what has grown there to the main hero as soon as it is worth supplyShare of the leader's army and the leader is within supplyDays; other heroes leave garrison troops alone; while a run is on its way the main hero does not walk home for troops. Off until a test shows a gain. Level 2: when the troops worth a run wait in a town where no hero of ours stands (the leader between one and supplyDays days away), a light hero of ours that reaches the town by tomorrow is called there to load them; if there is none, a courier is hired in the tavern (2,500 gold; for a load of 5,000 or more). At level 1 a run needs a hero that happens to stand in the town: in probe games three runs started in 45 days while the leader walked home on nine days out of thirty, and the town it had just taken fell behind its back
-	double supplyShare = 0.2;          ///< supply runs: smallest load worth a run, as a share of the main hero's army
+	int supplyRuns = 2;                ///< 1: one hero at a time, standing in a town of ours, brings what has grown there to the main hero as soon as it is worth supplyShare of the leader's army and the leader is within supplyDays; other heroes leave garrison troops alone; while a run is on its way the main hero does not walk home for troops. Off until a test shows a gain. Level 2: when the troops worth a run wait in a town where no hero of ours stands (the leader between one and supplyDays days away), a light hero of ours that reaches the town by tomorrow is called there to load them; if there is none, a courier is hired in the tavern (2,500 gold; for a load of 5,000 or more). At level 1 a run needs a hero that happens to stand in the town: in probe games three runs started in 45 days while the leader walked home on nine days out of thirty, and the town it had just taken fell behind its back
+	double supplyShare = 0.1;          ///< supply runs: smallest load worth a run, as a share of the main hero's army
 	int supplyDays = 4;                ///< supply runs: the leader must be within this many days' march
 	int relayChain = 0;                ///< 1: hero chain (BAUPLAN part 1). Light heroes stand on posts between the hub - the town where most grows - and the main hero, one day's march apart; on the first day of a week (and whenever enough waits) what our towns hold is bought and handed from link to link to the main hero within the day. Between deliveries a link collects around its post and buys in our own dwellings there
 	double chainSpacing = 1350;        ///< hero chain: movement points between two posts (a light hero marches 1,500 at least; the rest is slack for rough ground and the hand-over)
@@ -190,9 +201,9 @@ struct Params
 	int wardenFromDay = 29;            ///< wardens: not before this day
 	double earlyGoldDays = 21;         ///< until this day gold is scarce whatever the stock says (buildings are waiting): income buildings count in full, fading out over the two weeks after. 0: off. On by default: +0.05 and +0.12 score in two tests on medium maps (town hall and city hall in week one)
 	int earlyGoldContact = 0;          ///< 1: "gold first" ends when the first enemy hero or town comes into view (then troops count, fading within a week) - on small maps that is early, on large ones late. Off until a test shows a gain
-	int heroesWeek1 = 2;               ///< heroes wanted in the first week (hiring schedule)
-	int heroesWeek3 = 3;               ///< ... until day 21
-	int heroesLater = 4;               ///< ... afterwards
+	int heroesWeek1 = 1;               ///< heroes wanted in the first week (hiring schedule)
+	int heroesWeek3 = 2;               ///< ... until day 21
+	int heroesLater = 3;               ///< ... afterwards
 	int sellSurplus = 0;               ///< resources piling up are traded for the ones our buildings lack. Off until a test shows a gain
 	int skillChoice = 0;               ///< secondary skills are valued by the hero's role and army (what the skill's bonuses do) instead of one fixed ranking for everybody. Off until a test shows a gain
 	int resourcePlan = 0;              ///< mines and resource piles are valued by what our towns will need (buildings still missing, weekly creature costs) against stock and income - before a building is blocked. Off until a test shows a gain
