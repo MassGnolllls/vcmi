@@ -408,6 +408,12 @@ void Params::loadOverrides(int playerIndex)
 	read("collectorRing", collectorRing);
 	read("dwellingRounds", dwellingRounds);
 	read("seaAccess", seaAccess);
+	read("fillSlots", fillSlots);
+	read("cheapClear", cheapClear);
+	read("garrisonBehind", garrisonBehind);
+	read("coverDark", coverDark);
+	read("dwellingTownGrowth", dwellingTownGrowth);
+	read("cheapClearShare", cheapClearShare);
 	read("raceBindDays", raceBindDays);
 	read("raceBindRest", raceBindRest);
 	read("trade", trade);
@@ -996,6 +1002,12 @@ void AdventureAI::playTurn()
 		runRelay();
 		perception.refresh();
 	}
+	if(params.fillSlots)
+	{
+		// (fillSlots) the singles of the night go back into their stacks: the towns may have troops for us
+		for(const auto * hero : perception.ownHeroes())
+			mergeSingles(hero);
+	}
 	manageTowns(false);
 	hireHeroes();
 	chooseMainHero();
@@ -1171,6 +1183,12 @@ void AdventureAI::playTurn()
 	buyTavernArmies();
 	defendTowns();
 	arrangeTowns();
+	if(params.fillSlots)
+	{
+		// (fillSlots) a hero may be attacked in the enemy's turn: it waits with every slot taken
+		for(const auto * hero : perception.ownHeroes())
+			fillSingles(hero, ObjectInstanceID());
+	}
 
 	heroesLastTurn.clear();
 	for(const auto * hero : perception.ownHeroes())
@@ -1419,6 +1437,13 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		const CGHeroInstance * hero = ownHero(heroId);
 		if(!hero || hero->movementPointsRemaining() <= 0)
 			return;
+		if(params.fillSlots)
+		{
+			mergeSingles(hero); // (fillSlots) after a fight everything goes back into one stack
+			hero = ownHero(heroId);
+			if(!hero)
+				return;
+		}
 		if(hero->isGarrisoned())
 		{
 			const CGTownInstance * town = hero->getVisitedTown();
@@ -1965,6 +1990,21 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			const auto target = best.object.hasValue() ? objectBefore.find(best.object) : objectBefore.end();
 			monsterTarget = target != objectBefore.end() && target->second.type == Obj::MONSTER ? best.object.getNum() : -1;
 		}
+		if(params.fillSlots)
+		{
+			// (fillSlots) a fight ahead: every free slot takes a single creature of the weakest kind
+			const auto target = best.object.hasValue() ? objectBefore.find(best.object) : objectBefore.end();
+			const bool foreign = target != objectBefore.end() && target->second.owner != me && !isAlly(target->second.owner)
+				&& (target->second.type == Obj::HERO || target->second.type == Obj::TOWN || target->second.type == Obj::GARRISON || target->second.type == Obj::GARRISON2);
+			const bool fight = best.loss > 0 || foreign || best.description.rfind("monster", 0) == 0 || best.description.rfind("bank ", 0) == 0;
+			if(fight)
+			{
+				fillSingles(hero, best.object);
+				hero = ownHero(heroId);
+				if(!hero)
+					return;
+			}
+		}
 		activeHero = heroId.getNum();
 		bool sent = stepTowards(hero, best.tile, *paths);
 		if(sent)
@@ -1972,6 +2012,13 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		activeHero = -1;
 		guardedTarget = -1;
 		monsterTarget = -1;
+		if(params.coverDark && sent && best.object.hasValue())
+		{
+			const auto target = objectBefore.find(best.object);
+			if(target != objectBefore.end() && target->second.type == Obj::COVER_OF_DARKNESS)
+				if(const auto * now = ownHero(heroId); now && now->visitablePos() == best.tile)
+					coverDay[target->second.visitablePos] = today;
+		}
 		if(towardsBank && guardAnswer.load() == 1)
 		{
 			// how the fight went against what the simulator expected (to keep the forecast honest)
@@ -3422,6 +3469,13 @@ double AdventureAI::siteValue(const CGHeroInstance * hero, const ObservedObject 
 					value += unit.creature.toCreature()->getMaxHealth() * 0.5 * (unit.minCount + unit.maxCount) * expValue(hero);
 			}
 		}
+		if(params.garrisonBehind && instance)
+		{
+			// (garrisonBehind) what its far side holds, as for a guard
+			auto behind = garrisonUnlock.find(instance->id);
+			if(behind != garrisonUnlock.end())
+				return value + params.unlockFactor * behind->second;
+		}
 		Rewardable::RewardRevealTiles around{};
 		around.radius = 9;
 		around.scoreSurface = around.scoreSubterra = around.scoreWater = around.scoreRock = 1;
@@ -4057,6 +4111,21 @@ double AdventureAI::rewardValue(const CGHeroInstance * hero, const Rewardable::R
 	// land revealed (a Cover of Darkness hides land from the others: nothing for the visitor)
 	if(reward.revealTiles && !reward.revealTiles->hide)
 		value += std::min(6000.0, 0.5 * params.explorationTileValue * unexploredAround(where, *reward.revealTiles)) * std::max(0.4, 1.0 - today / 84.0);
+	else if(reward.revealTiles && params.coverDark)
+	{
+		// (coverDark) A Cover of Darkness hides the land around it from everybody else again: what they
+		// saw of our towns and roads they have to find anew. Worth a visit a week while towns of ours lie
+		// in its circle (owner's game of 27.11.2026: never visited, it counted nothing).
+		auto last = coverDay.find(where);
+		if(last == coverDay.end() || today - last->second >= 7)
+		{
+			int towns = 0;
+			for(const auto * town : perception.ownTowns())
+				if(town->visitablePos().z == where.z && town->visitablePos().dist2d(where) <= reward.revealTiles->radius)
+					++towns;
+			value += towns > 0 ? 600.0 + 900.0 * towns : 0.0;
+		}
+	}
 	return value;
 }
 
@@ -7992,6 +8061,14 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 				const double share = params.armyFit
 					? std::clamp(fitShare(leader ? leader : hero, creature->getId(), 4.0 * creature->getGrowth() * creature->getAIValue()), 0.0, 1.0) : 1.0;
 				value += share * creature->getGrowth() * creature->getAIValue() * params.goldPerArmyValue * 0.5 * params.dwellingHorizonWeeks * armyFactor;
+				// (dwellingTownGrowth) the dwelling adds one a week to every town of ours that grows its creature
+				if(params.dwellingTownGrowth)
+				{
+					for(const auto * town : perception.ownTowns())
+						for(const auto & grown : town->creatures)
+							if(vstd::contains(grown.second, creature->getId()))
+								value += share * creature->getAIValue() * params.goldPerArmyValue * 0.5 * params.dwellingHorizonWeeks * armyFactor;
+				}
 			}
 		}
 		return enemy ? 1.3 * value : value;
@@ -8944,6 +9021,66 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	if(auto seen = seenTilesOn.find(today); seen != seenTilesOn.end() && mapTiles > 0)
 		unseenShare = 1.0 - static_cast<double>(seen->second) / mapTiles;
 
+	// (garrisonBehind) What lies behind a garrison the leader can walk up to: the objects on its far side
+	// that no way of ours reaches now, and the land there we have not seen (owner's game of 27.11.2026:
+	// a garrison held back a valuable artifact and many treasures and counted 1,500 and a little land)
+	garrisonUnlock.clear();
+	if(params.garrisonBehind && leads(hero))
+	{
+		const int3 size = cb->getMapSize();
+		auto indexOf = [&](const int3 & pos) { return (static_cast<size_t>(pos.z) * size.y + pos.y) * size.x + pos.x; };
+		const double dayTiles = std::max(12.0, hero->movementPointsLimit(true) / 100.0);
+		for(const auto & [gid, gate] : known)
+		{
+			if((gate.type != Obj::GARRISON && gate.type != Obj::GARRISON2) || gate.owner == me || isAlly(gate.owner))
+				continue;
+			const CGPathNode * at = paths.getPathInfo(gate.visitablePos);
+			if(!at || !at->reachable() || at->turns > params.maxTravelTurns)
+				continue;
+			double behind = 0;
+			std::set<ObjectInstanceID> counted;
+			for(int dx = -1; dx <= 1; ++dx)
+				for(int dy = -1; dy <= 1; ++dy)
+				{
+					const int3 side = gate.visitablePos + int3(dx, dy, 0);
+					if((dx == 0 && dy == 0) || !cb->isInTheMap(side))
+						continue;
+					const TerrainTile * t = cb->getTile(side, false);
+					if(t && (t->blocked() || t->isWater()))
+						continue;
+					const CGPathNode * near = paths.getPathInfo(side);
+					if(near && near->reachable())
+						continue; // our side of the gate
+					ReachMap reach;
+					computeReach(reach, side, ownStrength, 2.0 * dayTiles);
+					int unseen = 0;
+					for(size_t i = 0; i < reach.tiles.size(); ++i)
+					{
+						if(reach.tiles[i] < 0)
+							continue;
+						const int x = static_cast<int>(i % size.x);
+						const int y = static_cast<int>((i / size.x) % size.y);
+						const int z = static_cast<int>(i / (static_cast<size_t>(size.x) * size.y));
+						unseen += cb->isVisible(int3(x, y, z)) ? 0 : 1;
+					}
+					behind += 0.3 * params.explorationTileValue * unseen;
+					for(const auto & [oid, other] : known)
+					{
+						if(other.type == Obj::MONSTER || oid == gid || counted.count(oid) || !cb->isInTheMap(other.visitablePos))
+							continue;
+						if(reach.tiles[indexOf(other.visitablePos)] < 0)
+							continue;
+						const CGPathNode * way = paths.getPathInfo(other.visitablePos);
+						if(way && way->reachable())
+							continue; // we get there without the gate
+						counted.insert(oid);
+						behind += std::max(0.0, objectValue(hero, other, perception.visibleObject(oid)));
+					}
+				}
+			garrisonUnlock[gid] = behind;
+		}
+	}
+
 	// ---- objects other than monsters
 	for(const auto & [id, object] : known)
 	{
@@ -9737,8 +9874,14 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			value += params.guardKillValue * danger * params.goldPerArmyValue;
 		// a guard next to unexplored land probably blocks a way into it
 		value += params.guardFogFactor * tileValue * revealGrid.count(object.visitablePos, hero->getSightRadius());
-		// on campaign a guard is worth a detour only for what the campaign is about: towns and the way on
-		const auto & opened = campaign(hero) && node->cost > 0.5 ? strategicUnlock : unlockValue;
+		// on campaign a guard is worth a detour only for what the campaign is about: towns and the way on -
+		// (cheapClear) but for a guard the leader beats at almost no loss, or one in the ring around our
+		// towns: what it holds back counts on campaign too (owner's game of 27.11.2026: master gremlins
+		// before a War Machine Factory and nagas before the shipyard "opened 0" all game long, while the
+		// loss forecast was 3 to 12)
+		const bool cheap = params.cheapClear && leads(hero)
+			&& (loss <= params.cheapClearShare * std::max(1.0, ownStrength) || inHomeRing(object.visitablePos));
+		const auto & opened = campaign(hero) && node->cost > 0.5 && !cheap ? strategicUnlock : unlockValue;
 		const auto unlock = opened.find(id);
 		const double opens = unlock != opened.end() ? params.unlockFactor * unlock->second : 0.0;
 		value += opens;
@@ -11138,6 +11281,69 @@ void AdventureAI::shedMisfits(const CGHeroInstance * hero)
 			cb->dismissCreature(hero, worst);
 		const CGHeroInstance * after = ownHero(hero->id);
 		if(!after || (after->getStackPtr(worst) && after->getStackPtr(worst)->getCreatureID() == kind && after->getStackPtr(worst)->getCount() == count))
+			return; // refused: do not ask again
+	}
+}
+
+void AdventureAI::mergeSingles(const CGHeroInstance * hero)
+{
+	if(!params.fillSlots || !hero || (params.fillSlots < 2 && !isMain(hero)))
+		return;
+	const ObjectInstanceID id = hero->id;
+	mergeDuplicates(hero);
+	gateway.waitTillFree();
+	(void)id;
+}
+
+void AdventureAI::fillSingles(const CGHeroInstance * hero, ObjectInstanceID target)
+{
+	// (fillSlots) Owner's rule of 27.11.2026: every slot that would stay empty holds a single creature of
+	// the weakest kind - one more stack for the enemy to hit and to retaliate on, at the price of one
+	// creature each. A slot stays free where creatures are to come: Necromancy raises the dead after the
+	// battle, a bank may pay in creatures, wandering creatures may offer to join.
+	if(!params.fillSlots || !hero || (params.fillSlots < 2 && !isMain(hero)) || hero->stacksCount() == 0)
+		return;
+	int keepFree = 0;
+	if(hero->valOfBonuses(BonusType::UNDEAD_RAISE_PERCENTAGE) > 0)
+		keepFree = 1;
+	if(target.hasValue())
+	{
+		const auto known = perception.knownObjects();
+		const auto it = known.find(target);
+		if(it != known.end() && (it->second.type == Obj::MONSTER || it->second.type == Obj::CREATURE_BANK || it->second.table))
+			keepFree = 1;
+	}
+	const ObjectInstanceID id = hero->id;
+	for(int guard = 0; guard < GameConstants::ARMY_SIZE; ++guard)
+	{
+		hero = ownHero(id);
+		if(!hero)
+			return;
+		const int free = GameConstants::ARMY_SIZE - static_cast<int>(hero->stacksCount());
+		if(free <= keepFree)
+			return;
+		// the weakest kind with more than one creature in its stack (the faster one of two alike)
+		SlotID weakest;
+		const CCreature * weakestType = nullptr;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(!stack || !stack->getCreature() || stack->getCount() < 2)
+				continue;
+			const CCreature * type = stack->getCreature();
+			if(!weakestType || type->getAIValue() < weakestType->getAIValue()
+				|| (type->getAIValue() == weakestType->getAIValue() && type->getMovementRange() > weakestType->getMovementRange()))
+			{
+				weakestType = type;
+				weakest = slot;
+			}
+		}
+		const SlotID empty = hero->getFreeSlot();
+		if(!weakest.validSlot() || !empty.validSlot())
+			return;
+		cb->splitStack(hero, hero, weakest, empty, 1);
+		gateway.waitTillFree();
+		const CGHeroInstance * after = ownHero(id);
+		if(!after || !after->hasStackAtSlot(empty))
 			return; // refused: do not ask again
 	}
 }

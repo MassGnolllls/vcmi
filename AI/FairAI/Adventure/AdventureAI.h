@@ -237,6 +237,8 @@ private:
 	int seaLog = -1; ///< (seaAccess) the day the reason was written down
 	ObjectInstanceID homeKeeper() const; ///< (collectorRing 2) the secondary hero that stays near home
 	mutable int keeperDay = -1;
+	mutable std::map<ObjectInstanceID, double> garrisonUnlock; ///< (garrisonBehind) garrison -> what its far side holds
+	std::map<int3, int> coverDay;                              ///< (coverDark) Cover of Darkness -> the day we were there
 	mutable ObjectInstanceID keeperId;
 	std::map<ObjectInstanceID, double> townLeftover;         ///< own town -> troop value the main hero left behind on its last visit (not a reason to come back)
 	/// Troops the main hero could pick up in an own town: garrison, a garrison hero's army, creatures for sale
@@ -805,6 +807,9 @@ private:
 	bool makeRoom(const CGTownInstance * town, const CArmedInstance * army, CreatureID creature, double batchValue);
 	/// stacks of one kind in one army become one stack
 	void mergeDuplicates(const CArmedInstance * army);
+	/// (fillSlots) single creatures of the weakest kind in every free slot before a fight; merged back after it
+	void fillSingles(const CGHeroInstance * hero, ObjectInstanceID target);
+	void mergeSingles(const CGHeroInstance * hero);
 	/// (armyFit) the main hero lets go of stacks that cost the rest of its army more in morale than they add
 	void shedMisfits(const CGHeroInstance * hero);
 	/// single creatures split off the cheapest stacks into free slots: they take retaliations and block
