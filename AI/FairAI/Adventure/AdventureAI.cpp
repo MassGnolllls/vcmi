@@ -1192,7 +1192,8 @@ void AdventureAI::playTurn()
 	{
 		// (fillSlots) a hero may be attacked in the enemy's turn: it waits with every slot taken
 		for(const auto * hero : perception.ownHeroes())
-			fillSingles(hero, ObjectInstanceID());
+			if(threatAt(hero->visitablePos()) > 0) // (only where an enemy can come tonight)
+				fillSingles(hero, ObjectInstanceID());
 	}
 	if(params.formation)
 	{
@@ -2006,10 +2007,9 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			const auto target = best.object.hasValue() ? objectBefore.find(best.object) : objectBefore.end();
 			const bool foreign = target != objectBefore.end() && target->second.owner != me && !isAlly(target->second.owner)
 				&& (target->second.type == Obj::HERO || target->second.type == Obj::TOWN || target->second.type == Obj::GARRISON || target->second.type == Obj::GARRISON2);
-			bool fight = best.loss > 0 || foreign || best.description.rfind("monster", 0) == 0 || best.description.rfind("bank ", 0) == 0;
-			// a guard on today's way (its zone, or a battle the path knows of) is a fight too
-			for(const CGPathNode * n = paths->getPathInfo(best.tile); n && !fight; n = n->theNodeBefore)
-				fight = n->turns == 0 && (n->action == EPathNodeAction::BATTLE || (cb->isVisible(n->coord) && !cb->getGuardingCreatures(n->coord).empty()));
+			// owner's word of 27.11.2026 16:30: only where losses cannot be avoided - the singles are no
+			// sacrifice for nothing: a fight the forecast expects to cost troops, or an enemy army
+			const bool fight = best.loss > 0.002 * std::max(1.0, static_cast<double>(hero->getArmyStrength()) * params.goldPerArmyValue) || foreign;
 			if(fight)
 			{
 				fillSingles(hero, best.object);
