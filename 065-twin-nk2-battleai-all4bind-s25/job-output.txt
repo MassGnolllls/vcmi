@@ -20,3 +20,7 @@ match   11 FairAI+FairAI as blue of 2: timeout winner= day=301 score=0.78 [921.8
 match   18 FairAI+FairAI as red of 2: victory winner=red day=112 score=1.00 [258.8s]
 match   16 FairAI+FairAI as red of 2: victory winner=red day=167 score=1.00 [624.5s]
 match   17 FairAI+FairAI as blue of 2: victory winner=blue day=145 score=1.00 [631.0s]
+match   20 FairAI+FairAI as red of 2: victory winner=red day=122 score=1.00 [407.1s]
+match   19 FairAI+FairAI as blue of 2: victory winner=red day=153 score=0.00 [490.8s]
+match   23 FairAI+FairAI as blue of 2: victory winner=red day=100 score=0.00 [271.2s]
+match   22 FairAI+FairAI as red of 2: victory winner=red day=177 score=1.00 [701.9s]
