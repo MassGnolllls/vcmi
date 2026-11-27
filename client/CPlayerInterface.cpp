@@ -212,6 +212,42 @@ void CPlayerInterface::closeAllDialogs()
 	}
 }
 
+void CPlayerInterface::spectatorSyncLists()
+{
+	if(playerID != PlayerColor::SPECTATOR || !GAME->server().client || !adventureInt)
+		return;
+	CClient & client = *GAME->server().client;
+	std::vector<const CGHeroInstance *> heroes;
+	std::vector<const CGTownInstance *> towns;
+	for(const auto & colour : client.soloColors)
+	{
+		auto state = client.gameState().players.find(colour);
+		if(state == client.gameState().players.end())
+			continue;
+		for(const auto * hero : std::as_const(state->second).getHeroes())
+			if(!hero->isGarrisoned())
+				heroes.push_back(hero);
+		for(const auto * town : std::as_const(state->second).getTowns())
+			towns.push_back(town);
+	}
+	const auto oldHeroes = localState->getWanderingHeroes();
+	const auto oldTowns = localState->getOwnedTowns();
+	for(const auto * hero : oldHeroes)
+		if(!vstd::contains(heroes, hero))
+			localState->removeWanderingHero(hero);
+	for(const auto * town : oldTowns)
+		if(!vstd::contains(towns, town))
+			localState->removeOwnedTown(town);
+	for(const auto * hero : heroes)
+		if(!vstd::contains(localState->getWanderingHeroes(), hero))
+			localState->addWanderingHero(hero);
+	for(const auto * town : towns)
+		if(!vstd::contains(localState->getOwnedTowns(), town))
+			localState->addOwnedTown(town);
+	adventureInt->onHeroChanged(nullptr);
+	adventureInt->onTownChanged(nullptr);
+}
+
 void CPlayerInterface::spectatorTurnSummary(PlayerColor player)
 {
 	// one line a turn: what the player built today - for the colours an AI plays for us (gosolo) also
@@ -242,7 +278,10 @@ void CPlayerInterface::playerEndsTurn(PlayerColor player)
 {
 	EVENT_HANDLER_CALLED_BY_CLIENT;
 	if(playerID == PlayerColor::SPECTATOR)
+	{
 		spectatorTurnSummary(player);
+		spectatorSyncLists();
+	}
 	if (player == playerID)
 	{
 		makingTurn = false;
@@ -263,6 +302,7 @@ void CPlayerInterface::playerStartsTurn(PlayerColor player)
 		ENGINE->windows().clear();
 		ENGINE->windows().pushWindow(adventureInt);
 	}
+	spectatorSyncLists(); // (gosolo: the lists of the colours an AI plays for us)
 
 	EVENT_HANDLER_CALLED_BY_CLIENT;
 	if (player != playerID && GAME->interface() == this)
@@ -445,6 +485,14 @@ void CPlayerInterface::heroMoved(const TryMoveHero & details, bool verbose)
 	if(playerID == PlayerColor::SPECTATOR && !settings["session"]["gosolo-all"].Bool() && GAME->server().client
 		&& !GAME->server().client->soloColors.empty() && !GAME->server().client->soloColors.count(hero->getOwner()))
 		return;
+
+	// (gosolo) the hero of ours that moves now is the selected one: the view goes there, the list shows it
+	if(playerID == PlayerColor::SPECTATOR && GAME->server().client && GAME->server().client->soloColors.count(hero->getOwner()))
+	{
+		spectatorSyncLists();
+		if(vstd::contains(localState->getWanderingHeroes(), hero) && localState->getCurrentHero() != hero)
+			localState->setSelection(hero);
+	}
 
 	movementController->onTryMoveHero(hero, details);
 }
@@ -1517,7 +1565,8 @@ void CPlayerInterface::objectRemoved(const CGObjectInstance * obj, const PlayerC
 	}
 	GAME->map().waitForOngoingAnimations();
 
-	if(obj->ID == Obj::HERO && obj->tempOwner == playerID)
+	if(obj->ID == Obj::HERO && (obj->tempOwner == playerID
+		|| (playerID == PlayerColor::SPECTATOR && vstd::contains(localState->getWanderingHeroes(), static_cast<const CGHeroInstance *>(obj)))))
 	{
 		const CGHeroInstance * h = static_cast<const CGHeroInstance *>(obj);
 		heroKilled(h);

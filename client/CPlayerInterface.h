@@ -75,6 +75,8 @@ class CPlayerInterface : public CGameInterface
 	std::map<PlayerColor, std::vector<std::string>> spectatorBuilt;
 	void spectatorTurnSummary(PlayerColor player);
 public: // TODO: make private
+	/// (gosolo) the spectator's hero and town lists hold those of the colours an AI plays for us
+	void spectatorSyncLists();
 	std::unique_ptr<ArtifactsUIController> artifactController;
 	std::shared_ptr<Environment> env;
 
