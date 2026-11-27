@@ -317,6 +317,8 @@ void PlayerLocalState::swapOwnedTowns(size_t pos1, size_t pos2)
 
 void PlayerLocalState::synchronizeState()
 {
+	if(owner.playerID == PlayerColor::SPECTATOR)
+		return; // (gosolo) the spectator has no player whose local state the server keeps
 	JsonNode data;
 	serialize(data);
 	owner.cb->saveLocalState(data);

@@ -238,6 +238,8 @@ void ClientCommandManager::handleGoSolo(const std::string & argument, const std:
 			focus = town;
 	if(focus)
 		adventureInt->centerOnObject(focus);
+	if(GAME->interface())
+		GAME->interface()->spectatorSyncLists();
 	ENGINE->windows().totalRedraw();
 
 	// the turn in progress is the AI's from here on
