@@ -15,11 +15,11 @@ namespace FAI
 {
 
 // PLAY BUILD (branch fairai-play). Owner's word of 26.11.2026 20:27: statPlaces, race (raceLastTown 0), townPortal,
-// townGuards, lastChance, scoutAll, homeRing, raceTrack. Owner's word of 27.11.2026 14:56 (Back For Revenge, first game):
-// areaAim, heroMerge, armyFit, collectorRing 2, dwellingRounds, sites, buyWarMachines, seaAccess, scouts -2.
-// Owner's word of 27.11.2026 16:30 (second game): fillSlots, cheapClear, garrisonBehind, coverDark, dwellingTownGrowth,
-// dwellingEarly, earlyDetour, supplyWeek, formation, useTactics, raceFree 1.5, supplyRuns 2 (supplyShare 0.1),
-// two heroes at the start (heroesWeek1 1, heroesWeek3 2, heroesLater 3 - plus the scouts).
+// townGuards, lastChance, scoutAll, homeRing, raceTrack. Owner's word of 27.11.2026 14:56: areaAim, heroMerge, armyFit,
+// collectorRing 2, dwellingRounds, sites, buyWarMachines, seaAccess, scouts -2. Owner's word of 27.11.2026 16:30:
+// fillSlots, cheapClear, garrisonBehind, coverDark, dwellingTownGrowth, dwellingEarly, earlyDetour, supplyWeek, formation,
+// useTactics, raceFree 1.5, supplyRuns 2 (supplyShare 0.1), heroes 1/2/3 + scouts. Owner's word of 27.11.2026 19:27:
+// townLearning; ownerPlan stays off (far weaker in three pairs of games on his map - his word decides).
 // Everything else as on branch fairai (the tests run there).
 struct Params
 {
@@ -91,6 +91,10 @@ struct Params
 	int supplyWeek = 1;                ///< 1: the secondary hero that keeps near home (collectorRing 2) is in a town of ours when the week begins: it buys what has grown there and brings it to the main hero (owner's word of 27.11.2026)
 	int formation = 1;                 ///< 1: before a fight the shooters stand at the two ends of the army, the single creatures beside them as their shell, the rest in the middle (owner's word of 27.11.2026)
 	int useTactics = 1;                ///< 1: in the tactics phase the shooters go to the corners on our side and single creatures (then weak stacks) take the hexes beside them (owner's word of 27.11.2026: the AI ended the phase at once)
+	int townLearning = 1;              ///< 1: a town of ours is worth a visit of the main hero for the guild's spells it does not know yet (townSpellValue per spell level) and for the buildings that give a visiting hero something once - Order of Fire, Hall of Valhalla, Wall of Knowledge, Academy of Battle Scholars (owner's question of 27.11.2026)
+	double townSpellValue = 300;       ///< see townLearning
+	int ownerPlan = 0;                 ///< 1: owner's word of 27.11.2026 19:27 - the main hero beats everything it beats losing at most 2 % of its army and visits everything on the map once, nearest to our main castle first (by the march from there), a town of ours only for spells or points; three heroes: the main hero, a scout, a supporting hero (supply, weekly buildings); enemy land seen keeps the main hero within that distance of home
+	double ownerLoss = 0.02;           ///< see ownerPlan: the largest forecast loss, as a share of the army, of a fight the main hero takes
 	int raceBind = 0;                  ///< 1: a race holds the main hero at home for raceBindDays at most (owner's word of 26.11.2026 21:23): when the enemy's main army has been in the race for a town of ours that many days in a row - the main hero behind the walls, or meeting it short of raceFree - and has not come, the main hero goes out for raceBindRest days as if no race were on (no leash, no round trips from a needy town), then the count starts again. Not while we hold only one town (the last town is not left - lastStand). Before: in a game on the Castle map the main hero sat at home on 35 of the 38 days from day 41 to 78 while the enemy's army waited a day or two away, stayed at level 7 (the enemy's hero reached 23), lost the second town all the same and the game on day 114
 	double raceBindDays = 3;           ///< see raceBind
 	double raceBindRest = 4;           ///< see raceBind

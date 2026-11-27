@@ -255,6 +255,12 @@ void CPlayerInterface::spectatorTurnSummary(PlayerColor player)
 	if(!player.isValidPlayer() || !cb)
 		return;
 	auto built = spectatorBuilt.find(player);
+	if(!settings["session"]["gosolo-build"].Bool())
+	{
+		if(built != spectatorBuilt.end())
+			built->second.clear(); // (gosolo without BUILD: nothing in the chat)
+		return;
+	}
 	const bool any = built != spectatorBuilt.end() && !built->second.empty();
 	const bool ours = GAME->server().client && GAME->server().client->soloColors.count(player);
 	if(!any && !ours)
@@ -481,10 +487,7 @@ void CPlayerInterface::heroMoved(const TryMoveHero & details, bool verbose)
 	if (!hero)
 		return;
 
-	// (gosolo) the view follows the heroes of the colours an AI plays for us - all heroes with "gosolo all"
-	if(playerID == PlayerColor::SPECTATOR && !settings["session"]["gosolo-all"].Bool() && GAME->server().client
-		&& !GAME->server().client->soloColors.empty() && !GAME->server().client->soloColors.count(hero->getOwner()))
-		return;
+	// (gosolo) the view follows every hero that moves - ours and the enemies' (owner's word of 27.11.2026)
 
 	// (gosolo) the hero of ours that moves now is the selected one: the view goes there, the list shows it
 	if(playerID == PlayerColor::SPECTATOR && GAME->server().client && GAME->server().client->soloColors.count(hero->getOwner()))

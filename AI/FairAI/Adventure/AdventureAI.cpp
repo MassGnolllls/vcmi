@@ -41,6 +41,7 @@
 #include "../../../lib/mapObjects/FlaggableMapObject.h"
 #include "../../../lib/mapObjects/CGHeroInstance.h"
 #include "../../../lib/mapObjects/CGTownInstance.h"
+#include "../../../lib/mapObjects/TownBuildingInstance.h"
 #include "../../../lib/mapObjects/IMarket.h"
 #include "../../../lib/mapObjects/IOwnableObject.h"
 #include "../../../lib/mapObjects/MiscObjects.h"
@@ -418,6 +419,10 @@ void Params::loadOverrides(int playerIndex)
 	read("supplyWeek", supplyWeek);
 	read("formation", formation);
 	read("useTactics", useTactics);
+	read("townLearning", townLearning);
+	read("townSpellValue", townSpellValue);
+	read("ownerPlan", ownerPlan);
+	read("ownerLoss", ownerLoss);
 	read("cheapClearShare", cheapClearShare);
 	read("raceBindDays", raceBindDays);
 	read("raceBindRest", raceBindRest);
@@ -1564,6 +1569,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		auto paths = computePaths(hero, false);
 		auto freePaths = computePaths(hero, true);
 		auto targets = supply && supply->courier == heroId ? supplyTargets(hero, *paths) : collectTargets(hero, *paths, *freePaths);
+		applyOwnerPlan(hero, targets);
 		// (muster) More waits in the town than the main hero leads: while that town is among its
 		// targets, nothing else is worth more than half a day - a town next door that changed hands
 		// every other day kept a leader of 130,000 from the 380,000 waiting four days away.
@@ -2037,6 +2043,12 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		activeHero = -1;
 		guardedTarget = -1;
 		monsterTarget = -1;
+		if(params.ownerPlan && sent && best.object.hasValue() && leads(hero))
+		{
+			// (ownerPlan) once is enough: what the main hero has been at is no target of its own again
+			if(const auto * now = ownHero(heroId); now && now->visitablePos().z == best.tile.z && now->visitablePos().dist2d(best.tile) < 1.5)
+				ownerVisited.insert(best.object);
+		}
 		if(params.coverDark && sent && best.object.hasValue())
 		{
 			const auto target = objectBefore.find(best.object);
@@ -7922,6 +7934,22 @@ double AdventureAI::reinforcementBoost(double troops) const
 
 double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObject & object, const CGObjectInstance * instance) const
 {
+	// (ownerPlan) the main hero visits everything it can deal with once - also what FairAI counts for nothing
+	if(params.ownerPlan && hero && leads(hero) && instance && !instance->wasVisited(hero) && !instance->wasVisited(me))
+	{
+		switch(object.type.toEnum())
+		{
+			case Obj::REDWOOD_OBSERVATORY:
+			case Obj::PILLAR_OF_FIRE:
+			case Obj::KEYMASTER:
+			case Obj::HUT_OF_MAGI:
+			case Obj::DEN_OF_THIEVES:
+			case Obj::COVER_OF_DARKNESS:
+				return 300;
+			default:
+				break;
+		}
+	}
 	// (a second leader counts skill points, artifacts and the like as the main hero does; towns and
 	// heroes of ours have rules for it below)
 	const bool main = leads(hero);
@@ -8144,6 +8172,12 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 		{
 			// (statPlaces) one point for 1,000 gold: a leader pays as soon as it can, the others when
 			// gold is not what the towns wait for
+			// (ownerPlan) owner's word of 27.11.2026: the 1,000 gold for a point always pay - the main hero
+			// pays them whenever it has them, whatever the towns would build
+			if(params.ownerPlan && main && !visitedByHero() && cb->getResourceAmount(GameResID::GOLD) >= 1000)
+				return std::max(1.0, object.type == Obj::SCHOOL_OF_WAR
+					? std::max(primaryPointValue(hero, 0, main), primaryPointValue(hero, 1, main))
+					: std::max(primaryPointValue(hero, 2, main), primaryPointValue(hero, 3, main)));
 			if(visitedByHero() || spendable()[GameResID::GOLD] < (main ? 1000 : 6000))
 				return 0;
 			const double point = object.type == Obj::SCHOOL_OF_WAR
@@ -8268,6 +8302,9 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 			// (magicFocus) spells waiting in the guild for a hero that can learn them
 			if(params.magicFocus)
 				value += 600.0 * unlearnedGuildLevels(hero, town);
+			// (townLearning) what the town teaches the leader (owner's question of 27.11.2026)
+			if(params.townLearning && leads(hero))
+				value += townLearningValue(hero, town);
 			auto trip = roundTrip.find(hero->id);
 			const bool onTrip = trip != roundTrip.end() && trip->second.town == town->id;
 			if(params.townGuard && !onTrip)
@@ -8524,7 +8561,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	const bool cautious = !leads(hero);
 	const bool scout = scoutsToday.count(hero->id) > 0;
-	const bool seenGround = params.collectorRing >= 2 && cautious && hero->id != homeKeeper();
+	const bool seenGround = params.collectorRing >= 2 && cautious && (params.ownerPlan || hero->id != homeKeeper());
 	struct ReachView
 	{
 		const AdventureAI & ai;
@@ -11287,6 +11324,157 @@ void AdventureAI::recruitInTown(const CGTownInstance * town, const CArmedInstanc
 	}
 }
 
+double AdventureAI::townLearningValue(const CGHeroInstance * hero, const CGTownInstance * town) const
+{
+	// (townLearning) The guild's spells the hero does not know yet, and the buildings that give a visiting
+	// hero something once (Order of Fire, Hall of Valhalla, Wall of Knowledge, Academy of Battle Scholars
+	// and the like) - what such a building gives is a rule of the game, read from its definition
+	double value = 0;
+	if(!hero || !town)
+		return 0;
+	{
+				if(hero->hasSpellbook())
+				{
+					const int limit = std::min(hero->maxSpellLevel(), town->mageGuildLevel());
+					for(int level = 0; level < limit && level < static_cast<int>(town->spells.size()); ++level)
+					{
+						const int shown = std::min<int>(town->spellsAtLevel(level + 1, true), town->spells[level].size());
+						for(int i = 0; i < shown; ++i)
+							if(!hero->spellbookContainsSpell(town->spells[level][i]))
+								value += params.townSpellValue * (level + 1);
+					}
+				}
+				// (what such a building gives is a rule of the game: the building's own definition, read as
+				// the rules write it - primary skills and experience, once per hero)
+				for(const auto & [building, instance] : town->rewardableBuildings)
+				{
+					if(!instance || instance->wasVisited(hero))
+						continue;
+					auto it = town->getTown()->buildings.find(building);
+					if(it == town->getTown()->buildings.end() || !it->second)
+						continue;
+					const JsonNode & rules = it->second->rewardableObjectInfo.getParameters();
+					if(rules["visitMode"].String() != "hero")
+						continue; // once per hero only: the weekly ones (Stables and the like) stay as they were
+					for(const JsonNode & reward : rules["rewards"].Vector())
+					{
+						static const std::array<std::string, 4> names = {"attack", "defence", "spellpower", "knowledge"};
+						for(int k = 0; k < 4; ++k)
+						{
+							const JsonNode & points = reward["primary"][names[k]];
+							if(points.isNumber() && points.Float() > 0)
+								value += points.Float() * primaryPointValue(hero, k, true);
+						}
+						if(reward["heroExperience"].isNumber())
+							value += reward["heroExperience"].Float() * expValue(hero);
+					}
+				}
+				}
+	return value;
+}
+
+void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets)
+{
+	// (ownerPlan) Owner's word of 27.11.2026 19:27: the main hero beats everything it beats losing at
+	// most 2 % of its army - monsters, banks, garrisons, towns - and visits everything on the map once
+	// that it can deal with (buildings, treasures, artifacts, resources, a town of ours that teaches it
+	// spells or a point); nearest to our main castle first, by the march from there. A fight that costs
+	// more waits until it does not. Retreats, flight and enemy heroes go as before.
+	if(!params.ownerPlan || !hero || !leads(hero))
+		return;
+	const CGTownInstance * castle = nullptr;
+	for(const auto * town : perception.ownTowns())
+		if(!castle || town->getBuildings().size() > castle->getBuildings().size())
+			castle = town;
+	if(!castle)
+		return;
+	if(castleReachDay != today || castleReachTown != castle->id)
+	{
+		computeReach(castleReach, castle->visitablePos(), fieldStrength(hero), 1e9);
+		castleReachDay = today;
+		castleReachTown = castle->id;
+	}
+	const int3 size = cb->getMapSize();
+	const double dayTiles = std::max(12.0, hero->movementPointsLimit(true) / 100.0);
+	auto castleDays = [&](const int3 & t) -> double
+	{
+		if(!cb->isInTheMap(t) || castleReach.tiles.empty())
+			return 99.0;
+		const float v = castleReach.tiles[(static_cast<size_t>(t.z) * size.y + t.y) * size.x + t.x];
+		return v < 0 ? 99.0 : v / dayTiles;
+	};
+	const auto known = perception.knownObjects();
+	// land of an enemy we have seen (a mine, a town, a dwelling of theirs): from there an enemy may come
+	double frontier = 1e9;
+	int3 frontierTile;
+	for(const auto & [id, object] : known)
+	{
+		if(!isEnemy(object.owner) || (object.type != Obj::MINE && object.type != Obj::TOWN && object.type != Obj::CREATURE_GENERATOR1 && object.type != Obj::CREATURE_GENERATOR4))
+			continue;
+		const double days = castleDays(object.visitablePos);
+		if(days < frontier)
+		{
+			frontier = days;
+			frontierTile = object.visitablePos;
+		}
+	}
+	if(frontier < 98 && frontierLog != today)
+	{
+		logAi->info("FairAI %s day %d: enemy land seen at %s, %.1f days from %s - an enemy may come from there; the main hero keeps within that much of home",
+			me.toString(), today, frontierTile.toString(), frontier, castle->getNameTranslated());
+		frontierLog = today;
+	}
+	const double armyGold = std::max(1.0, fieldStrength(hero) * params.goldPerArmyValue);
+	for(auto & t : targets)
+	{
+		const std::string & d = t.description;
+		if(d == "retreat" || d == "flee" || d == "home" || d == "aside" || d == "way out" || d == "fortress" || d == "evacuate" || d == "relocate")
+			continue;
+		const auto it = t.object.hasValue() ? known.find(t.object) : known.end();
+		if(it != known.end() && it->second.type == Obj::HERO)
+			continue; // heroes: as ever
+		// once is enough (a well, a windmill, a stable: the supporting hero does the rounds)
+		if(it != known.end() && it->second.type != Obj::TOWN && it->second.type != Obj::MONSTER)
+		{
+			const CGObjectInstance * instance = perception.visibleObject(t.object);
+			if(ownerVisited.count(t.object) || (instance && instance->wasVisited(hero)))
+			{
+				t.score = 0;
+				continue;
+			}
+		}
+		bool fight = t.loss > 0 || d.rfind("monster", 0) == 0 || d.rfind("bank ", 0) == 0;
+		if(it != known.end())
+		{
+			const auto type = it->second.type;
+			if((type == Obj::TOWN || type == Obj::GARRISON || type == Obj::GARRISON2) && it->second.owner != me && !isAlly(it->second.owner))
+				fight = true;
+			if(type == Obj::TOWN && it->second.owner == me)
+			{
+				// a town of ours for what it teaches - and for troops worth a good part of the army when the
+				// supporting hero has not brought them (the army must grow, or nothing is cheap to beat)
+				const auto * town = ownTownById(t.object);
+				if(!town || (townLearningValue(hero, town) <= 0 && t.value < 0.15 * armyGold))
+				{
+					t.score = 0;
+					continue;
+				}
+			}
+		}
+		if((fight && t.loss > params.ownerLoss * armyGold) || (!fight && t.value <= 0))
+		{
+			t.score = 0;
+			continue;
+		}
+		const double days = castleDays(t.tile);
+		double score = 1e5 / (1.0 + days + 0.5 * t.travel);
+		if(frontier < 98 && days > frontier)
+			score *= 0.5;
+		t.score = score;
+	}
+	vstd::erase_if(targets, [](const Target & t) { return t.score <= 0; });
+}
+
 int AdventureAI::unlearnedGuildLevels(const CGHeroInstance * hero, const CGTownInstance * town) const
 {
 	// without a book the first visit buys one (manageTownVisit) and the spells come with it
@@ -13445,6 +13633,8 @@ void AdventureAI::hireHeroes()
 	int wanted = (today <= 7 ? params.heroesWeek1 : (today <= 21 ? params.heroesWeek3 : params.heroesLater)) + params.scouts;
 	if(economy.rho > 2 && spendable()[GameResID::GOLD] > 8000)
 		wanted += 2;
+	if(params.ownerPlan)
+		wanted = 3; // (ownerPlan) the main hero, a scout and a supporting hero
 	// (relayChain) the links of the chain come on top of the main hero and the scouts
 	if(params.relayChain && chainActive && today > 14)
 		wanted = std::max(wanted, 1 + chainNeeded + (today < 22 ? std::max(0, params.scouts) : 0));

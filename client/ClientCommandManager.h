@@ -31,6 +31,7 @@ class ClientCommandManager //take mantis #2292 issue about account if thinking a
 	// An AI (FairAI, or the one named) takes over our human colours and the screen watches the game as a
 	// spectator, without a key to press; typed again, the human takes over at the start of its next turn.
 	// While it runs: "gosolo battles" shows or skips the battles, "gosolo follow" follows the heroes or not.
+	std::string goSoloSuffix; ///< (gosolo) what follows /gosolo in the same word: days, BUILD
 	void handleGoSoloCommand(std::istringstream & singleWordBuffer);
 	void handleGoSolo(const std::string & argument, const std::string & lowered, std::vector<std::string> & messages); // the work, under the interface lock
 

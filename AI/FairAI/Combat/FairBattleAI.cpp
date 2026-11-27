@@ -886,6 +886,17 @@ void FairBattleAI::yourTacticPhase(const BattleID & battleID, int distance)
 				for(const BattleHex & h : stack->getHexes())
 					taken.insert(h);
 		auto worth = [](const CStack * s) { return static_cast<double>(s->unitType()->getAIValue()) * s->getCount(); };
+		// (owner's word of 27.11.2026) a blast hits everything around its target: against area shooters
+		// (Magogs, Liches and the like) or an enemy hero - whose spells we do not know - nothing stands
+		// packed beside the shooters; they still go to the corners, apart from each other
+		bool spread = false;
+		for(const CStack * stack : battle->battleGetAllStacks())
+			if(stack && stack->alive() && stack->unitSide() != side && stack->hasBonusOfType(BonusType::SPELL_LIKE_ATTACK))
+				spread = true;
+		if(battle->battleGetFightingHero(side == BattleSide::ATTACKER ? BattleSide::DEFENDER : BattleSide::ATTACKER))
+			spread = true;
+		if(spread)
+			shields.clear();
 		std::sort(shooters.begin(), shooters.end(), [&](auto * a, auto * b) { return worth(a) > worth(b); });
 		std::sort(shields.begin(), shields.end(), [&](auto * a, auto * b)
 		{
@@ -2270,7 +2281,51 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 				// A plan under which nothing of ours is ever struck wins a tie: it does not depend on the
 				// forecast of the blows we would take otherwise.
 				const double margin = kiteWhole ? -1e-6 : marginShare * base.sideValue(side) + 1e-6;
-				if(!noKite && kiteValue > best->score + margin)
+				// (finish) Owner's word of 27.11.2026: a blow that kills the stack outright is struck at once -
+				// when the battle is won with it, or when nothing of theirs can strike the striker afterwards.
+				// (Six efreets flew about before the last forty imps they killed with every blow, until the
+				// imps had good morale and killed one.)
+				bool finishes = false;
+				if(best->sim.target >= 0 && (static_cast<int>(best->sim.type) == 1 || static_cast<int>(best->sim.type) == 2))
+				{
+					SimState after = base;
+					if(best->outcome && config.engineOutcome)
+						after.applyOutcome(me, *best->outcome);
+					else
+						after.apply(me, best->sim);
+					const int target = best->sim.target;
+					if(target < static_cast<int>(after.units.size()) && !after.units[target].alive() && after.units[me].alive())
+					{
+						bool enemyLeft = false;
+						bool danger = false;
+						std::array<int8_t, FIELD_SIZE> dist;
+						for(int e = 0; e < static_cast<int>(after.units.size()) && !danger; ++e)
+						{
+							const auto & u = after.units[e];
+							if(!u.alive() || u.side == after.units[me].side)
+								continue;
+							enemyLeft = true;
+							if(after.canShoot(e))
+							{
+								danger = true;
+								break;
+							}
+							if(!u.canMove)
+								continue;
+							after.reachable(e, dist);
+							for(const auto & around : battle::Unit::getSurroundingHexes(after.units[me].pos, after.units[me].doubleWide, after.units[me].side))
+							{
+								if(around.isValid() && dist[around.toInt()] >= 0 && after.adjacent(e, around, me))
+								{
+									danger = true;
+									break;
+								}
+							}
+						}
+						finishes = !enemyLeft || !danger;
+					}
+				}
+				if(!noKite && !finishes && kiteValue > best->score + margin)
 				{
 					// (the same horizon for the best of the others)
 					double rival = -std::numeric_limits<double>::max();
