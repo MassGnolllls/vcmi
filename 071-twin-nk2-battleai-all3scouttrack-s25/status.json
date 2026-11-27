@@ -1,9 +1,12 @@
 {
  "job": "071-twin-nk2-battleai-all3scouttrack-s25",
- "state": "running",
+ "state": "done",
  "commit": "c0dd098500d5d7228d9ecda75f38a999d861fc19",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-27T14:10:05",
- "note": "all3scout with raceTrack only: which of the two parts of all4 cost it its games (with raceTrack the main hero was bound on 19 % of the days instead of 9 % on seed 26). Seed 25, the same games as the all3scout job of that seed."
+ "note": "all3scout with raceTrack only: which of the two parts of all4 cost it its games (with raceTrack the main hero was bound on 19 % of the days instead of 9 % on seed 26). Seed 25, the same games as the all3scout job of that seed.",
+ "returncode": 0,
+ "finished": "2026-11-27T14:49:42",
+ "minutes": 39.6
 }
