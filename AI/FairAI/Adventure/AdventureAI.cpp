@@ -11451,10 +11451,11 @@ void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target
 				fight = true;
 			if(type == Obj::TOWN && it->second.owner == me)
 			{
-				// a town of ours for what it teaches - and for troops worth a good part of the army when the
-				// supporting hero has not brought them (the army must grow, or nothing is cheap to beat)
+				// a town of ours only for what it teaches - the supporting hero brings the troops (the town is
+				// where the castle distance is nought: as a target for troops the hero went back to it after
+				// every step - owner's test of 27.11.2026)
 				const auto * town = ownTownById(t.object);
-				if(!town || (townLearningValue(hero, town) <= 0 && t.value < 0.15 * armyGold))
+				if(!town || townLearningValue(hero, town) <= 0)
 				{
 					t.score = 0;
 					continue;
@@ -11472,6 +11473,13 @@ void AdventureAI::applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target
 			score *= 0.5;
 		t.score = score;
 	}
+	// looking at land is the scout's work: the main hero does it when nothing else is left (tile by tile
+	// beside the castle it took the whole day)
+	const bool objectLeft = std::any_of(targets.begin(), targets.end(), [](const Target & t) { return t.score > 0 && t.object.hasValue(); });
+	if(objectLeft)
+		for(auto & t : targets)
+			if(!t.object.hasValue() && t.description.rfind("explore", 0) == 0)
+				t.score = 0;
 	vstd::erase_if(targets, [](const Target & t) { return t.score <= 0; });
 }
 
