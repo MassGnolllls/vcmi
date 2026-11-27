@@ -2045,8 +2045,14 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		monsterTarget = -1;
 		if(params.ownerPlan && sent && best.object.hasValue() && leads(hero))
 		{
-			// (ownerPlan) once is enough: what the main hero has been at is no target of its own again
-			if(const auto * now = ownHero(heroId); now && now->visitablePos().z == best.tile.z && now->visitablePos().dist2d(best.tile) < 1.5)
+			// (ownerPlan) once is enough: what the main hero has been at is no target of its own again - but
+			// only when the visit really happened: the object is gone (picked up) or counts us as visitors, or
+			// the hero stands on it. (A step towards it ended beside the wood and the Learning Stone, and both
+			// were struck off: owner's test of 27.11.2026 22:27.)
+			const CGObjectInstance * after = perception.visibleObject(best.object);
+			const auto * now = ownHero(heroId);
+			const bool gone = !after && now && cb->isVisible(best.tile);
+			if(gone || (after && now && (after->wasVisited(now) || after->wasVisited(me))) || (now && now->visitablePos() == best.tile))
 				ownerVisited.insert(best.object);
 		}
 		if(params.coverDark && sent && best.object.hasValue())
