@@ -1,9 +1,12 @@
 {
  "job": "064-twin-nk2-battleai-all4-s27",
- "state": "running",
+ "state": "done",
  "commit": "145cd68578398eaa6216df11e443e169d4c4d3fe",
  "host": "DESKTOP-EFJ0RGH",
  "cpus": 12,
  "started": "2026-11-27T00:55:14",
- "note": "all3 with scoutAll, homeRing and raceTrack (owner's words of 26.11.2026 17:15: guards within three days of our towns that bar a way in are cleared by the main hero, scouts look behind them before it goes on into unknown land, no ways in from which enemies come out of nowhere; an enemy army out of sight stays in the race). Same games as job 058 (all3) and the job before (all3 with scoutAll), seed 27."
+ "note": "all3 with scoutAll, homeRing and raceTrack (owner's words of 26.11.2026 17:15: guards within three days of our towns that bar a way in are cleared by the main hero, scouts look behind them before it goes on into unknown land, no ways in from which enemies come out of nowhere; an enemy army out of sight stays in the race). Same games as job 058 (all3) and the job before (all3 with scoutAll), seed 27.",
+ "returncode": 0,
+ "finished": "2026-11-27T01:37:42",
+ "minutes": 42.4
 }
