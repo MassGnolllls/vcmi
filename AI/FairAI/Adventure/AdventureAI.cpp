@@ -1551,7 +1551,18 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			// game of 27.11.2026: 160 days on one island, no enemy town found, the scorpicores before
 			// the shipyard "not worth it" with the way to sea counted at 0 to 301)
 			bool enemyOverSea = false;
-			if(somethingToDo && params.seaAccess && isMain(hero) && !hero->inBoat() && huntWanted && today >= 14 && exploringStalled()
+			auto seaKnown = [this]()
+			{
+				// a shipyard or boat we know of, or a town of ours on the water
+				for(const auto * town : perception.ownTowns())
+					if(town->shipyardStatus() != IBoatGenerator::NO_WATER)
+						return true;
+				for(const auto & [id, object] : perception.knownObjects())
+					if(object.type == Obj::SHIPYARD || object.type == Obj::BOAT)
+						return true;
+				return false;
+			};
+			if(somethingToDo && params.seaAccess && isMain(hero) && !hero->inBoat() && huntWanted && today >= 14 && exploringStalled() && seaKnown()
 				&& std::none_of(targets.begin(), targets.end(), [this](const Target & t)
 					{
 						const auto known = perception.knownObjects();
@@ -1561,7 +1572,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			{
 				enemyOverSea = true;
 				if(seaLog != today)
-					logAi->info("FairAI %s day %d: %s - the enemy's towns are not on this land and exploring has stalled: the way on is the sea", me.toString(), today, hero->getNameTranslated());
+					logAi->info("FairAI %s day %d: %s - no enemy town found, exploring has stalled and the sea is in reach: the way on is the sea", me.toString(), today, hero->getNameTranslated());
 				seaLog = today;
 			}
 			if((!somethingToDo || enemyOverSea) && boatAttempts < 2 && seekBoat(hero, *paths, targets, freePaths.get(), enemyOverSea))
