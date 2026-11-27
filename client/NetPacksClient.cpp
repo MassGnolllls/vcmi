@@ -944,6 +944,13 @@ void ApplyClientNetPackVisitor::visitPlayerStartsTurn(PlayerStartsTurn & pack)
 	logNetwork->debug("Server gives turn to %s", pack.player.toString());
 	Arena::onPlayerStartsTurn(cl, pack.player);
 
+	// (gosolo<N>) the days are over: the human takes over at the start of its turn
+	if(settings["session"]["aiSolo"].Bool() && cl.soloColors.count(pack.player))
+	{
+		const int64_t until = settings["session"]["gosolo-until"].Integer();
+		if(until > 0 && cl.gameInfo().getDate(Date::DAY) >= until)
+			cl.soloReturnPending = true;
+	}
 	// (gosolo typed again) the human takes over before the AI's turn begins
 	cl.returnFromSolo(pack.player);
 

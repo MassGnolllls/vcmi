@@ -108,6 +108,32 @@ void ClientCommandManager::handleGoSolo(const std::string & argument, const std:
 	CClient & client = *GAME->server().client;
 	Settings session = settings.write["session"];
 
+	// (owner's word of 27.11.2026) /gosolo<N>: the AI plays N days, then the human takes over again;
+	// /gosoloBUILD: what the AIs build is written in the chat (without it: nothing); /gosolo alone:
+	// the AI plays until it is called back
+	const std::string suffix = boost::algorithm::to_lower_copy(goSoloSuffix);
+	goSoloSuffix.clear();
+	const bool wantsBuild = suffix.find("build") != std::string::npos;
+	int days = 0;
+	for(char c : suffix)
+		if(c >= '0' && c <= '9')
+			days = days * 10 + (c - '0');
+	const int today = client.gameInfo().getDate(Date::DAY);
+	if(session["aiSolo"].Bool() && (wantsBuild || days > 0))
+	{
+		if(wantsBuild)
+		{
+			session["gosolo-build"].Bool() = !session["gosolo-build"].Bool();
+			messages.push_back(session["gosolo-build"].Bool() ? "gosolo: was gebaut wird, steht im Chat" : "gosolo: keine Bau-Meldungen mehr im Chat");
+		}
+		if(days > 0)
+		{
+			session["gosolo-until"].Integer() = today + days;
+			client.soloReturnPending = false;
+			messages.push_back("gosolo: die KI spielt noch " + std::to_string(days) + " Tag(e), dann uebernimmst du wieder (Tag " + std::to_string(today + days) + ")");
+		}
+		return;
+	}
 	if(session["aiSolo"].Bool())
 	{
 		// while the AI plays: the spectator's switches, or the way back to the human
@@ -184,10 +210,14 @@ void ClientCommandManager::handleGoSolo(const std::string & argument, const std:
 	const PlayerColor current = GAME->interface() ? GAME->interface()->playerID : PlayerColor::CANNOT_DETERMINE;
 	const bool humanTurn = GAME->interface() && GAME->interface()->makingTurn && vstd::contains(humans, current);
 
+	session["gosolo-build"].Bool() = wantsBuild;
+	session["gosolo-until"].Integer() = days > 0 ? today + days : 0;
+	if(days > 0)
+		messages.push_back("gosolo: die KI spielt " + std::to_string(days) + " Tag(e), dann uebernimmst du wieder (Tag " + std::to_string(today + days) + ")");
 	client.removeGUI();
 	for(const PlayerColor & color : humans)
 	{
-		messages.push_back("gosolo: " + color.toString() + " spielt jetzt " + ai + " (nochmal /gosolo: du uebernimmst wieder; /gosolo kampf: ihre Kaempfe zeigen oder nicht; /gosolo alle: auch die anderen Spieler zeigen; /gosolo folgen: Helden folgen oder nicht)");
+		messages.push_back("gosolo: " + color.toString() + " spielt jetzt " + ai + " (nochmal /gosolo: du uebernimmst wieder; /gosolo7: noch 7 Tage; /gosoloBUILD: Bau-Meldungen an/aus; /gosolo kampf: ihre Kaempfe zeigen oder nicht; /gosolo alle: auch die Kaempfe der anderen; /gosolo folgen: Helden folgen oder nicht)");
 		logGlobal->info("gosolo: player %s will be lead by %s", color.toString(), ai);
 		client.installNewPlayerInterface(CDynLibHandler::getNewAI(ai), color);
 		client.soloColors.insert(color);
@@ -745,8 +775,11 @@ void ClientCommandManager::processCommand(const std::string & message, bool call
 	else if(commandName=="load")
 		handleLoadCommand(singleWordBuffer); // not implemented
 
-	else if(commandName == "gosolo")
+	else if(boost::algorithm::istarts_with(commandName, "gosolo"))
+	{
+		goSoloSuffix = commandName.substr(6); // /gosolo7: seven days, /gosoloBUILD: the buildings in the chat
 		handleGoSoloCommand(singleWordBuffer);
+	}
 
 	else if(commandName == "autoskip")
 		handleAutoskipCommand();

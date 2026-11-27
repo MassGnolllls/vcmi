@@ -236,6 +236,14 @@ private:
 	int boatGuardLog = -1;
 	int seaLog = -1; ///< (seaAccess) the day the reason was written down
 	ObjectInstanceID homeKeeper() const; ///< (collectorRing 2) the secondary hero that stays near home
+	/// (ownerPlan) the owner's order of things for the main hero
+	void applyOwnerPlan(const CGHeroInstance * hero, std::vector<Target> & targets);
+	double townLearningValue(const CGHeroInstance * hero, const CGTownInstance * town) const;
+	ReachMap castleReach;
+	int castleReachDay = -1;
+	ObjectInstanceID castleReachTown;
+	int frontierLog = -1;
+	std::set<ObjectInstanceID> ownerVisited; ///< (ownerPlan) what the main hero has been at
 	mutable int keeperDay = -1;
 	mutable std::map<ObjectInstanceID, double> garrisonUnlock; ///< (garrisonBehind) garrison -> what its far side holds
 	std::map<int3, int> coverDay;                              ///< (coverDark) Cover of Darkness -> the day we were there
