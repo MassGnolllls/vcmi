@@ -810,6 +810,8 @@ private:
 	/// (fillSlots) single creatures of the weakest kind in every free slot before a fight; merged back after it
 	void fillSingles(const CGHeroInstance * hero, ObjectInstanceID target);
 	void mergeSingles(const CGHeroInstance * hero);
+	/// (formation) shooters at the two ends of the army, singles beside them
+	void arrangeFormation(const CGHeroInstance * hero);
 	/// (armyFit) the main hero lets go of stacks that cost the rest of its army more in morale than they add
 	void shedMisfits(const CGHeroInstance * hero);
 	/// single creatures split off the cheapest stacks into free slots: they take retaliations and block

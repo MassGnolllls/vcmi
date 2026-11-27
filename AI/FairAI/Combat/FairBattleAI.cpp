@@ -818,6 +818,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	setWholeCreatures(params.wholeCreatures != 0);
 	battlePlan = params.battlePlan != 0;
 	areaAim = params.areaAim != 0;
+	useTactics = params.useTactics != 0;
 	guardOracle = params.guardOracle;
 	ambushPlan = params.battlePlan >= 2;
 	guardPlan = params.battlePlan >= 3;
@@ -859,7 +860,96 @@ void FairBattleAI::battleStart(const BattleID & battleID, const CCreatureSet * a
 
 void FairBattleAI::yourTacticPhase(const BattleID & battleID, int distance)
 {
-	cb->battleMakeTacticAction(battleID, BattleAction::makeEndOFTacticPhase(cb->getBattle(battleID)->battleGetTacticsSide()));
+	auto battle = cb->getBattle(battleID);
+	if(useTactics && battle)
+	{
+		// (useTactics) Owner's word of 27.11.2026: the shooters go to the two corners on our side, the
+		// single creatures - then the weakest stacks - take the hexes beside them as their shell. The
+		// hexes are chosen from the start of the phase at once: none is given twice, none taken now.
+		const BattleSide side = battle->battleGetMySide();
+		std::vector<const CStack *> shooters;
+		std::vector<const CStack *> shields;
+		std::set<BattleHex> taken;
+		for(const CStack * stack : battle->battleGetAllStacks())
+		{
+			if(!stack || !stack->alive() || stack->unitSide() != side || stack->isTurret() || stack->hasBonusOfType(BonusType::SIEGE_WEAPON))
+				continue;
+			for(const BattleHex & h : stack->getHexes())
+				taken.insert(h);
+			if(stack->isShooter())
+				shooters.push_back(stack);
+			else
+				shields.push_back(stack);
+		}
+		for(const CStack * stack : battle->battleGetAllStacks())
+			if(stack && stack->alive())
+				for(const BattleHex & h : stack->getHexes())
+					taken.insert(h);
+		auto worth = [](const CStack * s) { return static_cast<double>(s->unitType()->getAIValue()) * s->getCount(); };
+		std::sort(shooters.begin(), shooters.end(), [&](auto * a, auto * b) { return worth(a) > worth(b); });
+		std::sort(shields.begin(), shields.end(), [&](auto * a, auto * b)
+		{
+			if((a->getCount() == 1) != (b->getCount() == 1))
+				return a->getCount() == 1; // singles first
+			return worth(a) < worth(b);
+		});
+		const int backX = side == BattleSide::ATTACKER ? 1 : GameConstants::BFIELD_WIDTH - 2;
+		const std::array<int, 2> rows = {0, GameConstants::BFIELD_HEIGHT - 1};
+		std::vector<BattleAction> moves;
+		std::set<const CStack *> moved;
+		for(size_t k = 0; k < shooters.size() && k < 2; ++k)
+		{
+			const CStack * shooter = shooters[k];
+			const BattleHex corner(backX, rows[k]);
+			BattleHex best;
+			int bestDist = 1000;
+			for(const BattleHex & h : battle->battleGetAvailableHexes(shooter, false))
+			{
+				if(taken.count(h) && !vstd::contains(shooter->getHexes(), h))
+					continue;
+				const int d = BattleHex::getDistance(h, corner);
+				if(d < bestDist)
+				{
+					bestDist = d;
+					best = h;
+				}
+			}
+			if(!best.isValid())
+				continue;
+			if(best != shooter->getPosition())
+				moves.push_back(BattleAction::makeMove(shooter, best));
+			moved.insert(shooter);
+			taken.insert(best);
+			// the shell: the free hexes beside the shooter, singles first, then weak stacks worth less than the shooter
+			for(const BattleHex & around : best.getNeighbouringTiles())
+			{
+				if(!around.isAvailable() || taken.count(around))
+					continue;
+				const CStack * guard = nullptr;
+				for(const CStack * candidate : shields)
+				{
+					if(moved.count(candidate) || candidate->doubleWide())
+						continue;
+					if(candidate->getCount() > 1 && worth(candidate) >= worth(shooter))
+						continue;
+					if(!vstd::contains(battle->battleGetAvailableHexes(candidate, false), around))
+						continue;
+					guard = candidate;
+					break;
+				}
+				if(!guard)
+					continue;
+				moves.push_back(BattleAction::makeMove(guard, around));
+				moved.insert(guard);
+				taken.insert(around);
+			}
+		}
+		for(const auto & move : moves)
+			cb->battleMakeTacticAction(battleID, move);
+		if(!moves.empty())
+			logAi->info("FairAI battle: tactics phase - %d moves (shooters to the corners, their shell beside them)", static_cast<int>(moves.size()));
+	}
+	cb->battleMakeTacticAction(battleID, BattleAction::makeEndOFTacticPhase(battle ? battle->battleGetTacticsSide() : BattleSide::ATTACKER));
 }
 
 bool FairBattleAI::needsFallback(const CStack * stack) const
