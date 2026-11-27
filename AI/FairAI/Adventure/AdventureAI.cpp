@@ -402,6 +402,17 @@ void Params::loadOverrides(int playerIndex)
 	read("homeRing", homeRing);
 	read("homeRingDays", homeRingDays);
 	read("homeRingLoss", homeRingLoss);
+	read("raceBind", raceBind);
+	read("areaAim", areaAim);
+	read("heroMerge", heroMerge);
+	read("collectorRing", collectorRing);
+	read("dwellingRounds", dwellingRounds);
+	read("seaAccess", seaAccess);
+	read("raceBindDays", raceBindDays);
+	read("raceBindRest", raceBindRest);
+	read("trade", trade);
+	read("tradeMargin", tradeMargin);
+	read("tradeBoost", tradeBoost);
 	read("scoutSearchShare", scoutSearchShare);
 	read("boldEdge", boldEdge);
 	read("veterans", veterans);
@@ -850,7 +861,9 @@ void AdventureAI::playTurn()
 		for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
 			if(cb->getPlayerStatus(PlayerColor(c), false) == EPlayerStatus::INGAME)
 				++players;
-		params.scouts = players == 2 ? 2 : 0;
+		// (-2: one scout at least - owner's word of 27.11.2026 14:42: at least one secondary hero looks
+		// at the land we do not know, and picks up what lies unguarded on its way)
+		params.scouts = players == 2 ? 2 : (params.scouts <= -2 ? 1 : 0);
 		logAi->info("FairAI %s: %d players in the game, %d scouts", me.toString(), players, params.scouts);
 	}
 	townsPeak = std::max(townsPeak, static_cast<int>(perception.ownTowns().size())); // (lastStand: have we held more towns than now?)
@@ -864,7 +877,7 @@ void AdventureAI::playTurn()
 	pocketExits.clear();
 	trail.clear();
 	abandonedToday.clear();
-	if(params.homeRing)
+	if(params.homeRing || params.collectorRing)
 		planHomeRing();
 	if(params.race)
 	{
@@ -1125,9 +1138,13 @@ void AdventureAI::playTurn()
 			continue;
 		}
 		const int role = roaming++;
+		// (collectorRing 2) nobody sits in a garrison: the scouts look at the land we do not know, the
+		// collector nearest home keeps near it for the supply runs, the others work the land we have
+		// seen (owner's word of 27.11.2026: keeping heroes in the castle is pointless)
+		const bool allRoam = params.collectorRing >= 2;
 		if(role >= params.collectorsRoam && role < params.collectorsRoam + params.scouts)
 			scoutsToday.insert(id); // weakest roamers scout: they explore beyond our territory
-		else if(role >= params.collectorsRoam)
+		else if(!allRoam && role >= params.collectorsRoam)
 		{
 			// secondary heroes guard towns from the garrison instead of roaming
 			const auto * hero = ownHero(id);
@@ -1376,6 +1393,9 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 	int boatAttempts = 0;
 	if(params.artifactCare)
 		arrangeArtifacts(ownHero(heroId));
+	if(params.heroMerge && !params.baitStacks)
+		mergeDuplicates(ownHero(heroId)); // (heroMerge) two stacks of one kind become one
+	shedMisfits(ownHero(heroId)); // (armyFit)
 	struct EndOfDayLog
 	{
 		AdventureAI & ai;
@@ -1532,7 +1552,36 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 			bool somethingToDo = false;
 			for(const auto & t : targets)
 				somethingToDo = somethingToDo || (t.description != "retreat" && t.description != "flee");
-			if(!somethingToDo && boatAttempts < 2 && seekBoat(hero, *paths, targets, freePaths.get()))
+			// (seaAccess) The enemy's towns are not on this land and what is left here uncovers little:
+			// the main hero's way to them leads over the water, even while treasures lie about (owner's
+			// game of 27.11.2026: 160 days on one island, no enemy town found, the scorpicores before
+			// the shipyard "not worth it" with the way to sea counted at 0 to 301)
+			bool enemyOverSea = false;
+			auto seaKnown = [this]()
+			{
+				// a shipyard or boat we know of, or a town of ours on the water
+				for(const auto * town : perception.ownTowns())
+					if(town->shipyardStatus() != IBoatGenerator::NO_WATER)
+						return true;
+				for(const auto & [id, object] : perception.knownObjects())
+					if(object.type == Obj::SHIPYARD || object.type == Obj::BOAT)
+						return true;
+				return false;
+			};
+			if(somethingToDo && params.seaAccess && isMain(hero) && !hero->inBoat() && huntWanted && today >= 14 && exploringStalled() && seaKnown()
+				&& std::none_of(targets.begin(), targets.end(), [this](const Target & t)
+					{
+						const auto known = perception.knownObjects();
+						const auto it = t.object.hasValue() ? known.find(t.object) : known.end();
+						return it != known.end() && it->second.type == Obj::TOWN && isEnemy(it->second.owner);
+					}))
+			{
+				enemyOverSea = true;
+				if(seaLog != today)
+					logAi->info("FairAI %s day %d: %s - no enemy town found, exploring has stalled and the sea is in reach: the way on is the sea", me.toString(), today, hero->getNameTranslated());
+				seaLog = today;
+			}
+			if((!somethingToDo || enemyOverSea) && boatAttempts < 2 && seekBoat(hero, *paths, targets, freePaths.get(), enemyOverSea))
 			{
 				++boatAttempts;
 				continue; // a boat is waiting: plan again
@@ -1912,12 +1961,17 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 		const bool towardsBank = best.description.rfind("bank ", 0) == 0 && best.object.hasValue();
 		guardAnswer = -1;
 		guardedTarget = towardsBank ? best.object.getNum() : -1;
+		{
+			const auto target = best.object.hasValue() ? objectBefore.find(best.object) : objectBefore.end();
+			monsterTarget = target != objectBefore.end() && target->second.type == Obj::MONSTER ? best.object.getNum() : -1;
+		}
 		activeHero = heroId.getNum();
 		bool sent = stepTowards(hero, best.tile, *paths);
 		if(sent)
 			gateway.waitTillFree();
 		activeHero = -1;
 		guardedTarget = -1;
+		monsterTarget = -1;
 		if(towardsBank && guardAnswer.load() == 1)
 		{
 			// how the fight went against what the simulator expected (to keep the forecast honest)
@@ -2058,7 +2112,7 @@ void AdventureAI::playHero(ObjectInstanceID heroId)
 	}
 }
 
-bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets, const CPathsInfo * freePaths)
+bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths, std::vector<Target> & targets, const CPathsInfo * freePaths, bool enemyOverSea)
 {
 	if(!params.boats || hero->inBoat())
 		return false;
@@ -2077,6 +2131,8 @@ bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths
 			return false;
 	}
 	seaWanted = true;
+	// (seaAccess) the way to an enemy we have not found: worth what finding a town is worth to a leader
+	const double seaWorth = std::max(1500.0, 0.5 * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0));
 	auto affordable = [this](const IShipyard * yard)
 	{
 		ResourceSet cost;
@@ -2138,7 +2194,7 @@ bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths
 		Target t;
 		t.tile = bestTile;
 		t.object = bestId;
-		t.value = 1500;
+		t.value = enemyOverSea ? seaWorth : 1500;
 		t.travel = bestNode->cost;
 		t.score = t.value / (t.travel + params.travelOffset);
 		t.description = "shipyard";
@@ -2149,7 +2205,7 @@ bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths
 			earmarkDay = today;
 		}
 	}
-	else if(freePaths && params.boatGuards)
+	else if(freePaths && (params.boatGuards || enemyOverSea))
 	{
 		// (boatGuards) No shipyard we can walk to - but one behind a guard: that guard stands between us and the
 		// sea, and beating it is the way on. (On an island of 123 tiles the main hero stood in its
@@ -2187,7 +2243,7 @@ bool AdventureAI::seekBoat(const CGHeroInstance * hero, const CPathsInfo & paths
 				continue;
 			fight.tile = it->second.visitablePos;
 			fight.object = it->first;
-			fight.value = std::max(3000.0, 2.0 * loss);
+			fight.value = std::max(enemyOverSea ? seaWorth : 3000.0, 2.0 * loss);
 			fight.loss = loss;
 			fight.travel = node->cost;
 			fight.score = (fight.value - fight.loss) / (fight.travel + params.travelOffset);
@@ -3324,10 +3380,17 @@ double AdventureAI::siteValue(const CGHeroInstance * hero, const ObservedObject 
 		auto used = siteWeek.find(object.id);
 		if(used != siteWeek.end() && used->second == (today - 1) / 7)
 			return 0;
-		int missing = 0;
-		for(ArtifactPosition slot : {ArtifactPosition::MACH1, ArtifactPosition::MACH2, ArtifactPosition::MACH3})
-			missing += hero->getArt(slot) ? 0 : 1;
-		return 250.0 * missing;
+		// the tent only for a hero with First Aid (owner's word of 27.11.2026: without the skill it is
+		// gold thrown away - with it, it heals every round: his main hero had First Aid and a War
+		// Machine Factory beside its castle, and never bought the tent); Artillery aims the ballista
+		double value = 0;
+		if(!hero->hasArt(ArtifactID::BALLISTA))
+			value += 250.0 + 1500.0 * hero->getSecSkillLevel(SecondarySkill::ARTILLERY);
+		if(!hero->hasArt(ArtifactID::AMMO_CART))
+			value += 250.0;
+		if(!hero->hasArt(ArtifactID::FIRST_AID_TENT))
+			value += 1500.0 * hero->getSecSkillLevel(SecondarySkill::FIRST_AID);
+		return value;
 	}
 	case Obj::OBELISK:
 		// a piece of the puzzle that shows where the grail lies
@@ -4222,6 +4285,46 @@ bool AdventureAI::confirmVisit(const std::vector<Component> & components)
 	// hero came for was a guess at that.
 	const int heroNum = activeHero.load();
 	const int objectNum = guardedTarget.load();
+	if(params.armyFit && heroNum >= 0)
+	{
+		// (armyFit) Wandering creatures that offer to join (for nothing or for gold) - or to run: the
+		// game names no creature in that question, the monster is the one the hero went for or whose
+		// ground it stands on. The main hero says no to troops that cost its army more in morale than
+		// they bring (owner's game of 27.11.2026: walking dead, wights and nomads among the demons);
+		// then they fight - and the hero had come to fight them.
+		bool creatureShown = false;
+		for(const Component & c : components)
+			creatureShown = creatureShown || c.type == ComponentType::CREATURE;
+		const CGHeroInstance * hero = ownHero(ObjectInstanceID(heroNum));
+		if(!creatureShown && hero && isMain(hero))
+		{
+			ObjectInstanceID monster(monsterTarget.load());
+			if(!monster.hasValue())
+			{
+				const auto guards = cb->getGuardingCreatures(hero->visitablePos());
+				if(guards.size() == 1 && guards.front())
+					monster = guards.front()->id;
+			}
+			const auto known = perception.knownObjects();
+			const auto it = monster.hasValue() ? known.find(monster) : known.end();
+			if(it != known.end() && it->second.type == Obj::MONSTER && it->second.army)
+			{
+				for(const auto & unit : it->second.army->units)
+				{
+					if(!unit.creature.hasValue())
+						continue;
+					const double value = 0.5 * (unit.minCount + unit.maxCount) * unit.creature.toCreature()->getAIValue();
+					const double share = fitShare(hero, unit.creature, value);
+					if(share < 0)
+					{
+						logAi->info("FairAI %s: %s says no to the %s at %s that offer to join: they would take %.0f%% of their worth from the army",
+							me.toString(), hero->getNameTranslated(), unit.creature.toCreature()->getJsonKey(), it->second.visitablePos.toString(), -100 * share);
+						return false;
+					}
+				}
+			}
+		}
+	}
 	if(params.tables < 2 || heroNum < 0 || objectNum < 0)
 		return true;
 	std::vector<std::pair<CreatureID, int>> shown;
@@ -5548,6 +5651,31 @@ void AdventureAI::computeReach(ReachMap & reach, const int3 & from, double stren
 	}
 }
 
+ObjectInstanceID AdventureAI::homeKeeper() const
+{
+	// (collectorRing 2) the secondary hero nearest to a town of ours stays near home (for the supply runs)
+	if(keeperDay == today)
+		return keeperId;
+	keeperDay = today;
+	keeperId = ObjectInstanceID();
+	double best = 1e9;
+	const auto towns = perception.ownTowns();
+	for(const auto * hero : perception.ownHeroes())
+	{
+		if(!hero || hero->id == mainHero || leads(hero) || scoutsToday.count(hero->id))
+			continue;
+		double near = 1e6;
+		for(const auto * town : towns)
+			near = std::min(near, town->visitablePos().z == hero->visitablePos().z ? static_cast<double>(town->visitablePos().dist2d(hero->visitablePos())) : 1e5);
+		if(near < best || (near == best && keeperId.hasValue() && hero->id.getNum() < keeperId.getNum()))
+		{
+			best = near;
+			keeperId = hero->id;
+		}
+	}
+	return keeperId;
+}
+
 bool AdventureAI::inTerritory(const int3 & tile) const
 {
 	auto towns = perception.ownTowns();
@@ -5557,6 +5685,14 @@ bool AdventureAI::inTerritory(const int3 & tile) const
 	{
 		if(town->visitablePos().z == tile.z && town->visitablePos().dist2d(tile) <= params.collectorRadius)
 			return true;
+	}
+	// (collectorRing) the land within homeRingDays of march of our towns is home too: twelve tiles as
+	// the crow flies left a secondary hero standing for weeks while treasures lay three days out
+	// (owner's game of 27.11.2026; what an enemy in reach means is judged by the threats as before)
+	if(params.collectorRing && homeTilesDay == today && !homeTiles.empty() && cb->isInTheMap(tile))
+	{
+		const int3 size = cb->getMapSize();
+		return homeTiles[(static_cast<size_t>(tile.z) * size.y + tile.y) * size.x + tile.x] != 0;
 	}
 	return false;
 }
@@ -7785,6 +7921,38 @@ double AdventureAI::objectValue(const CGHeroInstance * hero, const ObservedObjec
 	case Obj::CREATURE_GENERATOR3:
 	case Obj::CREATURE_GENERATOR4:
 	{
+		if(own && params.dwellingRounds && (main || params.couriers || params.supplyRuns))
+		{
+			// (dwellingRounds) What has grown in a dwelling of ours waits there until somebody comes: the
+			// main hero buys it on its way, a secondary hero buys it for the main hero (the couriers or
+			// supply runs take it there). As much as the purse pays for; what does not fit the main
+			// army counts for what it adds to it (armyFit).
+			double waiting = 0;
+			if(const auto * dwelling = dynamic_cast<const CGDwelling *>(instance))
+			{
+				const ResourceSet purse = spendable();
+				const CGHeroInstance * leader = ownHero(mainHero);
+				for(const auto & level : dwelling->creatures)
+				{
+					if(level.first == 0 || level.second.empty())
+						continue;
+					const CCreature * creature = level.second.back().toCreature();
+					int amount = static_cast<int>(level.first);
+					for(GameResID res : LIBRARY->resourceTypeHandler->getAllObjects())
+					{
+						const int cost = creature->getRecruitCost(res);
+						if(cost > 0)
+							amount = std::min(amount, static_cast<int>(purse[res] / cost));
+					}
+					if(amount <= 0 || !hero->getSlotFor(creature->getId()).validSlot())
+						continue;
+					const double raw = static_cast<double>(amount) * creature->getAIValue();
+					const double share = params.armyFit ? std::clamp(fitShare(leader ? leader : hero, creature->getId(), raw), 0.0, 1.0) : 1.0;
+					waiting += share * raw * params.goldPerArmyValue * (main ? 1.0 : params.ferryFactor);
+				}
+			}
+			return waiting;
+		}
 		if(own)
 		{
 			// (relayChain) Our own dwellings are part of a link's weekly round: what has grown there is
@@ -8237,6 +8405,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	};
 	const bool cautious = !leads(hero);
 	const bool scout = scoutsToday.count(hero->id) > 0;
+	const bool seenGround = params.collectorRing >= 2 && cautious && hero->id != homeKeeper();
 	struct ReachView
 	{
 		const AdventureAI & ai;
@@ -8269,7 +8438,12 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		const bool toMain = (partner && partner->id == mainHero)
 			|| (params.couriers && object.hasValue() && object == mainHero);
 		// (relayChain: a link's ground is the leash around its post - see addTarget)
-		if(cautious && !scout && !toMain && !link && (!inTerritory(tile) || (stop.isValid() && !inTerritory(stop))))
+		// (collectorRing 2) the land we have uncovered is ours to work - but for the one hero nearest
+		// home, who keeps to the ring and carries what the towns grow to the main hero (owner's word of
+		// 27.11.2026 14:28: keeping heroes at home is pointless; where a seen enemy can reach them is
+		// still judged below)
+		auto home = [&](const int3 & t) { return seenGround ? cb->isVisible(t) : inTerritory(t); };
+		if(cautious && !scout && !toMain && !link && (!home(tile) || (stop.isValid() && !home(stop))))
 			return true;
 		if(threats.empty())
 			return false;
@@ -8292,7 +8466,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	// standing in a town that cannot hold on its own: only trips that end back home today,
 	// except to attack an enemy hero (the threat itself)
 	double roundTripBudget = -1;
-	if(params.townGuard && isMain(hero))
+	if(params.townGuard && isMain(hero) && !bindFree()) // (raceBind: not on the days out)
 	{
 		if(const auto * home = hero->getVisitedTown(); home && home->visitablePos() == heroPos && townNeed(home, hero) > 0.2)
 			roundTripBudget = static_cast<double>(hero->movementPointsRemaining()) / std::max(1, hero->movementPointsLimit(true));
@@ -8316,6 +8490,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			// ours holds the town and it is there today)
 			const bool raider = race.plan == 1 && !race.guarded;
 			if(race.plan != 2 && race.plan != 3 && !raider)
+				continue;
+			// (raceBind) the days out: the enemy that waits before the town does not hold the main hero
+			if(bindFree() && !raider)
 				continue;
 			// (Three times its strength: let it come - an army that sits in our town cannot get away.
 			// Not at twice: behind our walls it counts half as much again and buys what the town
@@ -8396,6 +8573,84 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 				hero->getNameTranslated(), fieldStrength(hero), outmatched, params.lastStand && !params.fortress ? "lately, and we are down to our last town" : "near us lately",
 				fortressOutside ? "heading for a town of ours" : "day trips from the town only");
 		fortressLog = today;
+	}
+	// (trade) The enemy's main army is in the race for a town of ours that our main hero cannot meet in
+	// the field (behind the walls, or not to be held): a town of that enemy which the main hero reaches
+	// tradeMargin days before any army of it that could hold the town (half our strength or more), and
+	// can take, is taken instead. On the way there it has only to be first. Not while outmatched (with
+	// one town left: lastStand).
+	std::set<ObjectInstanceID> tradeTowns;
+	bool tradeAdded = false;
+	if(params.trade && params.race && isMain(hero) && outmatched <= 0)
+	{
+		bool pressed = false;
+		for(const TownRace & race : races)
+			pressed = pressed || race.plan >= 3;
+		const double ours = fieldStrength(hero);
+		for(const auto & [id, object] : known)
+		{
+			if(object.type != Obj::TOWN || !isEnemy(object.owner))
+				continue;
+			// (on our way: the town to take yesterday is still where the main hero is going)
+			auto went = tradeDay.find(id.getNum());
+			auto goal = currentGoal.find(hero->id);
+			const bool going = went != tradeDay.end() && went->second >= today - 1 && goal != currentGoal.end() && goal->second == object.visitablePos;
+			if(!pressed && !going)
+				continue;
+			const CGPathNode * node = reachable(paths, object.visitablePos);
+			if(!node)
+				continue;
+			const double margin = going ? 0.0 : params.tradeMargin;
+			// the nearest army of that enemy that could hold the town against us
+			double theirs = 1e9;
+			std::string by = "none in reach";
+			for(const auto & [otherId, other] : known)
+			{
+				if(other.type != Obj::HERO || other.owner != object.owner || !other.army || today - other.lastSeenDay > 5 || other.visitablePos == object.visitablePos)
+					continue;
+				if(auto beaten = defeatedDay.find(other.subtype.getNum()); beaten != defeatedDay.end() && beaten->second >= other.lastSeenDay && !other.visibleNow)
+					continue;
+				const double strength = observedDanger(other) * heroFactor(other);
+				if(strength < 0.5 * ours)
+					continue;
+				const int age = today - other.lastSeenDay;
+				const double reach = std::max(8.0, reachEstimate(other, true));
+				const double tiles = enemyDistance(otherId, other.visitablePos, strength, object.visitablePos, (node->cost + margin + age + 1.0) * reach);
+				if(!std::isfinite(tiles))
+					continue;
+				const double days = std::max(0.0, tiles / reach - age);
+				if(days < theirs)
+				{
+					theirs = days;
+					const HeroTypeID type(other.subtype.getNum());
+					by = boost::str(boost::format("%s (%.0f)") % (type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("?")) % strength);
+				}
+			}
+			// what holds it: the heroes in it and the town, walls counted
+			double defenders = 0;
+			for(const auto & [otherId, other] : known)
+			{
+				if(other.visitablePos != object.visitablePos || other.owner == me)
+					continue;
+				if(other.type == Obj::HERO)
+					defenders += observedDanger(other) * heroFactor(other);
+				else if(other.type == Obj::TOWN)
+					defenders += observedDanger(other);
+			}
+			const double danger = guardDanger(object.visitablePos) + defenders * params.wallsFactor;
+			const bool first = theirs >= node->cost + margin;
+			const bool takes = expectedLoss(hero, danger, false, true) >= 0;
+			if(first && takes)
+			{
+				tradeTowns.insert(id);
+				tradeDay[id.getNum()] = today;
+			}
+			if(tradeLogged.insert({today, id.getNum()}).second)
+				logAi->info("FairAI %s day %d: trade - the town at %s%s: we are there in %.1f days, the nearest army of theirs that could hold it: %s%s; held by %.0f (walls counted) against our %.0f - %s",
+					me.toString(), today, object.visitablePos.toString(), going ? " (on our way)" : "", node->cost, by,
+					theirs < 1e8 ? boost::str(boost::format(", %.1f days away") % theirs) : std::string(), danger, ours,
+					!takes ? "too strong" : (!first ? "they are there first" : "the town to take"));
+		}
 	}
 	// (safeParts) A real army in the hands of a hero that is not our main hero does not spend the
 	// night in the open: whatever attacks it there wins, and it is attacked only by what wins. From
@@ -8557,13 +8812,13 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool town = it != known.end() && it->second.type == Obj::TOWN && (it->second.owner == me || (params.lastChance && perception.ownTowns().empty()));
-			if(!town)
+			if(!town && !tradeTowns.count(object))
 				return;
 		}
 		// (race) only what leaves the main hero time to be in the town before the enemy's army: the
 		// way there and from there to the gate - back the way it came, or straight across at a
 		// marching pace on the same level, or by Town Portal the morning after
-		if(!raceLeashes.empty() && !toSafety && description != "race")
+		if(!raceLeashes.empty() && !toSafety && description != "race" && !tradeTowns.count(object)) // (trade: the town to take instead)
 		{
 			for(const RaceLeash & leash : raceLeashes)
 			{
@@ -8603,7 +8858,7 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		}
 		// (wardens) a warden that cannot hold its town and finds none to go to gets out of the way: its
 		// army is worth more than the walls it would die behind
-		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery && !(warden && toSafety))
+		if(roundTripBudget >= 0 && travel * 2 > roundTripBudget && !delivery && !(warden && toSafety) && !tradeTowns.count(object)) // (trade: never while outmatched)
 		{
 			auto it = object.hasValue() ? known.find(object) : known.end();
 			const bool enemyHero = it != known.end() && it->second.type == Obj::HERO && isEnemy(it->second.owner);
@@ -8632,6 +8887,8 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 		auto goal = currentGoal.find(hero->id);
 		if(goal != currentGoal.end() && goal->second == tile)
 			t.score *= params.stickiness;
+		if(object.hasValue() && tradeTowns.count(object))
+			tradeAdded = true;
 		out.push_back(t);
 	};
 	if(evacuating)
@@ -8708,6 +8965,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 			continue;
 		const CGObjectInstance * instance = perception.visibleObject(id);
 		double value = objectValue(hero, object, instance);
+		// (trade) the town taken instead of ours counts what a town counts on campaign
+		if(tradeTowns.count(id))
+			value = std::max(value, params.tradeBoost * 2.0 * params.enemyTownValue * (1.0 + std::min(today, 140) / 28.0));
 		if(params.couriers && id == mainHero && !isMain(hero) && logAi->isDebugEnabled() && courierLog.insert(today * 1000 + heroNum % 1000).second)
 		{
 			// once a day per hero: why a hero does or does not bring its troops to the leader (diagnostics)
@@ -9759,6 +10019,9 @@ std::vector<Target> AdventureAI::collectTargets(const CGHeroInstance * hero, con
 	{
 		if(leash.own > 1e8 || leash.gate == heroPos || failedToday.count({heroNum, leash.gate}))
 			continue;
+		// (trade) behind walls we would be held in: the main hero takes a town of theirs instead
+		if(tradeAdded && leash.race->plan >= 3)
+			continue;
 		Target t;
 		t.tile = leash.gate;
 		t.object = leash.race->town;
@@ -10535,6 +10798,13 @@ void AdventureAI::recruitAtDwelling(const CGDwelling * dwelling, const CArmedIns
 		}
 		if(amount <= 0 || !destination->getSlotFor(creature).validSlot())
 			continue;
+		if(params.sites && creature == CreatureID::FIRST_AID_TENT)
+		{
+			// (sites) the tent is for a hero with First Aid only
+			const auto * buyer = dynamic_cast<const CGHeroInstance *>(destination);
+			if(!buyer || buyer->getSecSkillLevel(SecondarySkill::FIRST_AID) <= 0)
+				continue;
+		}
 		if(params.armyFit && dwelling->ID != Obj::WAR_MACHINE_FACTORY)
 		{
 			// Do they fit the army they are meant for - the leader's, wherever the buyer carries them?
@@ -10814,6 +11084,64 @@ int AdventureAI::unlearnedGuildLevels(const CGHeroInstance * hero, const CGTownI
 	return std::max(0, limit - (seen == guildSeen.end() ? 0 : seen->second));
 }
 
+void AdventureAI::shedMisfits(const CGHeroInstance * hero)
+{
+	// (armyFit) Whatever brought them - a box, an event, a join, a dwelling of the wrong kind: a stack
+	// that takes more from the rest of the army in morale than it adds leaves it. In a town of ours it
+	// stays in the garrison, in the field it is let go.
+	if(!params.armyFit || !hero || !isMain(hero))
+		return;
+	for(int round = 0; round < GameConstants::ARMY_SIZE; ++round)
+	{
+		gateway.checkInterruption();
+		hero = ownHero(hero->id);
+		if(!hero || hero->stacksCount() < 2)
+			return;
+		std::map<CreatureID, double> army;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(stack && stack->getCreature())
+				army[stack->getCreatureID()] += stackValue(stack.get());
+		}
+		const int shared = sharedMorale(hero);
+		const double now = armyWorth(shared, {army.begin(), army.end()});
+		SlotID worst;
+		double bestGain = 0.005 * now;
+		for(const auto & [slot, stack] : hero->Slots())
+		{
+			if(!stack || !stack->getCreature())
+				continue;
+			auto without = army;
+			without[stack->getCreatureID()] -= stackValue(stack.get());
+			if(without[stack->getCreatureID()] <= 0)
+				without.erase(stack->getCreatureID());
+			const double gain = armyWorth(shared, {without.begin(), without.end()}) - now;
+			if(gain > bestGain)
+			{
+				bestGain = gain;
+				worst = slot;
+			}
+		}
+		if(!worst.validSlot())
+			return;
+		const CStackInstance * stack = hero->getStackPtr(worst);
+		const CreatureID kind = stack->getCreatureID();
+		const int count = stack->getCount();
+		const CGTownInstance * town = hero->getVisitedTown();
+		const CArmedInstance * keep = town && town->tempOwner == me ? town->getUpperArmy() : nullptr;
+		const SlotID room = keep ? keep->getSlotFor(kind) : SlotID();
+		logAi->info("FairAI %s: %s %s %d %s: the rest of the army fights better without them (+%.0f)", me.toString(), hero->getNameTranslated(),
+			room.validSlot() ? "leaves in the garrison" : "lets go", count, kind.toCreature()->getJsonKey(), bestGain);
+		if(room.validSlot())
+			cb->mergeOrSwapStacks(hero, keep, worst, room);
+		else
+			cb->dismissCreature(hero, worst);
+		const CGHeroInstance * after = ownHero(hero->id);
+		if(!after || (after->getStackPtr(worst) && after->getStackPtr(worst)->getCreatureID() == kind && after->getStackPtr(worst)->getCount() == count))
+			return; // refused: do not ask again
+	}
+}
+
 void AdventureAI::mergeDuplicates(const CArmedInstance * army)
 {
 	for(int guard = 0; guard < GameConstants::ARMY_SIZE && army; ++guard)
@@ -11091,7 +11419,9 @@ void AdventureAI::manageTownVisit(const CGHeroInstance * hero, const CGTownInsta
 		{
 			// a ballista, tent or ammo cart from the blacksmith helps in every battle
 			const ArtifactID machine = town->getWarMachineInBuilding(BuildingID::BLACKSMITH);
-			if(machine.hasValue() && !hero->hasArt(machine))
+			// (the tent only for a hero with First Aid - owner's word of 27.11.2026)
+			const bool wasted = machine == ArtifactID::FIRST_AID_TENT && hero->getSecSkillLevel(SecondarySkill::FIRST_AID) <= 0;
+			if(machine.hasValue() && !hero->hasArt(machine) && !wasted)
 			{
 				const int price = static_cast<int>(machine.toArtifact()->getPrice());
 				const int64_t reserve = economy.rho > 1.5 ? 500 : 3000;
@@ -11283,9 +11613,14 @@ void AdventureAI::upgradeArmy(const CArmedInstance * hero)
 			}
 		}
 		if(!bestSlot.validSlot() || bestGain < 0.3)
-			return;
+			break;
 		cb->upgradeCreature(hero, bestSlot, bestUpgrade);
 	}
+	// (heroMerge) gogs taken along and upgraded later stand beside the magogs the hero had: the game
+	// does not put two stacks of one kind together (owner's game of 27.11.2026: 7 and 31 magogs, and
+	// the 7 went to a secondary hero)
+	if(params.heroMerge && !params.baitStacks && dynamic_cast<const CGHeroInstance *>(hero))
+		mergeDuplicates(hero);
 }
 
 double AdventureAI::buildingValue(const CGTownInstance * town, BuildingID id) const
@@ -12087,7 +12422,47 @@ void AdventureAI::planRace()
 			}
 		}
 	}
+	// (raceBind) The days a race has held the main hero at home in a row: behind the walls, or to meet
+	// an army it does not outweigh by raceFree. After raceBindDays of them without the enemy coming it
+	// goes out for raceBindRest days, then the count starts again. Not with one town left (lastStand).
+	if(params.raceBind && leader)
+	{
+		const TownRace * holding = nullptr;
+		for(const TownRace & race : races)
+			if(race.plan == 3 || (race.plan == 2 && own < params.raceFree * race.threat))
+				holding = &race;
+		if(towns.size() < 2 && bindFreeUntil >= today)
+		{
+			bindFreeUntil = today - 1;
+			logAi->info("FairAI %s day %d: %s is down to one town - the days out are over", me.toString(), today, leader->getNameTranslated());
+		}
+		if(holding)
+		{
+			if(bindLastDay < today - 1)
+				bindSince = today;
+			bindLastDay = today;
+			if(today > bindFreeUntil)
+			{
+				// (the days out do not count: after them the hold starts anew)
+				bindSince = std::max(bindSince, bindFreeUntil + 1);
+				const int held = today - bindSince;
+				if(held >= params.raceBindDays && towns.size() >= 2)
+				{
+					bindFreeUntil = today + static_cast<int>(std::lround(params.raceBindRest)) - 1;
+					const auto * town = ownTownById(holding->town);
+					const HeroTypeID type(holding->enemyType);
+					logAi->info("FairAI %s day %d: the race for %s has held %s at home for %d days and %s (%.0f against our %.0f) has not come - it goes out until day %d",
+						me.toString(), today, town ? town->getNameTranslated() : std::string("?"), leader->getNameTranslated(), held,
+						type.toHeroType() ? type.toHeroType()->getNameTranslated() : std::string("the enemy's army"), holding->threat, own, bindFreeUntil);
+				}
+			}
+		}
+	}
+}
 
+bool AdventureAI::bindFree() const
+{
+	return params.raceBind && today <= bindFreeUntil;
 }
 
 void AdventureAI::planHomeRing()
