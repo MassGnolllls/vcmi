@@ -861,7 +861,9 @@ void AdventureAI::playTurn()
 		for(int c = 0; c < PlayerColor::PLAYER_LIMIT_I; ++c)
 			if(cb->getPlayerStatus(PlayerColor(c), false) == EPlayerStatus::INGAME)
 				++players;
-		params.scouts = players == 2 ? 2 : 0;
+		// (-2: one scout at least - owner's word of 27.11.2026 14:42: at least one secondary hero looks
+		// at the land we do not know, and picks up what lies unguarded on its way)
+		params.scouts = players == 2 ? 2 : (params.scouts <= -2 ? 1 : 0);
 		logAi->info("FairAI %s: %d players in the game, %d scouts", me.toString(), players, params.scouts);
 	}
 	townsPeak = std::max(townsPeak, static_cast<int>(perception.ownTowns().size())); // (lastStand: have we held more towns than now?)
@@ -1136,9 +1138,13 @@ void AdventureAI::playTurn()
 			continue;
 		}
 		const int role = roaming++;
+		// (collectorRing 2) nobody sits in a garrison: the scouts look at the land we do not know, the
+		// collector nearest home keeps near it for the supply runs, the others work the land we have
+		// seen (owner's word of 27.11.2026: keeping heroes in the castle is pointless)
+		const bool allRoam = params.collectorRing >= 2;
 		if(role >= params.collectorsRoam && role < params.collectorsRoam + params.scouts)
 			scoutsToday.insert(id); // weakest roamers scout: they explore beyond our territory
-		else if(role >= params.collectorsRoam)
+		else if(!allRoam && role >= params.collectorsRoam)
 		{
 			// secondary heroes guard towns from the garrison instead of roaming
 			const auto * hero = ownHero(id);
@@ -5656,7 +5662,7 @@ ObjectInstanceID AdventureAI::homeKeeper() const
 	const auto towns = perception.ownTowns();
 	for(const auto * hero : perception.ownHeroes())
 	{
-		if(!hero || hero->id == mainHero || leads(hero))
+		if(!hero || hero->id == mainHero || leads(hero) || scoutsToday.count(hero->id))
 			continue;
 		double near = 1e6;
 		for(const auto * town : towns)
