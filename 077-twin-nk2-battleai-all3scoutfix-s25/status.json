@@ -1,0 +1,9 @@
+{
+ "job": "077-twin-nk2-battleai-all3scoutfix-s25",
+ "state": "running",
+ "commit": "201c38b9aedaf7fb820cb5030978443820dcf0aa",
+ "host": "DESKTOP-EFJ0RGH",
+ "cpus": 12,
+ "started": "2026-11-27T18:11:18",
+ "note": "all3scout with the fixes for the faults the owner found in Back For Revenge (27.11.2026): areaAim, heroMerge, armyFit (with joins and misfits), collectorRing 2, dwellingRounds, supplyRuns, sites, buyWarMachines, seaAccess, scouts -2; no secondary hero sits in a garrison (collectorRing 2) - as one bundle. Seed 25, the same games as the all3scout job of that seed."
+}
