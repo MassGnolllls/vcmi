@@ -817,6 +817,7 @@ void FairBattleAI::initBattleInterface(std::shared_ptr<Environment> ENV, std::sh
 	setAfterHit(params.simAfterHit != 0);
 	setWholeCreatures(params.wholeCreatures != 0);
 	battlePlan = params.battlePlan != 0;
+	areaAim = params.areaAim != 0;
 	guardOracle = params.guardOracle;
 	ambushPlan = params.battlePlan >= 2;
 	guardPlan = params.battlePlan >= 3;
@@ -1690,6 +1691,87 @@ FairBattleAI::UnitChoice FairBattleAI::bestUnitAction(const std::shared_ptr<Hypo
 			candidates.push_back({{SimActionType::SHOOT, target, BattleHex()}, BattleAction::makeShotAttack(stack, ap.attack.defender), "shoot " + ap.attack.defender->getDescription(), outcome});
 		else
 			candidates.push_back({{SimActionType::ATTACK, target, ap.from}, BattleAction::makeMeleeAttack(stack, ap.attack.defenderPos, ap.from), "attack " + ap.attack.defender->getDescription() + " from " + std::to_string(ap.from.toInt()), outcome});
+	}
+
+	// (areaAim) An area shot - Magog's fireball, Lich's death cloud - hits every unit the blast covers,
+	// ours too. Aimed at each hex from which the blast still reaches an enemy (beside it, where the rules
+	// let a shot land on an empty hex), every unit in the blast takes its shot's damage; the look-ahead
+	// weighs what the enemy loses against what we lose. (Owner, 27.11.2026: Magogs often hit their own
+	// troops - a player aims so that the blast spares them.)
+	if(areaAim && battle->battleCanShoot(stack) && stack->hasBonusOfType(BonusType::SPELL_LIKE_ATTACK))
+	{
+		const auto bonus = stack->getBonus(Selector::type()(BonusType::SPELL_LIKE_ATTACK));
+		const CSpell * spell = bonus && bonus->subtype.hasValue() ? bonus->subtype.as<SpellID>().toSpell() : nullptr;
+		const bool emptyHexes = battle->battleCanTargetEmptyHex(stack);
+		std::set<BattleHex> aims;
+		for(const auto & e : base.units)
+		{
+			if(!e.alive() || e.side == base.units[me].side)
+				continue;
+			const auto * enemy = battle->battleGetUnitByID(e.id);
+			if(!enemy)
+				continue;
+			for(const auto & hex : enemy->getHexes())
+			{
+				aims.insert(hex);
+				if(emptyHexes)
+					for(const auto & next : hex.getNeighbouringTiles())
+						if(next.isValid())
+							aims.insert(next);
+			}
+		}
+		for(const auto & aim : aims)
+		{
+			if(!spell || !battle->battleCanShoot(stack, aim))
+				continue;
+			const auto * standing = battle->battleGetUnitByPos(aim, true);
+			if(!emptyHexes && (!standing || standing->unitSide() == stack->unitSide()))
+				continue;
+			spells::BattleCast cast(battle.get(), stack, spells::Mode::SPELL_LIKE_ATTACK, spell);
+			cast.setSpellLevel(bonus->val);
+			auto mechanics = spell->battleMechanics(&cast);
+			if(!mechanics)
+				continue;
+			spells::Target where;
+			where.emplace_back(aim);
+			const auto hit = mechanics->getAffectedStacks(where);
+			AttackOutcome outcome;
+			outcome.shooting = true;
+			outcome.attackerCount = stack->getCount();
+			outcome.attackerFirstHP = stack->getFirstHPleft();
+			int64_t bestDamage = -1;
+			bool enemyHit = false;
+			for(const battle::Unit * u : hit)
+			{
+				const int index = base.indexOf(u->unitId());
+				if(index < 0 || !u->alive())
+					continue;
+				BattleAttackInfo info(stack, u, 0, true);
+				const auto estimate = battle->battleEstimateDamage(info);
+				auto state = u->acquireState();
+				int64_t damage = std::min<int64_t>((estimate.damage.min + estimate.damage.max) / 2, state->getAvailableHealth());
+				const int64_t dealt = damage;
+				state->damage(damage);
+				outcome.affected.emplace_back(index, state->getCount(), state->getFirstHPleft());
+				if(u->unitSide() != stack->unitSide())
+				{
+					enemyHit = true;
+					if(dealt > bestDamage)
+					{
+						bestDamage = dealt;
+						outcome.target = index;
+					}
+				}
+			}
+			if(!enemyHit || outcome.target < 0)
+				continue;
+			BattleAction shot;
+			shot.side = stack->unitSide();
+			shot.actionType = EActionType::SHOOT;
+			shot.stackNumber = stack->unitId();
+			shot.aimToHex(aim);
+			candidates.push_back({{SimActionType::SHOOT, outcome.target, BattleHex()}, shot, "aimed shot at hex " + std::to_string(aim.toInt()) + " (" + std::to_string(outcome.affected.size()) + " units in the blast)", outcome});
+		}
 	}
 
 	// a few movement targets

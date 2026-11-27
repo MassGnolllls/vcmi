@@ -403,6 +403,7 @@ void Params::loadOverrides(int playerIndex)
 	read("homeRingDays", homeRingDays);
 	read("homeRingLoss", homeRingLoss);
 	read("raceBind", raceBind);
+	read("areaAim", areaAim);
 	read("raceBindDays", raceBindDays);
 	read("raceBindRest", raceBindRest);
 	read("trade", trade);

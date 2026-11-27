@@ -116,6 +116,7 @@ private:
 	bool spellForecast = false; ///< the forecast logged at the start of a battle plays our hero's damage spells (as the adventure AI's does)
 	bool simAbilities = true; ///< from the player's FairAI parameters: the look-ahead knows special abilities
 	bool battlePlan = false;  ///< from the player's FairAI parameters: candidates are judged by playing several rounds ahead, holding or advancing
+	bool areaAim = false;     ///< (areaAim) area shots aimed at the best hex, an empty one too where the rules allow
 	int guardOracle = 0;      ///< from the player's FairAI parameters: rounds the guards are played by the oracle (0 = off)
 	bool ambushPlan = false;  ///< battlePlan 2: lying in wait is a third plan besides holding and advancing
 	bool guardPlan = false;   ///< battlePlan 3: closing ranks around our shooter is a fourth
